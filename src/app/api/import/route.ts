@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
 import { DEFAULT_HOUSEHOLD_ID } from '@/lib/constants'
-import { parseCSV } from '@/lib/csvParser'
+import { parseCSV, extractBalance } from '@/lib/csvParser'
 import { processBatch, upsertTransactions } from '@/lib/categoryPipeline'
 
 export async function POST(req: NextRequest) {
@@ -29,12 +29,16 @@ export async function POST(req: NextRequest) {
 
     let totalTransfers = 0
     const allParsed: ReturnType<typeof parseCSV> = []
+    let latestBalance: number | undefined
 
     for (const file of files) {
       const text = await file.text()
       const parsed = parseCSV(text)
       allParsed.push(...parsed)
       totalTransfers += text.split('\n').filter(l => l.trim()).length - 1 - parsed.length
+      // Extract balance directly from raw CSV (independent of transfer filtering)
+      const bal = extractBalance(text)
+      if (bal !== undefined) latestBalance = bal
     }
 
     const raws = allParsed.map(p => ({
@@ -48,14 +52,11 @@ export async function POST(req: NextRequest) {
     const autoCategorised = toUpsert.filter(t => t.category !== null).length
     const { inserted, duplicates } = await upsertTransactions(toUpsert)
 
-    // Update account current_balance from the most recent CSV row that has a balance
-    const withBalance = allParsed
-      .filter(p => p.balance !== undefined)
-      .sort((a, b) => b.date.localeCompare(a.date))
-    if (withBalance.length > 0 && withBalance[0].balance !== undefined) {
+    // Update account current_balance from the raw CSV balance (most recent row)
+    if (latestBalance !== undefined) {
       await supabase
         .from('accounts')
-        .update({ current_balance: withBalance[0].balance, last_synced_at: new Date().toISOString() })
+        .update({ current_balance: latestBalance, last_synced_at: new Date().toISOString() })
         .eq('id', accountId)
     }
 

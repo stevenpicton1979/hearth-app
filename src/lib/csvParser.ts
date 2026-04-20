@@ -19,10 +19,19 @@ function parseAmount(raw: string): number | null {
   return isNaN(n) ? null : n
 }
 
-type CSVFormat = 'cba_4col' | 'cba_5col' | 'anz' | 'westpac' | 'generic'
+type CSVFormat = 'cba_4col' | 'cba_4col_noheader' | 'cba_5col' | 'anz' | 'westpac' | 'generic'
 
-function detectFormat(headers: string[]): CSVFormat {
+const DATE_RE = /^\d{1,2}\/\d{1,2}\/\d{4}$/
+
+function detectFormat(headers: string[], firstDataLine?: string): CSVFormat {
   const h = headers.map(hdr => hdr.toLowerCase().trim())
+
+  // CBA exports have NO header row — first line is a date. Detect by checking if
+  // the first cell looks like DD/MM/YYYY.
+  if (headers.length >= 3 && DATE_RE.test(headers[0].trim())) {
+    return 'cba_4col_noheader'
+  }
+
   if (h.includes('debit') && h.includes('credit') && h.includes('balance')) {
     if (h.length >= 5) return 'westpac'
     return 'cba_5col'
@@ -34,18 +43,21 @@ function detectFormat(headers: string[]): CSVFormat {
 
 export function parseCSV(text: string): ParsedTransaction[] {
   const lines = text.split(/\r?\n/).filter(l => l.trim())
-  if (lines.length < 2) return []
+  if (lines.length < 1) return []
 
   const headers = lines[0].split(',').map(h => h.replace(/^"|"$/g, '').trim())
   const format = detectFormat(headers)
   const results: ParsedTransaction[] = []
 
+  // For no-header CBA exports, data starts at line 0; otherwise line 1
+  const dataStart = format === 'cba_4col_noheader' ? 0 : 1
+
   // Extract balance from first data row (most recent transaction in date-desc exports)
   let mostRecentBalance: number | undefined
-  if (lines.length >= 2) {
-    const firstCols = lines[1].split(',').map(c => c.replace(/^"|"$/g, '').trim())
+  if (lines.length > dataStart) {
+    const firstCols = lines[dataStart].split(',').map(c => c.replace(/^"|"$/g, '').trim())
     try {
-      if (format === 'cba_4col') mostRecentBalance = parseAmount(firstCols[3]) ?? undefined
+      if (format === 'cba_4col' || format === 'cba_4col_noheader') mostRecentBalance = parseAmount(firstCols[3]) ?? undefined
       else if (format === 'cba_5col') mostRecentBalance = parseAmount(firstCols[4]) ?? undefined
       else if (format === 'westpac') mostRecentBalance = parseAmount(firstCols[7]) ?? undefined
     } catch { /* ignore */ }
@@ -53,7 +65,7 @@ export function parseCSV(text: string): ParsedTransaction[] {
 
   let balanceAttached = false
 
-  for (let i = 1; i < lines.length; i++) {
+  for (let i = dataStart; i < lines.length; i++) {
     const cols = lines[i].split(',').map(c => c.replace(/^"|"$/g, '').trim())
     if (cols.length < 2) continue
 
@@ -62,7 +74,7 @@ export function parseCSV(text: string): ParsedTransaction[] {
     let description = ''
 
     try {
-      if (format === 'cba_4col') {
+      if (format === 'cba_4col' || format === 'cba_4col_noheader') {
         // Date, Amount, Description, Balance
         date = parseDate(cols[0])
         amount = parseAmount(cols[1])
@@ -121,4 +133,38 @@ export function parseCSV(text: string): ParsedTransaction[] {
   }
 
   return results
+}
+
+/**
+ * Extract the most recent account balance directly from a raw CSV string,
+ * without filtering for transfers or expense-only rows. This gives a reliable
+ * balance for account net-worth tracking regardless of what rows are skipped.
+ */
+export function extractBalance(text: string): number | undefined {
+  const lines = text.split(/\r?\n/).filter(l => l.trim())
+  if (lines.length < 1) return undefined
+
+  const headers = lines[0].split(',').map(h => h.replace(/^"|"$/g, '').trim())
+  const format = detectFormat(headers)
+
+  // For no-header CBA exports, first data row is line 0; otherwise line 1
+  const dataStart = format === 'cba_4col_noheader' ? 0 : 1
+  if (lines.length <= dataStart) return undefined
+
+  const firstCols = lines[dataStart].split(',').map(c => c.replace(/^"|"$/g, '').trim())
+  try {
+    if (format === 'cba_4col' || format === 'cba_4col_noheader') {
+      const bal = parseAmount(firstCols[3])
+      return bal !== null ? bal : undefined
+    }
+    if (format === 'cba_5col') {
+      const bal = parseAmount(firstCols[4])
+      return bal !== null ? bal : undefined
+    }
+    if (format === 'westpac') {
+      const bal = parseAmount(firstCols[7])
+      return bal !== null ? bal : undefined
+    }
+  } catch { /* ignore */ }
+  return undefined
 }

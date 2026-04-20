@@ -60,6 +60,8 @@ export default function ImportPage() {
       if (!res.ok) throw new Error(data.error || 'Import failed')
       setResult(data)
       setFiles([])
+      setAccountName('')
+      setSelectedAccountId('')
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Import failed')
     } finally {
