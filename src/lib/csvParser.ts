@@ -23,7 +23,7 @@ type CSVFormat = 'cba_4col' | 'cba_4col_noheader' | 'cba_5col' | 'anz' | 'westpa
 
 const DATE_RE = /^\d{1,2}\/\d{1,2}\/\d{4}$/
 
-function detectFormat(headers: string[], firstDataLine?: string): CSVFormat {
+function detectFormat(headers: string[]): CSVFormat {
   const h = headers.map(hdr => hdr.toLowerCase().trim())
 
   // CBA exports have NO header row — first line is a date. Detect by checking if
