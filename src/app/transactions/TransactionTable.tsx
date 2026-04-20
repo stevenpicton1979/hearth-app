@@ -323,7 +323,7 @@ export function TransactionTable({ initialTransactions, accounts }: Props) {
                       {t.notes && <div className="text-xs text-gray-400 truncate max-w-[200px]">{t.notes}</div>}
                     </td>
                     <td className="px-4 py-3 text-gray-500 hidden md:table-cell">
-                      {t.accounts?.display_name || '—'}
+                      {accounts.find(a => a.id === t.account_id)?.display_name || '—'}
                     </td>
                     <td className="px-4 py-3 text-right font-medium tabular-nums text-gray-900">
                       {formatAmount(t.amount)}

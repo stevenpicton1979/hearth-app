@@ -89,15 +89,15 @@ export function detectSubscriptions(
     const intervalMean = mean(intervals)
     const intervalStd = stddev(intervals, intervalMean)
 
-    // Check interval consistency: std < 0.3 * median
-    if (intervalStd > 0.3 * medianInterval) continue
+    // Check interval consistency: std < 0.35 * median
+    if (intervalStd > 0.35 * medianInterval) continue
 
-    // Check amount consistency: CV < 0.15
+    // Check amount consistency: CV < 0.20
     const amounts = sorted.map(t => Math.abs(t.amount))
     const amtMean = mean(amounts)
     const amtStd = stddev(amounts, amtMean)
     const cv = amtMean > 0 ? amtStd / amtMean : 1
-    if (cv >= 0.15) continue
+    if (cv >= 0.20) continue
 
     // Determine confidence
     let confidence: DetectedSubscription['confidence']
