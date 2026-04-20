@@ -1,8 +1,59 @@
+import Link from 'next/link'
+import {
+  BanknotesIcon,
+  CurrencyDollarIcon,
+  ArrowUpTrayIcon,
+  TagIcon,
+} from '@heroicons/react/24/outline'
+
+const SECTIONS = [
+  {
+    href: '/settings/accounts',
+    icon: BanknotesIcon,
+    label: 'Bank Accounts',
+    description: 'Manage connected accounts and CSV import',
+  },
+  {
+    href: '/settings/budgets',
+    icon: CurrencyDollarIcon,
+    label: 'Budgets',
+    description: 'Set monthly spending limits per category',
+  },
+  {
+    href: '/mappings',
+    icon: TagIcon,
+    label: 'Merchant Mappings',
+    description: 'Edit category rules that apply to all transactions',
+  },
+  {
+    href: '/import',
+    icon: ArrowUpTrayIcon,
+    label: 'Import CSV',
+    description: 'Upload bank export files to add transactions',
+  },
+]
+
 export default function SettingsPage() {
   return (
-    <div>
+    <div className="max-w-xl">
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Settings</h1>
-      <p className="text-gray-500">Settings shell coming in Sprint 7 (H-080).</p>
+      <div className="space-y-3">
+        {SECTIONS.map(({ href, icon: Icon, label, description }) => (
+          <Link
+            key={href}
+            href={href}
+            className="flex items-center gap-4 bg-white border border-gray-200 rounded-xl p-4 hover:border-emerald-300 hover:bg-emerald-50 transition-colors group"
+          >
+            <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-200 transition-colors">
+              <Icon className="h-5 w-5 text-emerald-700" />
+            </div>
+            <div>
+              <div className="font-medium text-gray-900">{label}</div>
+              <div className="text-sm text-gray-500">{description}</div>
+            </div>
+          </Link>
+        ))}
+      </div>
     </div>
   )
 }

@@ -1,41 +1,15 @@
 export const DEFAULT_HOUSEHOLD_ID = '00000000-0000-0000-0000-000000000001'
 
 export const CATEGORIES = [
-  'Transport',
-  'Eating Out',
-  'Food & Groceries',
-  'Entertainment',
-  'Technology',
-  'Health & Fitness',
-  'Medical',
-  'Insurance',
-  'Household',
-  'Shopping',
-  'Education',
-  'Travel',
-  'Mortgage',
-  'Utilities',
-  'Charity & Donations',
-  'Pets',
-  'Business',
-  'Personal Care',
-  'Income',
-  'Transfer',
-  'Other',
+  'Business', 'Charity & Donations', 'Clothing & Apparel', 'Eating Out',
+  'Education', 'Entertainment', 'Family', 'Food & Groceries', 'Health & Fitness',
+  'Holiday', 'Household', 'Insurance', 'Medical', 'Mortgage', 'Personal Care',
+  'Pets', 'Shopping', 'Technology', 'Transport', 'Travel', 'Utilities', 'Other',
 ] as const
-
 export type Category = typeof CATEGORIES[number]
 
 export const CLASSIFICATIONS = [
-  'Need',
-  'Want',
-  'Saving',
-  'Income',
-  'Transfer',
-  'Monthly Subscription',
-  'Annual Subscription',
-  'Quarterly Subscription',
-  'Weekly Subscription',
+  'Annual Subscription', 'Monthly Subscription', 'Fortnightly Subscription',
+  'Weekly Subscription', 'Regular Visit', 'One-off Purchase', 'Business Expense', 'Ignore',
 ] as const
-
 export type Classification = typeof CLASSIFICATIONS[number]

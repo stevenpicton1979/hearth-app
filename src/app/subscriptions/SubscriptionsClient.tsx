@@ -1,0 +1,175 @@
+'use client'
+
+import { useState } from 'react'
+import { DetectedSubscription } from '@/lib/types'
+import { CalendarIcon, ExclamationTriangleIcon, CheckCircleIcon } from '@heroicons/react/24/outline'
+
+interface Props {
+  subscriptions: DetectedSubscription[]
+}
+
+type Tab = 'active' | 'lapsed' | 'all'
+
+function formatCurrency(n: number): string {
+  return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 2 }).format(n)
+}
+
+function formatCurrencyRounded(n: number): string {
+  return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(n)
+}
+
+function formatDate(s: string): string {
+  return new Date(s + 'T00:00:00').toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
+function confidenceBadge(c: DetectedSubscription['confidence']) {
+  if (c === 'HIGH') return 'bg-emerald-100 text-emerald-800'
+  if (c === 'MEDIUM') return 'bg-amber-100 text-amber-800'
+  return 'bg-gray-100 text-gray-600'
+}
+
+function frequencyLabel(f: DetectedSubscription['frequency']): string {
+  const map: Record<string, string> = {
+    weekly: 'Weekly',
+    fortnightly: 'Fortnightly',
+    monthly: 'Monthly',
+    quarterly: 'Quarterly',
+    annual: 'Annual',
+  }
+  return map[f] || f
+}
+
+function isDatePast(dateStr: string): boolean {
+  return new Date(dateStr) < new Date()
+}
+
+export function SubscriptionsClient({ subscriptions }: Props) {
+  const [tab, setTab] = useState<Tab>('active')
+
+  const active = subscriptions.filter(s => !s.is_lapsed)
+  const lapsed = subscriptions.filter(s => s.is_lapsed)
+  const displayed = tab === 'active' ? active : tab === 'lapsed' ? lapsed : subscriptions
+
+  const activeAnnual = active.reduce((s, sub) => s + sub.annual_estimate, 0)
+  const totalAnnual = subscriptions.reduce((s, sub) => s + sub.annual_estimate, 0)
+
+  return (
+    <div className="space-y-6">
+      {/* Summary strip */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="bg-white border border-gray-200 rounded-xl p-4">
+          <div className="text-sm text-gray-500">Active subscriptions</div>
+          <div className="text-2xl font-bold text-gray-900 mt-1">{active.length}</div>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-xl p-4">
+          <div className="text-sm text-gray-500">Annual cost (active)</div>
+          <div className="text-2xl font-bold text-emerald-700 mt-1">{formatCurrencyRounded(activeAnnual)}</div>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-xl p-4">
+          <div className="text-sm text-gray-500">Monthly equivalent</div>
+          <div className="text-2xl font-bold text-gray-900 mt-1">{formatCurrencyRounded(activeAnnual / 12)}</div>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-xl p-4">
+          <div className="text-sm text-gray-500">Lapsed / cancelled</div>
+          <div className="text-2xl font-bold text-amber-600 mt-1">{lapsed.length}</div>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 bg-gray-100 rounded-lg p-1 w-fit">
+        {(['active', 'lapsed', 'all'] as Tab[]).map(t => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors capitalize ${
+              tab === t ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            {t === 'active' ? `Active (${active.length})` : t === 'lapsed' ? `Lapsed (${lapsed.length})` : `All (${subscriptions.length})`}
+          </button>
+        ))}
+      </div>
+
+      {displayed.length === 0 ? (
+        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center">
+          <CalendarIcon className="h-10 w-10 text-gray-300 mx-auto mb-3" />
+          <p className="text-gray-500 text-sm">
+            {subscriptions.length === 0
+              ? 'No recurring charges detected yet. Import at least 2+ months of transactions to enable subscription detection.'
+              : tab === 'active' ? 'No active subscriptions detected.' : 'No lapsed subscriptions.'}
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {displayed.map(sub => (
+            <div
+              key={sub.merchant}
+              className={`bg-white border rounded-xl p-4 flex items-start gap-4 ${
+                sub.is_lapsed ? 'border-amber-200 bg-amber-50' : 'border-gray-200'
+              }`}
+            >
+              {/* Icon */}
+              <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${
+                sub.is_lapsed ? 'bg-amber-100' : 'bg-emerald-100'
+              }`}>
+                {sub.is_lapsed
+                  ? <ExclamationTriangleIcon className="h-5 w-5 text-amber-600" />
+                  : <CheckCircleIcon className="h-5 w-5 text-emerald-600" />
+                }
+              </div>
+
+              {/* Main info */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-2 flex-wrap">
+                  <div>
+                    <div className="font-semibold text-gray-900">{sub.merchant}</div>
+                    <div className="text-sm text-gray-500 mt-0.5">
+                      {sub.account_name} · {frequencyLabel(sub.frequency)}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-bold text-gray-900">{formatCurrency(sub.amount)}</div>
+                    <div className="text-xs text-gray-400">{formatCurrencyRounded(sub.annual_estimate)}/yr</div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-4 mt-3 flex-wrap text-xs text-gray-500">
+                  <span>
+                    <span className="text-gray-400">Last:</span> {formatDate(sub.last_charged)}
+                  </span>
+                  <span className={isDatePast(sub.next_expected) && !sub.is_lapsed ? 'text-amber-600 font-medium' : ''}>
+                    <span className="text-gray-400">Next:</span> {formatDate(sub.next_expected)}
+                    {isDatePast(sub.next_expected) && !sub.is_lapsed && ' (overdue)'}
+                  </span>
+                  <span>
+                    <span className="text-gray-400">Seen:</span> {sub.occurrences} times
+                  </span>
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${confidenceBadge(sub.confidence)}`}>
+                    {sub.confidence}
+                  </span>
+                  {sub.is_lapsed && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+                      Possibly cancelled
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {subscriptions.length > 0 && (
+        <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm text-gray-500">
+          <p>
+            <span className="font-medium text-gray-700">How this works:</span> Recurring charges are detected by finding merchants
+            with consistent payment amounts (CV &lt; 15%) and regular intervals. Confidence increases with more occurrences.
+            {totalAnnual !== activeAnnual && (
+              <> Including lapsed subscriptions, the total detected annual spend is {formatCurrencyRounded(totalAnnual)}.</>
+            )}
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
