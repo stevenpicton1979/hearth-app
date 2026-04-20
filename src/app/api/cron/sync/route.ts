@@ -5,13 +5,28 @@ export async function GET(req: NextRequest) {
   if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
-  // Delegate to sync endpoint
+
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://hearth-app-kappa.vercel.app'
-  const res = await fetch(`${siteUrl}/api/sync`, {
+
+  // Step 1: Sync bank transactions
+  const syncRes = await fetch(`${siteUrl}/api/sync`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({}),
   })
-  const data = await res.json()
-  return NextResponse.json({ ok: true, ...data })
+  const syncData = await syncRes.json()
+
+  // Step 2: Record a daily net worth snapshot
+  let snapshotData: Record<string, unknown> = {}
+  try {
+    const snapshotRes = await fetch(`${siteUrl}/api/snapshots`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    })
+    snapshotData = await snapshotRes.json()
+  } catch {
+    snapshotData = { error: 'Failed to record snapshot' }
+  }
+
+  return NextResponse.json({ ok: true, sync: syncData, snapshot: snapshotData })
 }

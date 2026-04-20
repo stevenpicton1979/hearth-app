@@ -75,3 +75,47 @@ export interface DetectedSubscription {
   confidence: 'HIGH' | 'MEDIUM' | 'PROBABLE'
   is_lapsed: boolean
 }
+
+export interface Asset {
+  id: string
+  household_id: string
+  name: string
+  asset_type: 'property' | 'super' | 'shares' | 'cash' | 'other'
+  value: number
+  notes: string | null
+  as_at: string
+  updated_at: string
+}
+
+export interface Liability {
+  id: string
+  household_id: string
+  name: string
+  liability_type: 'mortgage' | 'personal_loan' | 'car_loan' | 'credit_card' | 'bnpl' | 'other'
+  balance: number
+  as_at: string
+  updated_at: string
+}
+
+export interface Goal {
+  id: string
+  household_id: string
+  name: string
+  target_amount: number
+  current_amount: number
+  target_date: string | null
+  is_complete: boolean
+  emoji: string | null
+  created_at: string
+  updated_at: string
+  linked_account_id?: string | null
+}
+
+export interface NetWorthSnapshot {
+  id: string
+  household_id: string
+  total_assets: number
+  total_liabilities: number
+  net_worth: number
+  recorded_at: string
+}

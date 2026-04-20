@@ -4,6 +4,8 @@ import {
   CurrencyDollarIcon,
   ArrowUpTrayIcon,
   TagIcon,
+  AdjustmentsHorizontalIcon,
+  ArrowDownTrayIcon,
 } from '@heroicons/react/24/outline'
 
 const SECTIONS = [
@@ -11,25 +13,37 @@ const SECTIONS = [
     href: '/settings/accounts',
     icon: BanknotesIcon,
     label: 'Bank Accounts',
-    description: 'Manage connected accounts and CSV import',
+    description: 'Manage connected accounts',
   },
   {
     href: '/settings/budgets',
     icon: CurrencyDollarIcon,
     label: 'Budgets',
-    description: 'Set monthly spending limits per category',
+    description: 'Set monthly spending limits',
+  },
+  {
+    href: '/settings/categories',
+    icon: AdjustmentsHorizontalIcon,
+    label: 'Categories',
+    description: 'Hide, rename or add categories',
   },
   {
     href: '/mappings',
     icon: TagIcon,
     label: 'Merchant Mappings',
-    description: 'Edit category rules that apply to all transactions',
+    description: 'Edit category rules',
   },
   {
     href: '/import',
     icon: ArrowUpTrayIcon,
     label: 'Import CSV',
-    description: 'Upload bank export files to add transactions',
+    description: 'Upload bank export files',
+  },
+  {
+    href: '/settings/export',
+    icon: ArrowDownTrayIcon,
+    label: 'Export & Data',
+    description: 'Download transactions as CSV',
   },
 ]
 
