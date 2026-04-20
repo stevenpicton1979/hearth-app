@@ -55,6 +55,9 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
     mappingMap.set(m.merchant, { category: m.category, classification: m.classification })
   }
 
+  // Collect auto-assigned categories to persist as mappings
+  const autoMappings = new Map<string, string>()
+
   for (const raw of raws) {
     if (raw.amount >= 0) continue
     if (isTransfer(raw.description)) { transfersSkipped++; continue }
@@ -63,6 +66,10 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
     const mapping = mappingMap.get(merchant)
     const category = mapping?.category ?? guessCategory(merchant)
     const classification = mapping?.classification ?? null
+
+    if (!mapping && category !== null) {
+      autoMappings.set(merchant, category)
+    }
 
     toUpsert.push({
       household_id: DEFAULT_HOUSEHOLD_ID,
@@ -76,6 +83,19 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
       is_transfer: false,
       basiq_transaction_id: raw.basiq_transaction_id ?? null,
     })
+  }
+
+  // Persist auto-categorised merchants as mappings so the Mappings page shows them
+  if (autoMappings.size > 0) {
+    const rows = Array.from(autoMappings.entries()).map(([merchant, category]) => ({
+      household_id: DEFAULT_HOUSEHOLD_ID,
+      merchant,
+      category,
+      classification: null,
+    }))
+    await supabase
+      .from('merchant_mappings')
+      .upsert(rows, { onConflict: 'household_id,merchant', ignoreDuplicates: true })
   }
 
   return { toUpsert, transfersSkipped }

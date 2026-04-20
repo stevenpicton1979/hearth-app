@@ -44,6 +44,7 @@ export interface ParsedTransaction {
   merchant: string
   category: string | null
   is_transfer: boolean
+  balance?: number
 }
 
 export interface ImportSummary {

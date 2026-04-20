@@ -48,6 +48,17 @@ export async function POST(req: NextRequest) {
     const autoCategorised = toUpsert.filter(t => t.category !== null).length
     const { inserted, duplicates } = await upsertTransactions(toUpsert)
 
+    // Update account current_balance from the most recent CSV row that has a balance
+    const withBalance = allParsed
+      .filter(p => p.balance !== undefined)
+      .sort((a, b) => b.date.localeCompare(a.date))
+    if (withBalance.length > 0 && withBalance[0].balance !== undefined) {
+      await supabase
+        .from('accounts')
+        .update({ current_balance: withBalance[0].balance, last_synced_at: new Date().toISOString() })
+        .eq('id', accountId)
+    }
+
     return NextResponse.json({
       imported: inserted,
       duplicates,

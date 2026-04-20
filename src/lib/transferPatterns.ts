@@ -21,6 +21,18 @@ export const TRANSFER_PATTERNS: RegExp[] = [
   /^refund\b/i,
   /\bcredit card payment\b/i,
   /\bcard payment\b/i,
+  /^wdl atm\b/i,
+  /^mycard credit\b/i,
+  /^citibank credit\b/i,
+  /\btax office\b/i,
+  /\bbcc rates\b/i,
+  /\boverdraw fee\b/i,
+  /\bdebit excess\b/i,
+  /\breturn no account\b/i,
+  /\bpayment received\b/i,
+  /\bdispute adjustment\b/i,
+  /\bintnl trans\b/i,
+  /^fast transfer\b/i,
 ]
 
 export function isTransfer(description: string): boolean {

@@ -12,7 +12,7 @@ export interface DuplicateSubscription {
 
 export interface TimelineItem {
   merchant: string
-  account_name: string
+  account_id: string
   amount: number
   expected_date: string
   frequency: string
@@ -23,6 +23,7 @@ interface Props {
   subscriptions: DetectedSubscription[]
   duplicates: DuplicateSubscription[]
   timeline: TimelineItem[]
+  accounts: { id: string; display_name: string }[]
 }
 
 type Tab = 'active' | 'lapsed' | 'all' | 'duplicates' | 'timeline'
@@ -71,7 +72,7 @@ function getWeekLabel(dateStr: string): string {
   return 'In 3–4 weeks'
 }
 
-export function SubscriptionsClient({ subscriptions, duplicates, timeline }: Props) {
+export function SubscriptionsClient({ subscriptions, duplicates, timeline, accounts }: Props) {
   const [tab, setTab] = useState<Tab>('active')
   const [dismissedDuplicates, setDismissedDuplicates] = useState<Set<string>>(new Set())
 
@@ -196,7 +197,7 @@ export function SubscriptionsClient({ subscriptions, duplicates, timeline }: Pro
                       <div>
                         <div className="font-semibold text-gray-900">{sub.merchant}</div>
                         <div className="text-sm text-gray-500 mt-0.5">
-                          {sub.account_name} · {frequencyLabel(sub.frequency)}
+                          {accounts.find(a => a.id === sub.account_id)?.display_name || 'Unknown'} · {frequencyLabel(sub.frequency)}
                         </div>
                       </div>
                       <div className="text-right">
@@ -274,7 +275,7 @@ export function SubscriptionsClient({ subscriptions, duplicates, timeline }: Pro
                       <div className="space-y-1.5">
                         {dup.accounts.map(acc => (
                           <div key={acc.account_id} className="flex items-center justify-between text-sm">
-                            <span className="text-gray-600">{acc.account_name}</span>
+                            <span className="text-gray-600">{accounts.find(a => a.id === acc.account_id)?.display_name || 'Unknown'}</span>
                             <div className="text-right">
                               <span className="font-medium text-gray-900">{formatCurrency(acc.amount)}</span>
                               <span className="text-xs text-gray-400 ml-2">last {formatDate(acc.last_charged)}</span>
@@ -340,7 +341,7 @@ export function SubscriptionsClient({ subscriptions, duplicates, timeline }: Pro
                         <div>
                           <span className="text-sm font-medium text-gray-900">{item.merchant}</span>
                           <div className="text-xs text-gray-400 mt-0.5">
-                            {item.account_name} · {frequencyLabel(item.frequency)} · {formatDate(item.expected_date)}
+                            {accounts.find(a => a.id === item.account_id)?.display_name || 'Unknown'} · {frequencyLabel(item.frequency)} · {formatDate(item.expected_date)}
                             {item.is_overdue && (
                               <span className="ml-2 text-red-600 font-medium">overdue</span>
                             )}

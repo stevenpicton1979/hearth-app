@@ -57,7 +57,7 @@ function computeTimeline(subscriptions: DetectedSubscription[]): TimelineItem[] 
 
     items.push({
       merchant: sub.merchant,
-      account_name: sub.account_name,
+      account_id: sub.account_id,
       amount: sub.amount,
       expected_date: sub.next_expected,
       frequency: sub.frequency,
@@ -103,7 +103,7 @@ export default async function SubscriptionsPage() {
           Auto-detected recurring charges from your transaction history.
         </p>
       </div>
-      <SubscriptionsClient subscriptions={detected} duplicates={duplicates} timeline={timeline} />
+      <SubscriptionsClient subscriptions={detected} duplicates={duplicates} timeline={timeline} accounts={accounts || []} />
     </div>
   )
 }

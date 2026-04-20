@@ -40,6 +40,19 @@ export function parseCSV(text: string): ParsedTransaction[] {
   const format = detectFormat(headers)
   const results: ParsedTransaction[] = []
 
+  // Extract balance from first data row (most recent transaction in date-desc exports)
+  let mostRecentBalance: number | undefined
+  if (lines.length >= 2) {
+    const firstCols = lines[1].split(',').map(c => c.replace(/^"|"$/g, '').trim())
+    try {
+      if (format === 'cba_4col') mostRecentBalance = parseAmount(firstCols[3]) ?? undefined
+      else if (format === 'cba_5col') mostRecentBalance = parseAmount(firstCols[4]) ?? undefined
+      else if (format === 'westpac') mostRecentBalance = parseAmount(firstCols[7]) ?? undefined
+    } catch { /* ignore */ }
+  }
+
+  let balanceAttached = false
+
   for (let i = 1; i < lines.length; i++) {
     const cols = lines[i].split(',').map(c => c.replace(/^"|"$/g, '').trim())
     if (cols.length < 2) continue
@@ -100,7 +113,11 @@ export function parseCSV(text: string): ParsedTransaction[] {
     const merchant = cleanMerchant(description)
     const category = guessCategory(merchant)
 
-    results.push({ date, amount, description, merchant, category, is_transfer: false })
+    // Attach balance to first parsed transaction only (most recent row)
+    const balance = !balanceAttached ? mostRecentBalance : undefined
+    balanceAttached = true
+
+    results.push({ date, amount, description, merchant, category, is_transfer: false, balance })
   }
 
   return results
