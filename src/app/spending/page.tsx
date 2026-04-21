@@ -73,6 +73,13 @@ export default async function SpendingPage({
 
   const hh = householdIds
 
+  const { data: manualIncome } = await supabase
+    .from('manual_income_entries')
+    .select('amount')
+    .eq('household_id', DEFAULT_HOUSEHOLD_ID)
+    .gte('date', from)
+    .lte('date', to)
+
   const qCurrent = supabase.from('transactions').select('category, amount').eq('household_id', DEFAULT_HOUSEHOLD_ID).eq('is_transfer', false).lt('amount', 0).gte('date', from).lte('date', to)
   const qLast = supabase.from('transactions').select('category, amount').eq('household_id', DEFAULT_HOUSEHOLD_ID).eq('is_transfer', false).lt('amount', 0).gte('date', lmFrom).lte('date', lmTo)
   const qThreeBack = supabase.from('transactions').select('category, amount').eq('household_id', DEFAULT_HOUSEHOLD_ID).eq('is_transfer', false).lt('amount', 0).gte('date', tmFrom).lte('date', tmTo)
@@ -97,7 +104,9 @@ export default async function SpendingPage({
   const currentTotal = currentSummary.reduce((s, c) => s + c.amount, 0)
   const lastTotal = lastSummary.reduce((s, c) => s + c.amount, 0)
   const lastSameDayTotal = (lastSameDay || []).reduce((s, t) => s + Math.abs(t.amount), 0)
-  const incomeTotal = (income || []).reduce((s, t) => s + (t as { amount: number }).amount, 0)
+  const txIncomeTotal = (income || []).reduce((s, t) => s + (t as { amount: number }).amount, 0)
+  const manualIncomeTotal = (manualIncome || []).reduce((s, e) => s + (e as { amount: number }).amount, 0)
+  const incomeTotal = txIncomeTotal + manualIncomeTotal
   const netTotal = incomeTotal - currentTotal
 
   // Daily spend rate / projection

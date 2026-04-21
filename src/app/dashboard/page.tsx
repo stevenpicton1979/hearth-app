@@ -84,6 +84,12 @@ export default async function DashboardPage() {
       : supabase.from('transactions').select('amount').eq('household_id', DEFAULT_HOUSEHOLD_ID).eq('is_transfer', false).gt('amount', 0).gte('date', thisMonthStart)),
   ])
 
+  const { data: manualIncome } = await supabase
+    .from('manual_income_entries')
+    .select('amount')
+    .eq('household_id', DEFAULT_HOUSEHOLD_ID)
+    .gte('date', thisMonthStart)
+
   const accounts = allAccounts
 
   // Net worth
@@ -104,8 +110,10 @@ export default async function DashboardPage() {
   const spendDelta = getDeltaLabel(thisMonthSpend, prevMonthSpend)
   const totalBudget = (budgets || []).reduce((s, b) => s + (b as { monthly_limit: number }).monthly_limit, 0)
 
-  // Income & savings
-  const thisMonthIncome = (thisMonthIncomeTxns || []).reduce((s, t) => s + (t as { amount: number }).amount, 0)
+  // Income & savings (transactions + manual income entries)
+  const txIncome = (thisMonthIncomeTxns || []).reduce((s, t) => s + (t as { amount: number }).amount, 0)
+  const manualIncomeTotal = (manualIncome || []).reduce((s, e) => s + (e as { amount: number }).amount, 0)
+  const thisMonthIncome = txIncome + manualIncomeTotal
   const netSurplus = thisMonthIncome - thisMonthSpend
   const savingsRate = thisMonthIncome > 0 ? (netSurplus / thisMonthIncome) * 100 : null
 

@@ -6,6 +6,7 @@ import {
   TagIcon,
   AdjustmentsHorizontalIcon,
   ArrowDownTrayIcon,
+  DocumentTextIcon,
 } from '@heroicons/react/24/outline'
 
 const SECTIONS = [
@@ -20,6 +21,12 @@ const SECTIONS = [
     icon: CurrencyDollarIcon,
     label: 'Budgets',
     description: 'Set monthly spending limits',
+  },
+  {
+    href: '/settings/income',
+    icon: DocumentTextIcon,
+    label: 'Income Entries',
+    description: 'Manually record director fees and invoices',
   },
   {
     href: '/settings/categories',
