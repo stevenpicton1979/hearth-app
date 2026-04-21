@@ -17,8 +17,11 @@ export default async function NetWorthPage() {
     supabase.from('net_worth_snapshots').select('*').eq('household_id', DEFAULT_HOUSEHOLD_ID).order('recorded_at', { ascending: true }).limit(24),
   ])
 
-  // Compute bank balance from accounts.current_balance
-  const bankBalance = (accounts || []).reduce((s: number, a) => s + ((a as { current_balance: number | null }).current_balance || 0), 0)
+  // Compute bank balance from accounts.current_balance — only include accounts where balance is known
+  const bankBalance = (accounts || []).reduce((s: number, a) => {
+    const bal = (a as { current_balance: number | null }).current_balance
+    return s + (bal !== null ? bal : 0)
+  }, 0)
 
   // Total assets = manual assets + bank balances
   const manualAssetsTotal = (assets || []).reduce((s: number, a) => s + (a as { value: number }).value, 0)

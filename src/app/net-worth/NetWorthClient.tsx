@@ -372,7 +372,9 @@ export function NetWorthClient({
                           </span>
                         )}
                       </div>
-                      <span className="text-sm font-medium text-gray-900">{audFull(acc.current_balance || 0)}</span>
+                      <span className="text-sm font-medium text-gray-900">
+                        {acc.current_balance !== null ? audFull(acc.current_balance) : <span className="text-gray-400 font-normal">balance not available</span>}
+                      </span>
                     </div>
                   ))}
                 </div>
