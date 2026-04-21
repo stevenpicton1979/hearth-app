@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseCSV, extractBalance, extractNABAccountName } from '../csvParser'
+import { parseCSV, extractBalance, extractNABAccountName, extractAmexAccountName } from '../csvParser'
 
 describe('csvParser - Import Layer', () => {
   describe('parseCSV', () => {
@@ -188,6 +188,107 @@ describe('csvParser - Import Layer', () => {
 
     it('returns null for empty string', () => {
       expect(extractNABAccountName('')).toBeNull()
+    })
+  })
+
+  describe('Amex format', () => {
+    const AMEX_HEADER = 'Date,Date Processed,Description,Amount,Flexible'
+
+    it('detects Amex format from header', () => {
+      const csv = `${AMEX_HEADER}
+20/04/2026,21/04/2026,VENTRAIP AUSTRALIA PTY  NARRE WARREN,30.00,FS`
+      const result = parseCSV(csv)
+      expect(result).toHaveLength(1)
+    })
+
+    it('negates amount: CSV 30.00 → stored as -30.00', () => {
+      const csv = `${AMEX_HEADER}
+20/04/2026,21/04/2026,VENTRAIP AUSTRALIA PTY  NARRE WARREN,30.00,FS`
+      const result = parseCSV(csv)
+      expect(result[0].amount).toBe(-30.00)
+    })
+
+    it('parses date "20/04/2026" to 2026-04-20', () => {
+      const csv = `${AMEX_HEADER}
+20/04/2026,21/04/2026,VENTRAIP AUSTRALIA PTY  NARRE WARREN,30.00,FS`
+      const result = parseCSV(csv)
+      expect(result[0].date).toBe('2026-04-20')
+    })
+
+    it('cleans merchant: splits on double spaces to drop city suffix', () => {
+      const csv = `${AMEX_HEADER}
+20/04/2026,21/04/2026,VENTRAIP AUSTRALIA PTY  NARRE WARREN,30.00,FS`
+      const result = parseCSV(csv)
+      expect(result[0].merchant).toBe('VENTRAIP AUSTRALIA PTY')
+    })
+
+    it('cleans merchant: ANTHROPIC with many spaces before city', () => {
+      const csv = `${AMEX_HEADER}
+10/04/2026,11/04/2026,ANTHROPIC               SAN FRANCISCO,310.00,FS`
+      const result = parseCSV(csv)
+      expect(result[0].merchant).toBe('ANTHROPIC')
+    })
+
+    it('marks PAYMENT description as is_transfer=true', () => {
+      const csv = `${AMEX_HEADER}
+01/04/2026,02/04/2026,PAYMENT RECEIVED - THANK YOU,500.00,`
+      const result = parseCSV(csv)
+      expect(result[0].is_transfer).toBe(true)
+    })
+
+    it('marks THANK YOU description as is_transfer=true', () => {
+      const csv = `${AMEX_HEADER}
+01/04/2026,02/04/2026,DIRECT DEBIT AUTOPAY,500.00,`
+      const result = parseCSV(csv)
+      expect(result[0].is_transfer).toBe(true)
+    })
+
+    it('marks ANNUAL CARD FEE as is_transfer=false', () => {
+      const csv = `${AMEX_HEADER}
+07/04/2026,07/04/2026,ANNUAL CARD FEE,249.00,`
+      const result = parseCSV(csv)
+      expect(result[0].is_transfer).toBe(false)
+    })
+
+    it('parses row with empty Flexible column', () => {
+      const csv = `${AMEX_HEADER}
+07/04/2026,07/04/2026,ANNUAL CARD FEE,249.00,`
+      const result = parseCSV(csv)
+      expect(result).toHaveLength(1)
+      expect(result[0].amount).toBe(-249.00)
+    })
+
+    it('parses multiple rows correctly', () => {
+      const csv = `${AMEX_HEADER}
+20/04/2026,21/04/2026,VENTRAIP AUSTRALIA PTY  NARRE WARREN,30.00,FS
+10/04/2026,11/04/2026,ANTHROPIC               SAN FRANCISCO,310.00,FS
+01/04/2026,02/04/2026,PAYMENT THANK YOU,154.54,`
+      const result = parseCSV(csv)
+      expect(result).toHaveLength(3)
+      expect(result[0].amount).toBe(-30.00)
+      expect(result[1].amount).toBe(-310.00)
+      expect(result[2].is_transfer).toBe(true)
+    })
+  })
+
+  describe('extractAmexAccountName', () => {
+    const AMEX_HEADER = 'Date,Date Processed,Description,Amount,Flexible'
+
+    it('returns "Business Amex" for Amex CSV', () => {
+      const csv = `${AMEX_HEADER}
+20/04/2026,21/04/2026,VENTRAIP AUSTRALIA PTY  NARRE WARREN,30.00,FS`
+      expect(extractAmexAccountName(csv)).toBe('Business Amex')
+    })
+
+    it('returns null for CBA CSV', () => {
+      const csv = `16/04/2026,"-23.14","WOOLWORTHS","5234.56"`
+      expect(extractAmexAccountName(csv)).toBeNull()
+    })
+
+    it('returns null for NAB CSV', () => {
+      const csv = `Date,Amount,Account Number,,Transaction Type,Transaction Details,Balance,Category,Merchant Name,Processed On
+12 Jan 26,-83.22,Card ending 1687,,CREDIT CARD PURCHASE,Reddy Express,-914.82,Fuel,Shell Coles Express,12 Jan 26`
+      expect(extractAmexAccountName(csv)).toBeNull()
     })
   })
 

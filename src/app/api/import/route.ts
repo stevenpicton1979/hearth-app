@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
 import { DEFAULT_HOUSEHOLD_ID } from '@/lib/constants'
-import { parseCSV, extractBalance, extractNABAccountName } from '@/lib/csvParser'
+import { parseCSV, extractBalance, extractNABAccountName, extractAmexAccountName } from '@/lib/csvParser'
 import { processBatch, upsertTransactions } from '@/lib/categoryPipeline'
 
 export async function POST(req: NextRequest) {
@@ -18,16 +18,19 @@ export async function POST(req: NextRequest) {
     // Read all file texts upfront (needed for NAB detection and parsing)
     const fileTexts = await Promise.all(files.map(f => f.text()))
 
-    // Auto-detect NAB account from file content when no account provided
+    // Auto-detect NAB or Amex account from file content when no account provided
     if (!accountId) {
       for (const text of fileTexts) {
         const nabName = extractNABAccountName(text)
-        if (nabName) {
+        const amexName = extractAmexAccountName(text)
+        const autoName = nabName || amexName
+        if (autoName) {
+          const institution = nabName ? 'NAB' : 'Amex'
           const { data: existing } = await supabase
             .from('accounts')
             .select('id')
             .eq('household_id', DEFAULT_HOUSEHOLD_ID)
-            .eq('display_name', nabName)
+            .eq('display_name', autoName)
             .maybeSingle()
           if (existing) {
             accountId = existing.id
@@ -36,9 +39,9 @@ export async function POST(req: NextRequest) {
               .from('accounts')
               .insert({
                 household_id: DEFAULT_HOUSEHOLD_ID,
-                display_name: nabName,
+                display_name: autoName,
                 account_type: 'credit_card',
-                institution: 'NAB',
+                institution,
               })
               .select('id')
               .single()

@@ -36,7 +36,9 @@ export default function ImportPage() {
     for (const file of newFiles) {
       const text = await file.slice(0, 300).text()
       const firstLine = text.split(/\r?\n/)[0]
-      if (firstLine.includes('Transaction Type') && firstLine.includes('Merchant Name')) {
+      const isNAB = firstLine.includes('Transaction Type') && firstLine.includes('Merchant Name')
+      const isAmex = firstLine.includes('Date Processed') && firstLine.includes('Flexible')
+      if (isNAB || isAmex) {
         setHasNABFile(true)
         return
       }

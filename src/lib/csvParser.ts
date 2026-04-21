@@ -33,7 +33,7 @@ function parseAmount(raw: string): number | null {
   return isNaN(n) ? null : n
 }
 
-type CSVFormat = 'cba_4col' | 'cba_4col_noheader' | 'cba_5col' | 'anz' | 'westpac' | 'nab_cc' | 'generic'
+type CSVFormat = 'cba_4col' | 'cba_4col_noheader' | 'cba_5col' | 'anz' | 'westpac' | 'nab_cc' | 'amex' | 'generic'
 
 const DATE_RE = /^\d{1,2}\/\d{1,2}\/\d{4}$/
 
@@ -65,6 +65,11 @@ function detectFormat(headers: string[]): CSVFormat {
   // NAB credit card: header contains "transaction type" and "merchant name"
   if (h.includes('transaction type') && h.includes('merchant name')) {
     return 'nab_cc'
+  }
+
+  // Amex: header has "date processed" in col 1 and "flexible" in col 4
+  if (h[1] === 'date processed' && h[4] === 'flexible') {
+    return 'amex'
   }
 
   if (h.includes('debit') && h.includes('credit') && h.includes('balance')) {
@@ -153,6 +158,14 @@ export function parseCSV(text: string): ParsedTransaction[] {
           txnDetails.includes('CASH/TRANSFER PAYMENT') ||
           txnDetails.includes('INTERNET PAYMENT Linked Acc Trns')
         nabCategoryOverride = NAB_CATEGORY_MAP[nabCategory] ?? null
+      } else if (format === 'amex') {
+        // Date, Date Processed, Description, Amount, Flexible
+        // Positive amount = purchase (spending) — negate to match Hearth convention
+        date = parseDate(cols[0])
+        const raw = parseAmount(cols[3])
+        amount = raw !== null ? -raw : null
+        description = cols[2].trim()
+        isTransferRow = /PAYMENT|THANK YOU|DIRECT DEBIT|AUTOPAY/i.test(description)
       } else {
         // generic: try date in col 0, amount somewhere, description
         date = parseDate(cols[0])
@@ -174,8 +187,9 @@ export function parseCSV(text: string): ParsedTransaction[] {
     if (!date || amount === null || !description) continue
     if (amount === 0) continue
 
-    // For non-NAB formats: use pattern-based transfer detection and skip
-    if (format !== 'nab_cc' && isTransfer(description)) continue
+    // For CBA/ANZ/Westpac/generic: use pattern-based transfer detection and skip
+    // NAB and Amex use their own transfer detection (is_transfer flag set above)
+    if (format !== 'nab_cc' && format !== 'amex' && isTransfer(description)) continue
 
     const merchant = cleanMerchant(description)
     const isIncome = amount > 0
@@ -215,6 +229,16 @@ export function extractNABAccountName(text: string): string | null {
     if (m) return `NAB Credit Card (\u00b7${m[1]})`
   }
   return null
+}
+
+/**
+ * Detect an Amex CSV and return the fixed account name "Business Amex", or null.
+ */
+export function extractAmexAccountName(text: string): string | null {
+  const lines = text.split(/\r?\n/).filter(l => l.trim())
+  if (lines.length < 1) return null
+  const headers = lines[0].split(',').map(h => h.replace(/^"|"$/g, '').trim())
+  return detectFormat(headers) === 'amex' ? 'Business Amex' : null
 }
 
 /**
