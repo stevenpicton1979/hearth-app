@@ -2,7 +2,11 @@ import { createServerClient } from '@/lib/supabase/server'
 import { DEFAULT_HOUSEHOLD_ID } from '@/lib/constants'
 import { TransactionTable } from './TransactionTable'
 
-export default async function TransactionsPage() {
+export default async function TransactionsPage({
+  searchParams,
+}: {
+  searchParams: { month?: string; category?: string }
+}) {
   const supabase = createServerClient()
 
   const [{ data: transactions }, { data: accounts }] = await Promise.all([
@@ -31,6 +35,7 @@ export default async function TransactionsPage() {
       <TransactionTable
         initialTransactions={transactions || []}
         accounts={accounts || []}
+        initialCategory={searchParams.category || ''}
       />
     </div>
   )

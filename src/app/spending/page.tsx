@@ -51,9 +51,16 @@ export default async function SpendingPage({
   const threeMonthsBack = prevMonth(prevMonth(lastMonth))
   const { from: tmFrom, to: tmTo } = getMonthRange(threeMonthsBack)
 
+  // Compute same-day-last-month cutoff for fair mid-month comparison
+  const isCurrentMonth = selectedMonth === currentMonthStr
+  const lastDayOfPrevMonth = new Date(today.getFullYear(), today.getMonth(), 0).getDate()
+  const sameDayLastMonth = Math.min(today.getDate(), lastDayOfPrevMonth)
+  const sameDayLastMonthTo = `${lmFrom.slice(0, 8)}${String(sameDayLastMonth).padStart(2, '0')}`
+  const comparisonLabel = isCurrentMonth ? 'vs same point last month' : 'vs last month'
+
   const supabase = createServerClient()
 
-  const [{ data: current }, { data: last }, { data: threeBack }, { data: budgets }] = await Promise.all([
+  const [{ data: current }, { data: last }, { data: threeBack }, { data: budgets }, { data: income }, { data: lastSameDay }, { data: uncategorised }] = await Promise.all([
     supabase
       .from('transactions')
       .select('category, amount')
@@ -82,6 +89,31 @@ export default async function SpendingPage({
       .from('budgets')
       .select('category, monthly_limit')
       .eq('household_id', DEFAULT_HOUSEHOLD_ID),
+    supabase
+      .from('transactions')
+      .select('amount')
+      .eq('household_id', DEFAULT_HOUSEHOLD_ID)
+      .eq('is_transfer', false)
+      .gt('amount', 0)
+      .gte('date', from)
+      .lte('date', to),
+    supabase
+      .from('transactions')
+      .select('category, amount')
+      .eq('household_id', DEFAULT_HOUSEHOLD_ID)
+      .eq('is_transfer', false)
+      .lt('amount', 0)
+      .gte('date', lmFrom)
+      .lte('date', sameDayLastMonthTo),
+    supabase
+      .from('transactions')
+      .select('merchant, amount')
+      .eq('household_id', DEFAULT_HOUSEHOLD_ID)
+      .eq('is_transfer', false)
+      .is('category', null)
+      .lt('amount', 0)
+      .gte('date', from)
+      .lte('date', to),
   ])
 
   const currentSummary = computeSummary(current || [])
@@ -90,13 +122,28 @@ export default async function SpendingPage({
 
   const currentTotal = currentSummary.reduce((s, c) => s + c.amount, 0)
   const lastTotal = lastSummary.reduce((s, c) => s + c.amount, 0)
+  const lastSameDayTotal = (lastSameDay || []).reduce((s, t) => s + Math.abs(t.amount), 0)
+  const incomeTotal = (income || []).reduce((s, t) => s + (t as { amount: number }).amount, 0)
+  const netTotal = incomeTotal - currentTotal
 
   // Daily spend rate / projection
   const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate()
-  const isCurrentMonth = selectedMonth === currentMonthStr
   const daysElapsed = isCurrentMonth ? today.getDate() : daysInMonth
   const dailyRate = daysElapsed > 0 ? currentTotal / daysElapsed : 0
   const projected = dailyRate * daysInMonth
+
+  // Uncategorised merchants grouped
+  const merchantMap: Record<string, { total: number; count: number }> = {}
+  for (const t of uncategorised || []) {
+    const m = (t as { merchant: string | null; amount: number }).merchant || 'Unknown'
+    if (!merchantMap[m]) merchantMap[m] = { total: 0, count: 0 }
+    merchantMap[m].total += Math.abs((t as { amount: number }).amount)
+    merchantMap[m].count += 1
+  }
+  const uncategorisedMerchants = Object.entries(merchantMap)
+    .map(([merchant, { total, count }]) => ({ merchant, total, count }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 10)
 
   return (
     <div>
@@ -109,6 +156,10 @@ export default async function SpendingPage({
         threeBackSummary={threeBackSummary}
         currentTotal={currentTotal}
         lastTotal={lastTotal}
+        lastSameDayTotal={lastSameDayTotal}
+        comparisonLabel={comparisonLabel}
+        incomeTotal={incomeTotal}
+        netTotal={netTotal}
         dailyRate={dailyRate}
         projected={projected}
         selectedMonth={selectedMonth}
@@ -116,6 +167,7 @@ export default async function SpendingPage({
         daysElapsed={daysElapsed}
         daysInMonth={daysInMonth}
         budgets={budgets || []}
+        uncategorisedMerchants={uncategorisedMerchants}
       />
     </div>
   )

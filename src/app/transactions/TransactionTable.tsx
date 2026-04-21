@@ -8,6 +8,7 @@ import { MagnifyingGlassIcon, EllipsisHorizontalIcon, XMarkIcon, ChevronLeftIcon
 interface Props {
   initialTransactions: Transaction[]
   accounts: { id: string; display_name: string }[]
+  initialCategory?: string
 }
 
 function rowBg(t: Transaction): string {
@@ -26,7 +27,7 @@ function formatDate(s: string): string {
   return d.toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
-export function TransactionTable({ initialTransactions, accounts }: Props) {
+export function TransactionTable({ initialTransactions, accounts, initialCategory }: Props) {
   const [transactions, setTransactions] = useState<Transaction[]>(initialTransactions)
   const [count, setCount] = useState<number>(initialTransactions.length)
   const [page, setPage] = useState(0)
@@ -34,7 +35,7 @@ export function TransactionTable({ initialTransactions, accounts }: Props) {
 
   // Filters
   const [filterAccount, setFilterAccount] = useState('')
-  const [filterCategory, setFilterCategory] = useState('')
+  const [filterCategory, setFilterCategory] = useState(initialCategory || '')
   const [filterClassification, setFilterClassification] = useState('')
   const [filterFrom, setFilterFrom] = useState('')
   const [filterTo, setFilterTo] = useState('')

@@ -21,12 +21,12 @@ function formatDate(s: string): string {
   return new Date(s + 'T00:00:00').toLocaleDateString('en-AU', { day: '2-digit', month: 'short' })
 }
 
-function getDeltaLabel(current: number, previous: number): { label: string; positive: boolean } | null {
+function getDeltaLabel(current: number, previous: number, label = 'vs same point last month'): { label: string; positive: boolean } | null {
   if (previous === 0) return null
   const delta = current - previous
   const pct = Math.abs((delta / Math.abs(previous)) * 100).toFixed(0)
   return {
-    label: `${delta >= 0 ? '+' : ''}${aud(delta)} (${pct}%) vs last month`,
+    label: `${delta >= 0 ? '+' : ''}${aud(delta)} (${pct}%) ${label}`,
     positive: delta >= 0,
   }
 }
@@ -38,7 +38,11 @@ export default async function DashboardPage() {
   const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
   const prevMonthStart = `${prevMonth.getFullYear()}-${String(prevMonth.getMonth() + 1).padStart(2, '0')}-01`
   const prevMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0)
-  const prevMonthEndStr = `${prevMonthEnd.getFullYear()}-${String(prevMonthEnd.getMonth() + 1).padStart(2, '0')}-${String(prevMonthEnd.getDate()).padStart(2, '0')}`
+
+  // Same-day-last-month for fair comparison
+  const lastDayOfPrevMonth = prevMonthEnd.getDate()
+  const sameDayPrevMonthDay = Math.min(now.getDate(), lastDayOfPrevMonth)
+  const sameDayPrevMonth = `${prevMonth.getFullYear()}-${String(prevMonth.getMonth() + 1).padStart(2, '0')}-${String(sameDayPrevMonthDay).padStart(2, '0')}`
 
   const [
     { data: assets },
@@ -51,17 +55,19 @@ export default async function DashboardPage() {
     { data: goals },
     { data: recentTxns },
     { data: subTxns },
+    { data: thisMonthIncomeTxns },
   ] = await Promise.all([
     supabase.from('assets').select('value').eq('household_id', DEFAULT_HOUSEHOLD_ID),
     supabase.from('liabilities').select('balance').eq('household_id', DEFAULT_HOUSEHOLD_ID),
     supabase.from('accounts').select('id, display_name, current_balance').eq('household_id', DEFAULT_HOUSEHOLD_ID).eq('is_active', true),
     supabase.from('net_worth_snapshots').select('*').eq('household_id', DEFAULT_HOUSEHOLD_ID).order('recorded_at', { ascending: false }).limit(2),
     supabase.from('transactions').select('amount, category').eq('household_id', DEFAULT_HOUSEHOLD_ID).eq('is_transfer', false).gte('date', thisMonthStart).lt('amount', 0),
-    supabase.from('transactions').select('amount').eq('household_id', DEFAULT_HOUSEHOLD_ID).eq('is_transfer', false).gte('date', prevMonthStart).lte('date', prevMonthEndStr).lt('amount', 0),
+    supabase.from('transactions').select('amount').eq('household_id', DEFAULT_HOUSEHOLD_ID).eq('is_transfer', false).gte('date', prevMonthStart).lte('date', sameDayPrevMonth).lt('amount', 0),
     supabase.from('budgets').select('*').eq('household_id', DEFAULT_HOUSEHOLD_ID),
     supabase.from('goals').select('*').eq('household_id', DEFAULT_HOUSEHOLD_ID).eq('is_complete', false).order('created_at', { ascending: false }).limit(3),
     supabase.from('transactions').select('id, date, merchant, description, amount, category, classification, accounts(display_name)').eq('household_id', DEFAULT_HOUSEHOLD_ID).eq('is_transfer', false).order('date', { ascending: false }).limit(5),
     supabase.from('transactions').select('*').eq('household_id', DEFAULT_HOUSEHOLD_ID).eq('is_transfer', false).lt('amount', 0).order('date', { ascending: false }).limit(2000),
+    supabase.from('transactions').select('amount').eq('household_id', DEFAULT_HOUSEHOLD_ID).eq('is_transfer', false).gt('amount', 0).gte('date', thisMonthStart),
   ])
 
   // Net worth
@@ -81,6 +87,27 @@ export default async function DashboardPage() {
   const prevMonthSpend = (prevMonthTxns || []).reduce((s, t) => s + Math.abs((t as { amount: number }).amount), 0)
   const spendDelta = getDeltaLabel(thisMonthSpend, prevMonthSpend)
   const totalBudget = (budgets || []).reduce((s, b) => s + (b as { monthly_limit: number }).monthly_limit, 0)
+
+  // Income & savings
+  const thisMonthIncome = (thisMonthIncomeTxns || []).reduce((s, t) => s + (t as { amount: number }).amount, 0)
+  const netSurplus = thisMonthIncome - thisMonthSpend
+  const savingsRate = thisMonthIncome > 0 ? (netSurplus / thisMonthIncome) * 100 : null
+
+  // Per-category spend for budget widget
+  const categorySpend: Record<string, number> = {}
+  for (const t of thisMonthTxns || []) {
+    const cat = (t as { category: string | null; amount: number }).category || 'Other'
+    categorySpend[cat] = (categorySpend[cat] || 0) + Math.abs((t as { amount: number }).amount)
+  }
+  // Top 3 budget categories by utilisation ratio
+  const budgetProgress = (budgets || [])
+    .map(b => {
+      const spent = categorySpend[(b as { category: string }).category] || 0
+      const limit = (b as { monthly_limit: number }).monthly_limit
+      return { category: (b as { category: string }).category, spent, limit, ratio: limit > 0 ? spent / limit : 0 }
+    })
+    .sort((a, b) => b.ratio - a.ratio)
+    .slice(0, 3)
 
   // Subscriptions — upcoming in next 7 days
   const detected = detectSubscriptions((subTxns || []) as Transaction[], accounts || [])
@@ -142,12 +169,41 @@ export default async function DashboardPage() {
               Details <ArrowRightIcon className="h-3 w-3" />
             </Link>
           </div>
-          <p className="text-3xl font-bold text-gray-900">{aud(thisMonthSpend)}</p>
+
+          {/* Income / Spent / Net */}
+          <div className="flex gap-4 mb-3">
+            <div className="flex-1">
+              <span className="text-xs text-gray-400 block">Income</span>
+              <span className="font-semibold text-emerald-700">{aud(thisMonthIncome)}</span>
+            </div>
+            <div className="flex-1">
+              <span className="text-xs text-gray-400 block">Spent</span>
+              <span className="font-semibold text-gray-900">{aud(thisMonthSpend)}</span>
+            </div>
+            <div className="flex-1">
+              <span className="text-xs text-gray-400 block">Net</span>
+              <span className={`font-semibold ${netSurplus >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{aud(netSurplus)}</span>
+            </div>
+          </div>
+
+          {/* Net surplus/deficit prominent figure */}
+          <p className={`text-3xl font-bold ${netSurplus >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>{aud(netSurplus)}</p>
+          <p className="text-xs text-gray-400 mt-0.5">{netSurplus >= 0 ? 'surplus' : 'deficit'} this month</p>
+
           {spendDelta && (
             <p className={`text-xs mt-1 ${spendDelta.positive ? 'text-red-500' : 'text-emerald-600'}`}>
               {spendDelta.label}
             </p>
           )}
+
+          {/* Savings rate */}
+          {savingsRate !== null && (
+            <p className={`text-xs font-medium mt-1 ${savingsRate >= 20 ? 'text-emerald-600' : savingsRate >= 10 ? 'text-amber-600' : 'text-red-600'}`}>
+              Savings rate: {savingsRate.toFixed(0)}%
+            </p>
+          )}
+
+          {/* Total budget progress */}
           {totalBudget > 0 && (
             <div className="mt-4">
               <div className="flex justify-between text-xs text-gray-500 mb-1">
@@ -162,6 +218,27 @@ export default async function DashboardPage() {
                   style={{ width: `${Math.min(100, (thisMonthSpend / totalBudget) * 100)}%` }}
                 />
               </div>
+
+              {/* Top 3 budget categories */}
+              {budgetProgress.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  {budgetProgress.map(({ category, spent, limit, ratio }) => {
+                    const pct = ratio * 100
+                    const barColor = pct >= 100 ? 'bg-red-500' : pct >= 75 ? 'bg-amber-500' : 'bg-emerald-500'
+                    return (
+                      <div key={category}>
+                        <div className="flex justify-between text-xs text-gray-500 mb-0.5">
+                          <span>{category}</span>
+                          <span className={pct >= 100 ? 'text-red-600' : pct >= 75 ? 'text-amber-600' : ''}>{aud(spent)} / {aud(limit)}</span>
+                        </div>
+                        <div className="w-full bg-gray-100 rounded-full h-1.5">
+                          <div className={`h-1.5 rounded-full transition-all ${barColor}`} style={{ width: `${Math.min(100, pct)}%` }} />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           )}
           {totalBudget === 0 && (

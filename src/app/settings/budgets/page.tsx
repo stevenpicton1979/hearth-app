@@ -21,12 +21,38 @@ export default function BudgetsPage() {
   const [addAmount, setAddAmount] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [categoryAverages, setCategoryAverages] = useState<Record<string, number>>({})
 
   useEffect(() => {
     fetch('/api/budgets')
       .then(r => r.json())
       .then(d => setBudgets(d.budgets || []))
       .finally(() => setIsLoading(false))
+
+    // Fetch 3-month category averages
+    const now = new Date()
+    const from = new Date(now.getFullYear(), now.getMonth() - 3, 1)
+    const to = new Date(now.getFullYear(), now.getMonth(), 0)
+    const fromStr = `${from.getFullYear()}-${String(from.getMonth() + 1).padStart(2, '0')}-01`
+    const toStr = `${to.getFullYear()}-${String(to.getMonth() + 1).padStart(2, '0')}-${String(to.getDate()).padStart(2, '0')}`
+    fetch(`/api/transactions?from=${fromStr}&to=${toStr}&page=0`)
+      .then(r => r.json())
+      .then(d => {
+        // Compute per-category totals over 3 months
+        const totals: Record<string, number> = {}
+        for (const t of (d.transactions || []) as Array<{ category: string | null; amount: number }>) {
+          if (t.amount >= 0) continue // skip income
+          const cat = t.category || 'Other'
+          totals[cat] = (totals[cat] || 0) + Math.abs(t.amount)
+        }
+        // Average per month (3 months)
+        const avgs: Record<string, number> = {}
+        for (const [cat, total] of Object.entries(totals)) {
+          avgs[cat] = total / 3
+        }
+        setCategoryAverages(avgs)
+      })
+      .catch(() => {/* silently ignore */})
   }, [])
 
   const usedCategories = new Set(budgets.map(b => b.category))
@@ -84,14 +110,24 @@ export default function BudgetsPage() {
       <form onSubmit={handleAdd} className="bg-white border border-gray-200 rounded-xl p-5 mb-6">
         <h2 className="font-semibold text-gray-900 mb-4">Add budget limit</h2>
         <div className="flex gap-3 flex-wrap">
-          <select
-            value={addCategory}
-            onChange={e => setAddCategory(e.target.value)}
-            className="flex-1 min-w-40 text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-          >
-            <option value="">Select category...</option>
-            {availableCategories.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
+          <div className="flex-1 min-w-40">
+            <select
+              value={addCategory}
+              onChange={e => {
+                setAddCategory(e.target.value)
+                const avg = categoryAverages[e.target.value]
+                if (avg && avg > 0) setAddAmount(String(Math.round(avg)))
+              }}
+              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            >
+              <option value="">Select category...</option>
+              {availableCategories.map(c => (
+                <option key={c} value={c}>
+                  {c}{categoryAverages[c] ? ` (avg $${Math.round(categoryAverages[c])}/mo)` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
           <div className="relative">
             <span className="absolute left-3 top-2.5 text-sm text-gray-400">$</span>
             <input
@@ -114,6 +150,9 @@ export default function BudgetsPage() {
           </button>
         </div>
         {error && <p className="text-sm text-red-600 mt-3">{error}</p>}
+        {Object.keys(categoryAverages).length > 0 && (
+          <p className="text-xs text-gray-400 mt-2">Averages based on your last 3 months of spending.</p>
+        )}
       </form>
 
       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">

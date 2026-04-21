@@ -9,7 +9,7 @@ export default async function NetWorthPage() {
     { data: assets },
     { data: liabilities },
     { data: accounts },
-    { data: snapshots },
+    { data: rawSnapshots },
   ] = await Promise.all([
     supabase.from('assets').select('*').eq('household_id', DEFAULT_HOUSEHOLD_ID).order('asset_type').order('name'),
     supabase.from('liabilities').select('*').eq('household_id', DEFAULT_HOUSEHOLD_ID).order('liability_type').order('name'),
@@ -29,6 +29,33 @@ export default async function NetWorthPage() {
   const totalLiabilities = (liabilities || []).reduce((s: number, l) => s + (l as { balance: number }).balance, 0)
   const netWorth = totalAssets - totalLiabilities
 
+  // Auto-insert today's snapshot if not already recorded
+  const todayStr = new Date().toISOString().slice(0, 10)
+  const snapshots = rawSnapshots || []
+  const hasTodaySnapshot = snapshots.some(s => (s as { recorded_at: string }).recorded_at.startsWith(todayStr))
+
+  let allSnapshots = snapshots
+  if (!hasTodaySnapshot) {
+    try {
+      const { data: newSnap } = await supabase
+        .from('net_worth_snapshots')
+        .insert({
+          household_id: DEFAULT_HOUSEHOLD_ID,
+          total_assets: totalAssets,
+          total_liabilities: totalLiabilities,
+          net_worth: netWorth,
+          recorded_at: new Date().toISOString(),
+        })
+        .select()
+        .single()
+      if (newSnap) {
+        allSnapshots = [...snapshots, newSnap].slice(-24)
+      }
+    } catch {
+      // silently continue if auto-snapshot fails
+    }
+  }
+
   return (
     <div>
       <div className="mb-6">
@@ -39,11 +66,12 @@ export default async function NetWorthPage() {
         assets={assets || []}
         liabilities={liabilities || []}
         accounts={accounts || []}
-        snapshots={snapshots || []}
+        snapshots={allSnapshots}
         bankBalance={bankBalance}
         totalAssets={totalAssets}
         totalLiabilities={totalLiabilities}
         netWorth={netWorth}
+        hasTodaySnapshot={hasTodaySnapshot || allSnapshots.length > snapshots.length}
       />
     </div>
   )

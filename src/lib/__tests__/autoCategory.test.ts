@@ -361,3 +361,45 @@ describe('autoCategory - Categorisation', () => {
     })
   })
 })
+
+describe('Chunk 11 - New merchant rules', () => {
+  it('categorises BWS as Shopping', () => {
+    expect(guessCategory('BWS LIQUOR')).toBe('Shopping')
+  })
+
+  it('categorises DAN MURPHY as Shopping', () => {
+    expect(guessCategory('DAN MURPHY')).toBe('Shopping')
+  })
+
+  it('categorises LIQUORLAND as Shopping', () => {
+    expect(guessCategory('LIQUORLAND')).toBe('Shopping')
+  })
+
+  it('categorises PUNCH ESPRESSO as Eating Out (matches ESPRESSO)', () => {
+    expect(guessCategory('PUNCH ESPRESSO')).toBe('Eating Out')
+  })
+
+  it('categorises HANAICHI as Eating Out', () => {
+    expect(guessCategory('HANAICHI')).toBe('Eating Out')
+  })
+
+  it('categorises MR EDWARDS ALEHOUSE as Eating Out (matches ALEHOUSE)', () => {
+    expect(guessCategory('MR EDWARDS ALEHOUSE')).toBe('Eating Out')
+  })
+
+  it('categorises CARINA MED as Medical (matches CARINA MED)', () => {
+    expect(guessCategory('CARINA MED')).toBe('Medical')
+  })
+
+  it('categorises MED & SPEC PATHOLOGY as Medical (matches MED & SPEC)', () => {
+    expect(guessCategory('MED & SPEC PATHOLOGY')).toBe('Medical')
+  })
+
+  it('categorises UNITED PETROL as Transport', () => {
+    expect(guessCategory('UNITED PETROL')).toBe('Transport')
+  })
+
+  it('categorises ZEN HAIR as Personal Care (via HAIR keyword)', () => {
+    expect(guessCategory('ZEN HAIR')).toBe('Personal Care')
+  })
+})

@@ -30,6 +30,7 @@ interface Props {
   totalAssets: number
   totalLiabilities: number
   netWorth: number
+  hasTodaySnapshot: boolean
 }
 
 const aud = (n: number) =>
@@ -88,6 +89,7 @@ export function NetWorthClient({
   accounts,
   snapshots,
   bankBalance,
+  hasTodaySnapshot,
 }: Props) {
   const [assets, setAssets] = useState<Asset[]>(initialAssets)
   const [liabilities, setLiabilities] = useState<Liability[]>(initialLiabilities)
@@ -116,6 +118,7 @@ export function NetWorthClient({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [recordingSnapshot, setRecordingSnapshot] = useState(false)
+  const [todayRecorded, setTodayRecorded] = useState(hasTodaySnapshot)
 
   // Recompute totals from local state
   const manualAssetsTotal = assets.reduce((s, a) => s + a.value, 0)
@@ -136,6 +139,7 @@ export function NetWorthClient({
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       setLocalSnapshots(prev => [...prev, data.snapshot].slice(-24))
+      setTodayRecorded(true)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to record snapshot')
     } finally {
@@ -293,10 +297,10 @@ export function NetWorthClient({
           </div>
           <button
             onClick={handleRecordSnapshot}
-            disabled={recordingSnapshot}
+            disabled={recordingSnapshot || todayRecorded}
             className="flex items-center gap-2 bg-emerald-700 text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-emerald-800 disabled:opacity-50 transition-colors"
           >
-            {recordingSnapshot ? 'Recording...' : 'Record snapshot'}
+            {recordingSnapshot ? 'Recording...' : todayRecorded ? 'Recorded today' : 'Record snapshot'}
           </button>
         </div>
       </div>
