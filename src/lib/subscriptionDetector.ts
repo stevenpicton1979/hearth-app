@@ -47,6 +47,17 @@ function daysSince(dateStr: string): number {
   return Math.floor((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24))
 }
 
+// Categories where transactions are typically one-off purchases, not subscriptions
+const EXCLUDED_CATEGORIES = new Set([
+  'Shopping',
+  'Eating Out',
+  'Food & Groceries',
+  'Transport',
+  'Medical',
+  'Pets',
+  'Personal Care'
+])
+
 export function detectSubscriptions(
   transactions: Transaction[],
   accounts: { id: string; display_name: string }[]
@@ -66,7 +77,11 @@ export function detectSubscriptions(
   const results: DetectedSubscription[] = []
 
   for (const [merchant, txns] of Object.entries(byMerchant)) {
-    if (txns.length < 2) continue
+    if (txns.length < 3) continue // Minimum 3 occurrences required
+
+    // Check if merchant is in an excluded category (one-off purchases)
+    const merchantCategory = txns[0].category
+    if (merchantCategory && EXCLUDED_CATEGORIES.has(merchantCategory)) continue
 
     // Sort by date ascending
     const sorted = [...txns].sort((a, b) => a.date.localeCompare(b.date))
