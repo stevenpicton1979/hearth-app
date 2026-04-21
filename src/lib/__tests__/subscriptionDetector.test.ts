@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { detectSubscriptions } from '../subscriptionDetector'
 import { Transaction } from '../types'
 
@@ -65,8 +65,8 @@ describe('subscriptionDetector - Subscription Detection Algorithm', () => {
     })
   })
 
-  describe('Category awareness - Eating Out category exclusion', () => {
-    it('should NOT detect MCDONALD as subscription even with consistent pattern', () => {
+  describe('Category awareness - Eating Out now included (delivery services like HelloFresh)', () => {
+    it('detects consistent monthly MCDONALDS pattern (Eating Out no longer excluded)', () => {
       const transactions: Transaction[] = [
         createTransaction('MCDONALDS', -10, '2026-04-01', 'Eating Out'),
         createTransaction('MCDONALDS', -9.99, '2026-03-01', 'Eating Out'),
@@ -75,10 +75,10 @@ describe('subscriptionDetector - Subscription Detection Algorithm', () => {
       ]
       const result = detectSubscriptions(transactions, mockAccounts)
       const mcdonaldsSub = result.find(s => s.merchant === 'MCDONALDS')
-      expect(mcdonaldsSub).toBeUndefined()
+      expect(mcdonaldsSub).toBeDefined()
     })
 
-    it('should NOT detect restaurant as subscription', () => {
+    it('detects consistent restaurant subscription pattern', () => {
       const transactions: Transaction[] = [
         createTransaction('RESTAURANT ABC', -50, '2026-04-01', 'Eating Out'),
         createTransaction('RESTAURANT ABC', -48, '2026-03-01', 'Eating Out'),
@@ -86,10 +86,10 @@ describe('subscriptionDetector - Subscription Detection Algorithm', () => {
       ]
       const result = detectSubscriptions(transactions, mockAccounts)
       const restaurantSub = result.find(s => s.merchant === 'RESTAURANT ABC')
-      expect(restaurantSub).toBeUndefined()
+      expect(restaurantSub).toBeDefined()
     })
 
-    it('should NOT detect cafe as subscription', () => {
+    it('detects consistent cafe pattern', () => {
       const transactions: Transaction[] = [
         createTransaction('COFFEE CAFE', -5.50, '2026-04-10', 'Eating Out'),
         createTransaction('COFFEE CAFE', -5.20, '2026-03-10', 'Eating Out'),
@@ -97,10 +97,10 @@ describe('subscriptionDetector - Subscription Detection Algorithm', () => {
       ]
       const result = detectSubscriptions(transactions, mockAccounts)
       const cafeSub = result.find(s => s.merchant === 'COFFEE CAFE')
-      expect(cafeSub).toBeUndefined()
+      expect(cafeSub).toBeDefined()
     })
 
-    it('should NOT detect pub as subscription', () => {
+    it('detects consistent pub/regular visit pattern', () => {
       const transactions: Transaction[] = [
         createTransaction('LOCAL PUB', -45, '2026-04-01', 'Eating Out'),
         createTransaction('LOCAL PUB', -40, '2026-03-01', 'Eating Out'),
@@ -108,15 +108,25 @@ describe('subscriptionDetector - Subscription Detection Algorithm', () => {
       ]
       const result = detectSubscriptions(transactions, mockAccounts)
       const pubSub = result.find(s => s.merchant === 'LOCAL PUB')
-      expect(pubSub).toBeUndefined()
+      expect(pubSub).toBeDefined()
     })
   })
 
   describe('Minimum occurrence threshold', () => {
-    it('should NOT detect subscription with only 2 occurrences', () => {
+    it('detects subscription with 2 occurrences (PROBABLE confidence)', () => {
       const transactions: Transaction[] = [
         createTransaction('NETFLIX', -15.99, '2026-04-01', 'Entertainment'),
         createTransaction('NETFLIX', -15.99, '2026-03-01', 'Entertainment')
+      ]
+      const result = detectSubscriptions(transactions, mockAccounts)
+      const netflixSub = result.find(s => s.merchant === 'NETFLIX')
+      expect(netflixSub).toBeDefined()
+      expect(netflixSub?.confidence).toBe('PROBABLE')
+    })
+
+    it('should NOT detect subscription with only 1 occurrence', () => {
+      const transactions: Transaction[] = [
+        createTransaction('NETFLIX', -15.99, '2026-04-01', 'Entertainment')
       ]
       const result = detectSubscriptions(transactions, mockAccounts)
       const netflixSub = result.find(s => s.merchant === 'NETFLIX')

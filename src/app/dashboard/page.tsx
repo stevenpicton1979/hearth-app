@@ -181,7 +181,7 @@ export default async function DashboardPage() {
               <span className="font-semibold text-gray-900">{aud(thisMonthSpend)}</span>
             </div>
             <div className="flex-1">
-              <span className="text-xs text-gray-400 block">Net</span>
+              <span className="text-xs text-gray-400 block">Cash Flow</span>
               <span className={`font-semibold ${netSurplus >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{aud(netSurplus)}</span>
             </div>
           </div>

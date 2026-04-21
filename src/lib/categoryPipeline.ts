@@ -59,16 +59,22 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
   const autoMappings = new Map<string, string>()
 
   for (const raw of raws) {
-    if (raw.amount >= 0) continue
+    if (raw.amount === 0) continue
     if (isTransfer(raw.description)) { transfersSkipped++; continue }
 
     const merchant = cleanMerchant(raw.description)
-    const mapping = mappingMap.get(merchant)
-    const category = mapping?.category ?? guessCategory(merchant)
-    const classification = mapping?.classification ?? null
+    const isIncome = raw.amount > 0
 
-    if (!mapping && category !== null) {
-      autoMappings.set(merchant, category)
+    let category: string | null = null
+    let classification: string | null = null
+
+    if (!isIncome) {
+      const mapping = mappingMap.get(merchant)
+      category = mapping?.category ?? guessCategory(merchant)
+      classification = mapping?.classification ?? null
+      if (!mapping && category !== null) {
+        autoMappings.set(merchant, category)
+      }
     }
 
     toUpsert.push({

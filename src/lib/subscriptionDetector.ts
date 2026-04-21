@@ -23,7 +23,7 @@ function detectFrequency(medianInterval: number): {
   const buckets: { label: DetectedSubscription['frequency']; days: number; tolerance: number }[] = [
     { label: 'weekly', days: 7, tolerance: 2 },
     { label: 'fortnightly', days: 14, tolerance: 3 },
-    { label: 'monthly', days: 30, tolerance: 5 },
+    { label: 'monthly', days: 30, tolerance: 8 },
     { label: 'quarterly', days: 91, tolerance: 10 },
     { label: 'annual', days: 365, tolerance: 30 },
   ]
@@ -50,7 +50,6 @@ function daysSince(dateStr: string): number {
 // Categories where transactions are typically one-off purchases, not subscriptions
 const EXCLUDED_CATEGORIES = new Set([
   'Shopping',
-  'Eating Out',
   'Food & Groceries',
   'Transport',
   'Medical',
@@ -77,7 +76,7 @@ export function detectSubscriptions(
   const results: DetectedSubscription[] = []
 
   for (const [merchant, txns] of Object.entries(byMerchant)) {
-    if (txns.length < 3) continue // Minimum 3 occurrences required
+    if (txns.length < 2) continue // Minimum 2 occurrences required
 
     // Check if merchant is in an excluded category (one-off purchases)
     const merchantCategory = txns[0].category
@@ -104,21 +103,21 @@ export function detectSubscriptions(
     const intervalMean = mean(intervals)
     const intervalStd = stddev(intervals, intervalMean)
 
-    // Check interval consistency: std < 0.35 * median
-    if (intervalStd > 0.35 * medianInterval) continue
+    // Check interval consistency: std < 0.40 * median
+    if (intervalStd > 0.40 * medianInterval) continue
 
-    // Check amount consistency: CV < 0.20
+    // Check amount consistency: CV < 0.25
     const amounts = sorted.map(t => Math.abs(t.amount))
     const amtMean = mean(amounts)
     const amtStd = stddev(amounts, amtMean)
     const cv = amtMean > 0 ? amtStd / amtMean : 1
-    if (cv >= 0.20) continue
+    if (cv >= 0.25) continue
 
     // Determine confidence
     let confidence: DetectedSubscription['confidence']
     if (sorted.length >= 5) confidence = 'HIGH'
     else if (sorted.length >= 3) confidence = 'MEDIUM'
-    else confidence = 'PROBABLE'
+    else confidence = 'PROBABLE' // 2 occurrences
 
     const lastCharged = sorted[sorted.length - 1].date
     const nextExpected = addDays(lastCharged, medianInterval)

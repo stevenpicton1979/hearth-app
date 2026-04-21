@@ -169,7 +169,7 @@ export function SpendingCharts({
           <div className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(currentTotal)}</div>
         </div>
         <div className="bg-white border border-gray-200 rounded-xl p-4">
-          <div className="text-sm text-gray-500">Net</div>
+          <div className="text-sm text-gray-500">Cash Flow</div>
           <div className={`text-2xl font-bold mt-1 ${netTotal >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
             {formatCurrency(netTotal)}
           </div>
@@ -278,13 +278,14 @@ export function SpendingCharts({
                     cy="50%"
                     outerRadius={100}
                     innerRadius={50}
-                    cursor="pointer"
-                    onClick={(data) => {
-                      if (data?.name) router.push(`/transactions?category=${encodeURIComponent(data.name)}`)
-                    }}
                   >
-                    {currentSummary.map((_, index) => (
-                      <Cell key={index} fill={COLORS[index % COLORS.length]} />
+                    {currentSummary.map((entry, index) => (
+                      <Cell
+                        key={index}
+                        fill={COLORS[index % COLORS.length]}
+                        cursor="pointer"
+                        onClick={() => router.push(`/transactions?category=${encodeURIComponent(entry.category)}`)}
+                      />
                     ))}
                   </Pie>
                   <RechartsTooltip

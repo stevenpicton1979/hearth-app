@@ -119,11 +119,12 @@ export function parseCSV(text: string): ParsedTransaction[] {
     }
 
     if (!date || amount === null || !description) continue
-    if (amount >= 0) continue // expenses only
+    if (amount === 0) continue
     if (isTransfer(description)) continue
 
     const merchant = cleanMerchant(description)
-    const category = guessCategory(merchant)
+    const isIncome = amount > 0
+    const category = isIncome ? null : guessCategory(merchant)
 
     // Attach balance to first parsed transaction only (most recent row)
     const balance = !balanceAttached ? mostRecentBalance : undefined

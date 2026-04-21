@@ -25,11 +25,22 @@ describe('csvParser - Import Layer', () => {
       expect(result[0].balance).toBeUndefined()
     })
 
-    it('skips rows where amount >= 0', () => {
+    it('includes income rows (positive amounts) alongside expenses', () => {
       const csv = `16/04/2026,"50.00","SALARY DEPOSIT","5234.56"
 15/04/2026,"-23.14","WOOLWORTHS","5184.56"`
       const result = parseCSV(csv)
+      expect(result).toHaveLength(2)
+      expect(result[0].amount).toBe(50.00)
+      expect(result[0].category).toBeNull()
+      expect(result[1].amount).toBe(-23.14)
+    })
+
+    it('skips zero-amount rows', () => {
+      const csv = `16/04/2026,"0.00","FEE REVERSAL","5234.56"
+15/04/2026,"-23.14","WOOLWORTHS","5184.56"`
+      const result = parseCSV(csv)
       expect(result).toHaveLength(1)
+      expect(result[0].amount).toBe(-23.14)
     })
 
     it('correctly parses negative amounts', () => {

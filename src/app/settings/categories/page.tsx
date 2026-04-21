@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { CATEGORIES } from '@/lib/constants'
-import { PlusIcon } from '@heroicons/react/24/outline'
+import { PlusIcon, ArrowPathIcon } from '@heroicons/react/24/outline'
 
 interface CategoryPref {
   id: string
@@ -19,6 +19,8 @@ export default function CategoriesPage() {
   const [newCategory, setNewCategory] = useState('')
   const [addingCustom, setAddingCustom] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [recategorising, setRecategorising] = useState(false)
+  const [recategoriseResult, setRecategoriseResult] = useState<string | null>(null)
 
   useEffect(() => {
     fetch('/api/categories')
@@ -110,6 +112,20 @@ export default function CategoriesPage() {
     setPrefs(prev => prev.filter(p => p.category !== category))
   }
 
+  async function handleRecategorise() {
+    setRecategorising(true)
+    setRecategoriseResult(null)
+    try {
+      const res = await fetch('/api/admin/recategorise', { method: 'POST' })
+      const data = await res.json()
+      setRecategoriseResult(`Updated ${data.updated} transaction${data.updated !== 1 ? 's' : ''}.`)
+    } catch {
+      setRecategoriseResult('Error running auto-categorisation.')
+    } finally {
+      setRecategorising(false)
+    }
+  }
+
   // All known categories: built-in + any custom (prefs not in CATEGORIES)
   const builtInSet = new Set(CATEGORIES as readonly string[])
   const customCategories = prefs.filter(p => !builtInSet.has(p.category))
@@ -123,6 +139,27 @@ export default function CategoriesPage() {
         <p className="text-sm text-gray-500 mt-1">
           Hide categories you don&apos;t use, or rename them to match your preferences.
         </p>
+      </div>
+
+      {/* Re-run auto-categorisation */}
+      <div className="bg-white border border-gray-200 rounded-xl p-4 mb-5 flex items-center justify-between gap-4">
+        <div>
+          <div className="text-sm font-medium text-gray-800">Re-run auto-categorisation</div>
+          <div className="text-xs text-gray-500 mt-0.5">
+            Apply updated category rules to all uncategorised transactions.
+          </div>
+          {recategoriseResult && (
+            <div className="text-xs text-emerald-700 mt-1 font-medium">{recategoriseResult}</div>
+          )}
+        </div>
+        <button
+          onClick={handleRecategorise}
+          disabled={recategorising}
+          className="flex items-center gap-1.5 text-sm bg-emerald-700 text-white rounded-lg px-3 py-2 hover:bg-emerald-800 disabled:opacity-50 whitespace-nowrap"
+        >
+          <ArrowPathIcon className={`h-4 w-4 ${recategorising ? 'animate-spin' : ''}`} />
+          {recategorising ? 'Running...' : 'Run now'}
+        </button>
       </div>
 
       {loading ? (

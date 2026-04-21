@@ -101,6 +101,10 @@ describe('autoCategory - Categorisation', () => {
       expect(guessCategory('BP AUSTRALIA')).toBe('Transport')
     })
 
+    it('does not match BPAY as Transport (BP keyword requires trailing space)', () => {
+      expect(guessCategory('BPAY TAX OFFICE PAYMENTS COM')).not.toBe('Transport')
+    })
+
     it('categorises SHELL as Transport', () => {
       expect(guessCategory('SHELL PETROL')).toBe('Transport')
     })
@@ -359,6 +363,32 @@ describe('autoCategory - Categorisation', () => {
     it('returns first matching category in rule order', () => {
       expect(guessCategory('NETFLIX STREAMING SERVICE')).toBe('Entertainment')
     })
+  })
+})
+
+describe('Government & Tax category', () => {
+  it('categorises TAX OFFICE as Government & Tax', () => {
+    expect(guessCategory('TAX OFFICE PAYMENTS')).toBe('Government & Tax')
+  })
+
+  it('categorises BPAY TAX OFFICE as Government & Tax', () => {
+    expect(guessCategory('BPAY TAX OFFICE PAYMENTS COM')).toBe('Government & Tax')
+  })
+
+  it('categorises ATO as Government & Tax', () => {
+    expect(guessCategory('ATO AUSTRALIA')).toBe('Government & Tax')
+  })
+
+  it('categorises CENTRELINK as Government & Tax', () => {
+    expect(guessCategory('CENTRELINK PAYMENT')).toBe('Government & Tax')
+  })
+
+  it('categorises BCC RATES as Government & Tax', () => {
+    expect(guessCategory('BCC RATES ANNUAL')).toBe('Government & Tax')
+  })
+
+  it('categorises COUNCIL RATES as Government & Tax', () => {
+    expect(guessCategory('COUNCIL RATES PAYMENT')).toBe('Government & Tax')
   })
 })
 

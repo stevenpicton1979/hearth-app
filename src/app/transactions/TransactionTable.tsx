@@ -40,6 +40,7 @@ export function TransactionTable({ initialTransactions, accounts, initialCategor
   const [filterFrom, setFilterFrom] = useState('')
   const [filterTo, setFilterTo] = useState('')
   const [filterSearch, setFilterSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [showTransfers, setShowTransfers] = useState(false)
 
   // Inline editing
@@ -55,6 +56,12 @@ export function TransactionTable({ initialTransactions, accounts, initialCategor
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
 
+  // Debounce search input by 300ms
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(filterSearch), 300)
+    return () => clearTimeout(timer)
+  }, [filterSearch])
+
   const fetchTransactions = useCallback(async (p: number) => {
     setIsLoading(true)
     try {
@@ -64,7 +71,7 @@ export function TransactionTable({ initialTransactions, accounts, initialCategor
       if (filterClassification) params.set('classification', filterClassification)
       if (filterFrom) params.set('from', filterFrom)
       if (filterTo) params.set('to', filterTo)
-      if (filterSearch) params.set('search', filterSearch)
+      if (debouncedSearch) params.set('search', debouncedSearch)
       if (showTransfers) params.set('show_transfers', 'true')
       params.set('page', String(p))
       const res = await fetch(`/api/transactions?${params}`)
@@ -74,12 +81,12 @@ export function TransactionTable({ initialTransactions, accounts, initialCategor
     } finally {
       setIsLoading(false)
     }
-  }, [filterAccount, filterCategory, filterClassification, filterFrom, filterTo, filterSearch, showTransfers])
+  }, [filterAccount, filterCategory, filterClassification, filterFrom, filterTo, debouncedSearch, showTransfers])
 
   useEffect(() => {
     setPage(0)
     setSelectedIds(new Set())
-  }, [filterAccount, filterCategory, filterClassification, filterFrom, filterTo, filterSearch, showTransfers])
+  }, [filterAccount, filterCategory, filterClassification, filterFrom, filterTo, debouncedSearch, showTransfers])
 
   useEffect(() => {
     fetchTransactions(page)
@@ -346,9 +353,10 @@ export function TransactionTable({ initialTransactions, accounts, initialCategor
                       ) : (
                         <button
                           onClick={() => { setEditingId(t.id); setEditingField('category') }}
-                          className={`text-left text-sm rounded px-2 py-0.5 hover:bg-white hover:shadow-sm transition-all ${
+                          className={`text-left text-sm rounded px-2 py-0.5 hover:bg-white hover:ring-1 hover:ring-emerald-400 hover:shadow-sm transition-all ${
                             t.category ? 'text-gray-700' : 'text-amber-600 italic'
                           }`}
+                          title="Click to edit"
                         >
                           {t.category || 'Set category'}
                         </button>
@@ -371,11 +379,12 @@ export function TransactionTable({ initialTransactions, accounts, initialCategor
                       ) : (
                         <button
                           onClick={() => { setEditingId(t.id); setEditingField('classification') }}
-                          className={`text-left text-sm rounded px-2 py-0.5 hover:bg-white hover:shadow-sm transition-all ${
-                            t.classification ? 'text-gray-600' : 'text-gray-300'
+                          className={`text-left text-sm rounded px-2 py-0.5 hover:bg-white hover:ring-1 hover:ring-emerald-400 hover:shadow-sm transition-all ${
+                            t.classification ? 'text-gray-600' : 'text-gray-400 italic'
                           }`}
+                          title="Click to edit"
                         >
-                          {t.classification || '—'}
+                          {t.classification || 'Set classification'}
                         </button>
                       )}
                     </td>

@@ -2,7 +2,7 @@ export const DEFAULT_HOUSEHOLD_ID = '00000000-0000-0000-0000-000000000001'
 
 export const CATEGORIES = [
   'Business', 'Charity & Donations', 'Clothing & Apparel', 'Eating Out',
-  'Education', 'Entertainment', 'Family', 'Food & Groceries', 'Health & Fitness',
+  'Education', 'Entertainment', 'Family', 'Food & Groceries', 'Government & Tax', 'Health & Fitness',
   'Holiday', 'Household', 'Insurance', 'Medical', 'Mortgage', 'Personal Care',
   'Pets', 'Shopping', 'Technology', 'Transport', 'Travel', 'Utilities', 'Other',
 ] as const

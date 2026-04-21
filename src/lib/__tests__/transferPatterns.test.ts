@@ -103,14 +103,6 @@ describe('transferPatterns - Transfer Detection', () => {
       expect(isTransfer('CITIBANK CREDIT TRANSFER')).toBe(true)
     })
 
-    it('detects "tax office" pattern', () => {
-      expect(isTransfer('TAX OFFICE PAYMENT')).toBe(true)
-    })
-
-    it('detects "bcc rates" pattern', () => {
-      expect(isTransfer('BCC RATES PAYMENT')).toBe(true)
-    })
-
     it('detects "overdraw fee" pattern', () => {
       expect(isTransfer('OVERDRAW FEE')).toBe(true)
     })
@@ -179,6 +171,18 @@ describe('transferPatterns - Transfer Detection', () => {
 
     it('returns false for utility payment', () => {
       expect(isTransfer('ENERGEX ELECTRICITY')).toBe(false)
+    })
+
+    it('returns false for ATO tax payment', () => {
+      expect(isTransfer('TAX OFFICE PAYMENT')).toBe(false)
+    })
+
+    it('returns false for BPAY ATO payment', () => {
+      expect(isTransfer('BPAY TAX OFFICE PAYMENTS COM')).toBe(false)
+    })
+
+    it('returns false for council rates', () => {
+      expect(isTransfer('BCC RATES PAYMENT')).toBe(false)
     })
 
     it('returns false for similar but distinct descriptions', () => {
