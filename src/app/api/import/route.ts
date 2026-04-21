@@ -49,8 +49,7 @@ export async function POST(req: NextRequest) {
     }))
 
     const { toUpsert, transfersSkipped } = await processBatch(raws)
-    const autoCategorised = toUpsert.filter(t => t.category !== null).length
-    const { inserted, duplicates } = await upsertTransactions(toUpsert)
+    const { inserted, duplicates, autoCategorised } = await upsertTransactions(toUpsert)
 
     // Update account current_balance from the raw CSV balance (most recent row)
     if (latestBalance !== undefined) {

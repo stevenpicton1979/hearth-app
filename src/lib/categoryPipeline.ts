@@ -101,15 +101,16 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
   return { toUpsert, transfersSkipped }
 }
 
-export async function upsertTransactions(rows: ProcessedTransaction[]): Promise<{ inserted: number; duplicates: number }> {
-  if (rows.length === 0) return { inserted: 0, duplicates: 0 }
+export async function upsertTransactions(rows: ProcessedTransaction[]): Promise<{ inserted: number; duplicates: number; autoCategorised: number }> {
+  if (rows.length === 0) return { inserted: 0, duplicates: 0, autoCategorised: 0 }
   const supabase = createServerClient()
   const { data, error } = await supabase
     .from('transactions')
     .upsert(rows, { onConflict: 'account_id,date,amount,description', ignoreDuplicates: true })
-    .select('id')
+    .select('id, category')
 
   if (error) throw new Error(error.message)
   const inserted = data?.length ?? 0
-  return { inserted, duplicates: rows.length - inserted }
+  const autoCategorised = data?.filter(r => r.category !== null).length ?? 0
+  return { inserted, duplicates: rows.length - inserted, autoCategorised }
 }
