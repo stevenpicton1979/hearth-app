@@ -52,12 +52,15 @@ describe('csvParser - Import Layer', () => {
       expect(result[1].amount).toBe(-0.99)
     })
 
-    it('skips transfer patterns', () => {
+    it('marks transfer patterns as is_transfer=true (not dropped)', () => {
       const csv = `16/04/2026,"-100.00","TRANSFER TO SAVINGS","5000.00"
 14/04/2026,"-75.00","NORMAL MERCHANT","5150.00"`
       const result = parseCSV(csv)
-      expect(result).toHaveLength(1)
-      expect(result[0].description).toBe('NORMAL MERCHANT')
+      expect(result).toHaveLength(2)
+      expect(result[0].is_transfer).toBe(true)
+      expect(result[0].description).toBe('TRANSFER TO SAVINGS')
+      expect(result[1].is_transfer).toBe(false)
+      expect(result[1].description).toBe('NORMAL MERCHANT')
     })
 
     it('returns correct date format YYYY-MM-DD', () => {

@@ -62,9 +62,28 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
 
   for (const raw of raws) {
     if (raw.amount === 0) continue
-    if (raw.is_transfer || isTransfer(raw.description)) { transfersSkipped++; continue }
 
+    const isTransferRow = raw.is_transfer || isTransfer(raw.description)
     const merchant = cleanMerchant(raw.description)
+
+    if (isTransferRow) {
+      // Store transfers with is_transfer=true so "Show excluded" can reveal them
+      toUpsert.push({
+        household_id: DEFAULT_HOUSEHOLD_ID,
+        account_id: raw.account_id,
+        date: raw.date,
+        amount: raw.amount,
+        description: raw.description,
+        merchant,
+        category: null,
+        classification: null,
+        is_transfer: true,
+        basiq_transaction_id: raw.basiq_transaction_id ?? null,
+      })
+      transfersSkipped++
+      continue
+    }
+
     const isIncome = raw.amount > 0
 
     let category: string | null = null

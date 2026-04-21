@@ -187,9 +187,10 @@ export function parseCSV(text: string): ParsedTransaction[] {
     if (!date || amount === null || !description) continue
     if (amount === 0) continue
 
-    // For CBA/ANZ/Westpac/generic: use pattern-based transfer detection and skip
-    // NAB and Amex use their own transfer detection (is_transfer flag set above)
-    if (format !== 'nab_cc' && format !== 'amex' && isTransfer(description)) continue
+    // For CBA/ANZ/Westpac/generic: mark as transfer (stored with is_transfer=true, not dropped)
+    if (format !== 'nab_cc' && format !== 'amex' && isTransfer(description)) {
+      isTransferRow = true
+    }
 
     const merchant = cleanMerchant(description)
     const isIncome = amount > 0

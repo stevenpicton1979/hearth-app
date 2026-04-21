@@ -328,6 +328,7 @@ export function TransactionTable({ initialTransactions, accounts, initialCategor
                     <td className="px-4 py-3 whitespace-nowrap text-gray-600">{formatDate(t.date)}</td>
                     <td className="px-4 py-3">
                       <div className="font-medium text-gray-900 truncate max-w-[200px]">{t.merchant}</div>
+                      {t.is_transfer && <span className="text-xs bg-gray-200 text-gray-500 rounded px-1.5 py-0.5">Transfer</span>}
                       {t.notes && <div className="text-xs text-gray-400 truncate max-w-[200px]">{t.notes}</div>}
                     </td>
                     <td className="px-4 py-3 text-gray-500 hidden md:table-cell">

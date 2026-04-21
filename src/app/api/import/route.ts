@@ -72,7 +72,8 @@ export async function POST(req: NextRequest) {
     for (const text of fileTexts) {
       const parsed = parseCSV(text)
       allParsed.push(...parsed)
-      totalTransfers += text.split('\n').filter(l => l.trim()).length - 1 - parsed.length
+      // Count rows that failed to parse (invalid date/amount) — transfers are now in parsed
+      totalTransfers += Math.max(0, text.split('\n').filter(l => l.trim()).length - 1 - parsed.length)
       // Extract balance directly from raw CSV (independent of transfer filtering)
       const bal = extractBalance(text)
       if (bal !== undefined) latestBalance = bal
