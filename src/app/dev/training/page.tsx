@@ -23,6 +23,7 @@ interface TrainingLabel {
   total_spend: number
   min_date: string | null
   max_date: string | null
+  accounts: string[]
 }
 
 interface EvalMetrics {
@@ -187,6 +188,9 @@ function LabelRow({
           {label.transaction_count} txn{label.transaction_count !== 1 ? 's' : ''} · {aud(label.total_spend)}
         </div>
         <div className="text-xs text-gray-400">{fmtDate(label.min_date)}–{fmtDate(label.max_date)}</div>
+        {label.accounts?.length > 0 && (
+          <div className="text-xs text-gray-400 mt-0.5">Accounts: {label.accounts.join(', ')}</div>
+        )}
         <div className="flex flex-wrap gap-1 mt-1">
           {label.holdout && <span className="text-xs bg-amber-100 text-amber-700 rounded px-1.5 py-0.5">holdout</span>}
           <span className={`text-xs rounded px-1.5 py-0.5 ${STATUS_COLORS[local.status] || STATUS_COLORS.pending}`}>{local.status}</span>

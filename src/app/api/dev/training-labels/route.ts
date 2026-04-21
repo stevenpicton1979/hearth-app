@@ -15,22 +15,42 @@ export async function GET() {
 
   // Fetch transaction stats for each merchant
   const merchants = (data || []).map(r => r.merchant)
-  const statsByMerchant: Record<string, { count: number; totalSpend: number; minDate: string; maxDate: string }> = {}
+  const statsByMerchant: Record<string, { count: number; totalSpend: number; minDate: string; maxDate: string; accountIds: Set<string> }> = {}
 
   if (merchants.length > 0) {
     const { data: txns } = await supabase
       .from('transactions')
-      .select('merchant, amount, date')
+      .select('merchant, amount, date, account_id')
       .eq('household_id', DEFAULT_HOUSEHOLD_ID)
       .in('merchant', merchants)
 
     for (const t of txns || []) {
       const m = t.merchant
-      if (!statsByMerchant[m]) statsByMerchant[m] = { count: 0, totalSpend: 0, minDate: t.date, maxDate: t.date }
+      if (!statsByMerchant[m]) statsByMerchant[m] = { count: 0, totalSpend: 0, minDate: t.date, maxDate: t.date, accountIds: new Set() }
       statsByMerchant[m].count++
       statsByMerchant[m].totalSpend += Math.abs(t.amount)
       if (t.date < statsByMerchant[m].minDate) statsByMerchant[m].minDate = t.date
       if (t.date > statsByMerchant[m].maxDate) statsByMerchant[m].maxDate = t.date
+      if (t.account_id) statsByMerchant[m].accountIds.add(t.account_id)
+    }
+
+    // Look up account display names for the collected IDs
+    const allAccountIds = Array.from(new Set(
+      Object.values(statsByMerchant).flatMap(s => Array.from(s.accountIds))
+    ))
+    const accountNameMap = new Map<string, string>()
+    if (allAccountIds.length > 0) {
+      const { data: accts } = await supabase
+        .from('accounts')
+        .select('id, display_name')
+        .in('id', allAccountIds)
+      for (const a of (accts || [])) accountNameMap.set(a.id, a.display_name)
+    }
+
+    // Replace account IDs with names in each merchant stat
+    for (const s of Object.values(statsByMerchant)) {
+      const named = new Set(Array.from(s.accountIds).map(id => accountNameMap.get(id) ?? id))
+      s.accountIds = named
     }
   }
 
@@ -40,6 +60,7 @@ export async function GET() {
     total_spend: statsByMerchant[r.merchant]?.totalSpend ?? 0,
     min_date: statsByMerchant[r.merchant]?.minDate ?? null,
     max_date: statsByMerchant[r.merchant]?.maxDate ?? null,
+    accounts: Array.from(statsByMerchant[r.merchant]?.accountIds ?? []),
   }))
 
   return NextResponse.json({ labels })
