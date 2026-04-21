@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
 import { DEFAULT_HOUSEHOLD_ID } from '@/lib/constants'
-import { parseCSV, extractBalance } from '@/lib/csvParser'
+import { parseCSV, extractBalance, extractNABAccountName } from '@/lib/csvParser'
 import { processBatch, upsertTransactions } from '@/lib/categoryPipeline'
 
 export async function POST(req: NextRequest) {
@@ -15,7 +15,42 @@ export async function POST(req: NextRequest) {
 
     const supabase = createServerClient()
 
-    // Create account if needed
+    // Read all file texts upfront (needed for NAB detection and parsing)
+    const fileTexts = await Promise.all(files.map(f => f.text()))
+
+    // Auto-detect NAB account from file content when no account provided
+    if (!accountId) {
+      for (const text of fileTexts) {
+        const nabName = extractNABAccountName(text)
+        if (nabName) {
+          const { data: existing } = await supabase
+            .from('accounts')
+            .select('id')
+            .eq('household_id', DEFAULT_HOUSEHOLD_ID)
+            .eq('display_name', nabName)
+            .maybeSingle()
+          if (existing) {
+            accountId = existing.id
+          } else {
+            const { data, error } = await supabase
+              .from('accounts')
+              .insert({
+                household_id: DEFAULT_HOUSEHOLD_ID,
+                display_name: nabName,
+                account_type: 'credit_card',
+                institution: 'NAB',
+              })
+              .select('id')
+              .single()
+            if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+            accountId = data.id
+          }
+          break
+        }
+      }
+    }
+
+    // Create CBA/other account if needed
     if (!accountId && accountName) {
       const { data, error } = await supabase
         .from('accounts')
@@ -31,8 +66,7 @@ export async function POST(req: NextRequest) {
     const allParsed: ReturnType<typeof parseCSV> = []
     let latestBalance: number | undefined
 
-    for (const file of files) {
-      const text = await file.text()
+    for (const text of fileTexts) {
       const parsed = parseCSV(text)
       allParsed.push(...parsed)
       totalTransfers += text.split('\n').filter(l => l.trim()).length - 1 - parsed.length
@@ -46,6 +80,8 @@ export async function POST(req: NextRequest) {
       date: p.date,
       amount: p.amount,
       description: p.description,
+      is_transfer: p.is_transfer,
+      category_hint: p.category,
     }))
 
     const { toUpsert, transfersSkipped } = await processBatch(raws)

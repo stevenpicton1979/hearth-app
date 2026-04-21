@@ -22,6 +22,7 @@ export default function ImportPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [result, setResult] = useState<ImportResult | null>(null)
   const [error, setError] = useState('')
+  const [hasNABFile, setHasNABFile] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
@@ -31,19 +32,39 @@ export default function ImportPage() {
       .catch(() => {})
   }, [])
 
+  const detectNAB = useCallback(async (newFiles: File[]) => {
+    for (const file of newFiles) {
+      const text = await file.slice(0, 300).text()
+      const firstLine = text.split(/\r?\n/)[0]
+      if (firstLine.includes('Transaction Type') && firstLine.includes('Merchant Name')) {
+        setHasNABFile(true)
+        return
+      }
+    }
+    setHasNABFile(false)
+  }, [])
+
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     setIsDragging(false)
     const dropped = Array.from(e.dataTransfer.files).filter(f => f.name.endsWith('.csv'))
-    setFiles(prev => [...prev, ...dropped])
-  }, [])
+    setFiles(prev => {
+      const updated = [...prev, ...dropped]
+      detectNAB(updated)
+      return updated
+    })
+  }, [detectNAB])
 
-  const removeFile = (idx: number) => setFiles(prev => prev.filter((_, i) => i !== idx))
+  const removeFile = (idx: number) => setFiles(prev => {
+    const updated = prev.filter((_, i) => i !== idx)
+    detectNAB(updated)
+    return updated
+  })
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!files.length) return setError('Please select at least one CSV file')
-    if (!accountName && !selectedAccountId) return setError('Please specify an account')
+    if (!accountName && !selectedAccountId && !hasNABFile) return setError('Please specify an account')
 
     setIsLoading(true)
     setError('')
@@ -62,6 +83,7 @@ export default function ImportPage() {
       setFiles([])
       setAccountName('')
       setSelectedAccountId('')
+      setHasNABFile(false)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Import failed')
     } finally {
@@ -123,6 +145,11 @@ export default function ImportPage() {
           {/* Account selector */}
           <div className="bg-white rounded-xl border border-gray-200 p-5">
             <h2 className="font-semibold text-gray-900 mb-4">Which account are these from?</h2>
+            {hasNABFile && (
+              <div className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 mb-4">
+                NAB credit card detected — account will be created automatically from the file.
+              </div>
+            )}
             {accounts.length > 0 && (
               <div className="mb-4">
                 <label className="text-sm text-gray-600 mb-2 block">Select existing account</label>
@@ -175,7 +202,14 @@ export default function ImportPage() {
                 accept=".csv"
                 multiple
                 className="hidden"
-                onChange={e => setFiles(prev => [...prev, ...Array.from(e.target.files || [])])}
+                onChange={e => {
+                  const added = Array.from(e.target.files || [])
+                  setFiles(prev => {
+                    const updated = [...prev, ...added]
+                    detectNAB(updated)
+                    return updated
+                  })
+                }}
               />
             </label>
           </div>

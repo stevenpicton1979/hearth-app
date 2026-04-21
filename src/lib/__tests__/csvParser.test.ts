@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseCSV, extractBalance } from '../csvParser'
+import { parseCSV, extractBalance, extractNABAccountName } from '../csvParser'
 
 describe('csvParser - Import Layer', () => {
   describe('parseCSV', () => {
@@ -87,6 +87,107 @@ describe('csvParser - Import Layer', () => {
       const result = parseCSV(csv)
       expect(result[0].category).toBe('Entertainment')
       expect(result[1].category).toBe('Food & Groceries')
+    })
+  })
+
+  describe('NAB credit card format', () => {
+    const NAB_HEADER = 'Date,Amount,Account Number,,Transaction Type,Transaction Details,Balance,Category,Merchant Name,Processed On'
+
+    it('parses NAB date "22 Jan 26" to 2026-01-22', () => {
+      const csv = `${NAB_HEADER}
+22 Jan 26,-83.22,Card ending 1687,,CREDIT CARD PURCHASE,Reddy Express 1809 Rocklea,-914.82,Fuel,Shell Coles Express (Rocklea),22 Jan 26`
+      const result = parseCSV(csv)
+      expect(result[0].date).toBe('2026-01-22')
+    })
+
+    it('parses NAB date "05 Dec 25" to 2025-12-05', () => {
+      const csv = `${NAB_HEADER}
+05 Dec 25,-45.00,Card ending 1687,,CREDIT CARD PURCHASE,MCDONALD'S,-960.00,Restaurants & takeaway,McDonald's,05 Dec 25`
+      const result = parseCSV(csv)
+      expect(result[0].date).toBe('2025-12-05')
+    })
+
+    it('marks CREDIT CARD PAYMENT rows as is_transfer=true', () => {
+      const csv = `${NAB_HEADER}
+22 Jan 26,19.35,Card ending 1687,,CREDIT CARD PAYMENT,INTERNET PAYMENT Linked Acc Trns,0.00,Internal transfers,,22 Jan 26`
+      const result = parseCSV(csv)
+      expect(result).toHaveLength(1)
+      expect(result[0].is_transfer).toBe(true)
+    })
+
+    it('marks CREDIT CARD PURCHASE rows as is_transfer=false', () => {
+      const csv = `${NAB_HEADER}
+12 Jan 26,-83.22,Card ending 1687,,CREDIT CARD PURCHASE,Reddy Express 1809 Rocklea,-914.82,Fuel,Shell Coles Express (Rocklea),12 Jan 26`
+      const result = parseCSV(csv)
+      expect(result[0].is_transfer).toBe(false)
+    })
+
+    it('marks Internal transfers category as is_transfer=true', () => {
+      const csv = `${NAB_HEADER}
+10 Jan 26,100.00,Card ending 1687,,CREDIT CARD PAYMENT,Some payment,0.00,Internal transfers,,10 Jan 26`
+      const result = parseCSV(csv)
+      expect(result[0].is_transfer).toBe(true)
+    })
+
+    it('uses Merchant Name when non-empty', () => {
+      const csv = `${NAB_HEADER}
+12 Jan 26,-83.22,Card ending 1687,,CREDIT CARD PURCHASE,Reddy Express 1809 Rocklea,-914.82,Fuel,Shell Coles Express (Rocklea),12 Jan 26`
+      const result = parseCSV(csv)
+      expect(result[0].description).toBe('Shell Coles Express (Rocklea)')
+    })
+
+    it('falls back to Transaction Details when Merchant Name is empty', () => {
+      const csv = `${NAB_HEADER}
+22 Jan 26,19.35,Card ending 1687,,CREDIT CARD PAYMENT,INTERNET PAYMENT Linked Acc Trns,0.00,Internal transfers,,22 Jan 26`
+      const result = parseCSV(csv)
+      expect(result[0].description).toBe('INTERNET PAYMENT Linked Acc Trns')
+    })
+
+    it('maps NAB category "Fuel" to Transport', () => {
+      const csv = `${NAB_HEADER}
+12 Jan 26,-83.22,Card ending 1687,,CREDIT CARD PURCHASE,Reddy Express,-914.82,Fuel,Shell Coles Express,12 Jan 26`
+      const result = parseCSV(csv)
+      expect(result[0].category).toBe('Transport')
+    })
+
+    it('maps NAB category "Restaurants & takeaway" to Eating Out', () => {
+      const csv = `${NAB_HEADER}
+10 Jan 26,-25.00,Card ending 1687,,CREDIT CARD PURCHASE,MCDONALD'S,-940.00,Restaurants & takeaway,McDonald's,10 Jan 26`
+      const result = parseCSV(csv)
+      expect(result[0].category).toBe('Eating Out')
+    })
+
+    it('maps NAB category "Groceries" to Food & Groceries', () => {
+      const csv = `${NAB_HEADER}
+08 Jan 26,-120.00,Card ending 1687,,CREDIT CARD PURCHASE,WOOLWORTHS,-1060.00,Groceries,Woolworths,08 Jan 26`
+      const result = parseCSV(csv)
+      expect(result[0].category).toBe('Food & Groceries')
+    })
+
+    it('sets null category for transfer rows', () => {
+      const csv = `${NAB_HEADER}
+22 Jan 26,19.35,Card ending 1687,,CREDIT CARD PAYMENT,INTERNET PAYMENT Linked Acc Trns,0.00,Internal transfers,,22 Jan 26`
+      const result = parseCSV(csv)
+      expect(result[0].category).toBeNull()
+    })
+  })
+
+  describe('extractNABAccountName', () => {
+    const NAB_HEADER = 'Date,Amount,Account Number,,Transaction Type,Transaction Details,Balance,Category,Merchant Name,Processed On'
+
+    it('extracts account name from Card ending digits', () => {
+      const csv = `${NAB_HEADER}
+12 Jan 26,-83.22,Card ending 1687,,CREDIT CARD PURCHASE,Reddy Express,-914.82,Fuel,Shell Coles Express,12 Jan 26`
+      expect(extractNABAccountName(csv)).toBe('NAB Credit Card (\u00b71687)')
+    })
+
+    it('returns null for CBA CSV', () => {
+      const csv = `16/04/2026,"-23.14","WOOLWORTHS","5234.56"`
+      expect(extractNABAccountName(csv)).toBeNull()
+    })
+
+    it('returns null for empty string', () => {
+      expect(extractNABAccountName('')).toBeNull()
     })
   })
 

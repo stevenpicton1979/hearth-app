@@ -13,15 +13,45 @@ function parseDate(raw: string): string | null {
   return null
 }
 
+// Parse NAB date format: "22 Jan 26" → "2026-01-22"
+function parseNABDate(raw: string): string | null {
+  const m = raw.match(/^(\d{1,2})\s+([A-Za-z]{3})\s+(\d{2})$/)
+  if (!m) return null
+  const day = m[1].padStart(2, '0')
+  const monthNames = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec']
+  const monthIdx = monthNames.indexOf(m[2].toLowerCase())
+  if (monthIdx === -1) return null
+  const month = String(monthIdx + 1).padStart(2, '0')
+  const yr = parseInt(m[3], 10)
+  const year = yr < 50 ? 2000 + yr : 1900 + yr
+  return `${year}-${month}-${day}`
+}
+
 function parseAmount(raw: string): number | null {
   const cleaned = raw.replace(/[$,\s]/g, '')
   const n = parseFloat(cleaned)
   return isNaN(n) ? null : n
 }
 
-type CSVFormat = 'cba_4col' | 'cba_4col_noheader' | 'cba_5col' | 'anz' | 'westpac' | 'generic'
+type CSVFormat = 'cba_4col' | 'cba_4col_noheader' | 'cba_5col' | 'anz' | 'westpac' | 'nab_cc' | 'generic'
 
 const DATE_RE = /^\d{1,2}\/\d{1,2}\/\d{4}$/
+
+// NAB category → Hearth category mapping
+const NAB_CATEGORY_MAP: Record<string, string> = {
+  'Fuel': 'Transport',
+  'Restaurants & takeaway': 'Eating Out',
+  'Home improvements': 'Household',
+  'Accommodation': 'Travel',
+  'Travel expenses': 'Transport',
+  'Vehicle expenses': 'Transport',
+  'Electronics & technology': 'Shopping',
+  'Other shopping': 'Shopping',
+  'Groceries': 'Food & Groceries',
+  'Health & medical': 'Medical',
+  'Entertainment': 'Entertainment',
+  'Utilities': 'Utilities',
+}
 
 function detectFormat(headers: string[]): CSVFormat {
   const h = headers.map(hdr => hdr.toLowerCase().trim())
@@ -30,6 +60,11 @@ function detectFormat(headers: string[]): CSVFormat {
   // the first cell looks like DD/MM/YYYY.
   if (headers.length >= 3 && DATE_RE.test(headers[0].trim())) {
     return 'cba_4col_noheader'
+  }
+
+  // NAB credit card: header contains "transaction type" and "merchant name"
+  if (h.includes('transaction type') && h.includes('merchant name')) {
+    return 'nab_cc'
   }
 
   if (h.includes('debit') && h.includes('credit') && h.includes('balance')) {
@@ -72,6 +107,8 @@ export function parseCSV(text: string): ParsedTransaction[] {
     let date: string | null = null
     let amount: number | null = null
     let description = ''
+    let isTransferRow = false
+    let nabCategoryOverride: string | null = null
 
     try {
       if (format === 'cba_4col' || format === 'cba_4col_noheader') {
@@ -100,6 +137,22 @@ export function parseCSV(text: string): ParsedTransaction[] {
         date = parseDate(cols[0])
         amount = parseAmount(cols[1])
         description = cols[2] || ''
+      } else if (format === 'nab_cc') {
+        // Date, Amount, Account Number, [empty], Transaction Type, Transaction Details,
+        // Balance, Category, Merchant Name, Processed On
+        date = parseNABDate(cols[0])
+        amount = parseAmount(cols[1])
+        const txnType = cols[4] || ''
+        const txnDetails = cols[5] || ''
+        const nabCategory = cols[7] || ''
+        const merchantName = cols[8] || ''
+        description = merchantName || txnDetails
+        isTransferRow =
+          txnType === 'CREDIT CARD PAYMENT' ||
+          nabCategory === 'Internal transfers' ||
+          txnDetails.includes('CASH/TRANSFER PAYMENT') ||
+          txnDetails.includes('INTERNET PAYMENT Linked Acc Trns')
+        nabCategoryOverride = NAB_CATEGORY_MAP[nabCategory] ?? null
       } else {
         // generic: try date in col 0, amount somewhere, description
         date = parseDate(cols[0])
@@ -120,20 +173,48 @@ export function parseCSV(text: string): ParsedTransaction[] {
 
     if (!date || amount === null || !description) continue
     if (amount === 0) continue
-    if (isTransfer(description)) continue
+
+    // For non-NAB formats: use pattern-based transfer detection and skip
+    if (format !== 'nab_cc' && isTransfer(description)) continue
 
     const merchant = cleanMerchant(description)
     const isIncome = amount > 0
-    const category = isIncome ? null : guessCategory(merchant)
+
+    let category: string | null
+    if (isTransferRow || isIncome) {
+      category = null
+    } else if (nabCategoryOverride !== null) {
+      category = nabCategoryOverride
+    } else {
+      category = guessCategory(merchant)
+    }
 
     // Attach balance to first parsed transaction only (most recent row)
     const balance = !balanceAttached ? mostRecentBalance : undefined
     balanceAttached = true
 
-    results.push({ date, amount, description, merchant, category, is_transfer: false, balance })
+    results.push({ date, amount, description, merchant, category, is_transfer: isTransferRow, balance })
   }
 
   return results
+}
+
+/**
+ * Extract the NAB account name from a raw NAB credit card CSV.
+ * Returns e.g. "NAB Credit Card (·1687)" from "Card ending 1687", or null.
+ */
+export function extractNABAccountName(text: string): string | null {
+  const lines = text.split(/\r?\n/).filter(l => l.trim())
+  if (lines.length < 2) return null
+  const headers = lines[0].split(',').map(h => h.replace(/^"|"$/g, '').trim())
+  if (detectFormat(headers) !== 'nab_cc') return null
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].split(',').map(c => c.replace(/^"|"$/g, '').trim())
+    const accountNum = cols[2] || ''
+    const m = accountNum.match(/Card ending (\d+)/i)
+    if (m) return `NAB Credit Card (\u00b7${m[1]})`
+  }
+  return null
 }
 
 /**

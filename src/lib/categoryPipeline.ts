@@ -10,6 +10,8 @@ export interface RawTransaction {
   amount: number
   description: string
   basiq_transaction_id?: string
+  is_transfer?: boolean
+  category_hint?: string | null
 }
 
 export interface ProcessedTransaction {
@@ -60,7 +62,7 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
 
   for (const raw of raws) {
     if (raw.amount === 0) continue
-    if (isTransfer(raw.description)) { transfersSkipped++; continue }
+    if (raw.is_transfer || isTransfer(raw.description)) { transfersSkipped++; continue }
 
     const merchant = cleanMerchant(raw.description)
     const isIncome = raw.amount > 0
@@ -70,7 +72,7 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
 
     if (!isIncome) {
       const mapping = mappingMap.get(merchant)
-      category = mapping?.category ?? guessCategory(merchant)
+      category = mapping?.category ?? raw.category_hint ?? guessCategory(merchant)
       classification = mapping?.classification ?? null
       if (!mapping && category !== null) {
         autoMappings.set(merchant, category)
