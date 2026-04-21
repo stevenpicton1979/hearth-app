@@ -139,6 +139,16 @@ export function TransactionTable({ initialTransactions, accounts, initialCategor
     fetchTransactions(page)
   }
 
+  const handleUnexclude = async (id: string) => {
+    setMenuOpenId(null)
+    await fetch('/api/transactions/bulk', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: [id], action: 'unexclude' }),
+    })
+    fetchTransactions(page)
+  }
+
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => {
       const next = new Set(prev)
@@ -328,7 +338,10 @@ export function TransactionTable({ initialTransactions, accounts, initialCategor
                     <td className="px-4 py-3 whitespace-nowrap text-gray-600">{formatDate(t.date)}</td>
                     <td className="px-4 py-3">
                       <div className="font-medium text-gray-900 truncate max-w-[200px]">{t.merchant}</div>
-                      {t.is_transfer && <span className="text-xs bg-gray-200 text-gray-500 rounded px-1.5 py-0.5">Transfer</span>}
+                      <div className="flex gap-1 flex-wrap mt-0.5">
+                        {t.is_transfer && <span className="text-xs bg-gray-200 text-gray-500 rounded px-1.5 py-0.5">Transfer</span>}
+                        {!t.is_transfer && t.amount > 0 && <span className="text-xs bg-emerald-100 text-emerald-700 rounded px-1.5 py-0.5">Income</span>}
+                      </div>
                       {t.notes && <div className="text-xs text-gray-400 truncate max-w-[200px]">{t.notes}</div>}
                     </td>
                     <td className="px-4 py-3 text-gray-500 hidden md:table-cell">
@@ -401,12 +414,21 @@ export function TransactionTable({ initialTransactions, accounts, initialCategor
                         </button>
                         {menuOpenId === t.id && (
                           <div className="absolute right-0 top-8 z-10 bg-white border border-gray-200 rounded-lg shadow-lg py-1 w-48">
-                            <button
-                              onClick={() => handleExclude(t.id)}
-                              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                            >
-                              Exclude from reports
-                            </button>
+                            {t.is_transfer ? (
+                              <button
+                                onClick={() => handleUnexclude(t.id)}
+                                className="w-full text-left px-4 py-2 text-sm text-emerald-700 hover:bg-gray-50"
+                              >
+                                Un-exclude (include in reports)
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleExclude(t.id)}
+                                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                              >
+                                Exclude from reports
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>

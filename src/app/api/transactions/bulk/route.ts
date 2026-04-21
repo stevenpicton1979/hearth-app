@@ -12,6 +12,7 @@ export async function POST(req: NextRequest) {
   if (action === 'set_category') update = { category: value }
   else if (action === 'set_classification') update = { classification: value }
   else if (action === 'exclude') update = { is_transfer: true }
+  else if (action === 'unexclude') update = { is_transfer: false }
   else return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
 
   const { error } = await supabase

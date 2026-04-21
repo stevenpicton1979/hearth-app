@@ -3,6 +3,7 @@ import { DEFAULT_HOUSEHOLD_ID } from './constants'
 import { cleanMerchant } from './cleanMerchant'
 import { guessCategory } from './autoCategory'
 import { isTransfer } from './transferPatterns'
+import { isDirectorIncome } from './directorIncome'
 
 export interface RawTransaction {
   account_id: string
@@ -63,8 +64,26 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
   for (const raw of raws) {
     if (raw.amount === 0) continue
 
-    const isTransferRow = raw.is_transfer || isTransfer(raw.description)
     const merchant = cleanMerchant(raw.description)
+
+    // Director income: positive credit from business — NOT a transfer, even if pattern matches
+    if (isDirectorIncome(raw.description, raw.amount)) {
+      toUpsert.push({
+        household_id: DEFAULT_HOUSEHOLD_ID,
+        account_id: raw.account_id,
+        date: raw.date,
+        amount: raw.amount,
+        description: raw.description,
+        merchant,
+        category: 'Director Income',
+        classification: null,
+        is_transfer: false,
+        basiq_transaction_id: raw.basiq_transaction_id ?? null,
+      })
+      continue
+    }
+
+    const isTransferRow = raw.is_transfer || isTransfer(raw.description)
 
     if (isTransferRow) {
       // Store transfers with is_transfer=true so "Show excluded" can reveal them
