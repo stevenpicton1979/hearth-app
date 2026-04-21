@@ -10,6 +10,7 @@ import {
   CalendarIcon,
   ArrowRightIcon,
 } from '@heroicons/react/24/outline'
+import { BusinessSummaryWidget } from './BusinessSummaryWidget'
 
 const aud = (n: number) =>
   new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(n)
@@ -89,6 +90,22 @@ export default async function DashboardPage() {
     .select('amount')
     .eq('household_id', DEFAULT_HOUSEHOLD_ID)
     .gte('date', thisMonthStart)
+
+  // Business accounts data (only if any business-scoped accounts exist)
+  const businessAccounts = (allAccounts || []).filter(a => (a as { scope: string | null }).scope === 'business')
+  const businessIds = businessAccounts.map(a => a.id)
+
+  const businessBalance = businessAccounts.reduce((s, a) => s + ((a as { current_balance: number | null }).current_balance || 0), 0)
+
+  let businessRevenue = 0
+  let businessOutgoings = 0
+  if (businessIds.length > 0) {
+    const qBizRev = supabase.from('transactions').select('amount').eq('household_id', DEFAULT_HOUSEHOLD_ID).eq('is_transfer', false).gt('amount', 0).gte('date', thisMonthStart).in('account_id', businessIds)
+    const qBizOut = supabase.from('transactions').select('amount').eq('household_id', DEFAULT_HOUSEHOLD_ID).eq('is_transfer', false).lt('amount', 0).gte('date', thisMonthStart).in('account_id', businessIds)
+    const [{ data: bizRev }, { data: bizOut }] = await Promise.all([qBizRev, qBizOut])
+    businessRevenue = (bizRev || []).reduce((s, t) => s + (t as { amount: number }).amount, 0)
+    businessOutgoings = (bizOut || []).reduce((s, t) => s + Math.abs((t as { amount: number }).amount), 0)
+  }
 
   const accounts = allAccounts
 
@@ -420,6 +437,16 @@ export default async function DashboardPage() {
             </Link>
           </div>
         </div>
+
+        {/* Business summary — only rendered when business-scoped accounts exist */}
+        {businessAccounts.length > 0 && (
+          <BusinessSummaryWidget
+            balance={businessBalance}
+            revenue={businessRevenue}
+            outgoings={businessOutgoings}
+            accountCount={businessAccounts.length}
+          />
+        )}
       </div>
     </div>
   )
