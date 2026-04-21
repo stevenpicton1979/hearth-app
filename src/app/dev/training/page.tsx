@@ -147,8 +147,7 @@ function LabelRow({
   autoCategory: string | null
   onSave: (merchant: string, updates: Partial<TrainingLabel>) => Promise<void>
 }) {
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState({
+  const [local, setLocal] = useState({
     correct_category: label.correct_category,
     correct_classification: label.correct_classification,
     is_income: label.is_income,
@@ -156,166 +155,123 @@ function LabelRow({
     is_subscription: label.is_subscription,
     subscription_frequency: label.subscription_frequency,
     notes: label.notes || '',
+    status: label.status,
+    suggested_rule: label.suggested_rule,
   })
-  const [saving, setSaving] = useState(false)
+  const [savedFlash, setSavedFlash] = useState(false)
   const [ruleImpactKeyword, setRuleImpactKeyword] = useState<string | null>(null)
 
-  const hasMismatch = label.status === 'confirmed' && autoCategory !== label.correct_category
-  const suggestedKeyword = hasMismatch && label.correct_category ? label.merchant.split(' ')[0] : null
+  const hasMismatch = autoCategory !== null && local.correct_category !== null && autoCategory !== local.correct_category
+  const suggestedKeyword = hasMismatch ? label.merchant.split(' ')[0] : null
 
-  async function handleConfirm() {
-    setSaving(true)
-    let suggested_rule: string | null = null
-    if (autoCategory !== draft.correct_category && draft.correct_category) {
-      suggested_rule = `'${label.merchant.split(' ')[0]}' → ${draft.correct_category}`
-    }
-    await onSave(label.merchant, { ...draft, status: 'confirmed', suggested_rule })
-    setSaving(false)
-    setEditing(false)
+  async function saveField(updates: Partial<typeof local>) {
+    const newStatus = local.status === 'pending' ? 'confirmed' : local.status
+    const merged = { ...local, ...updates }
+    const newCat = merged.correct_category
+    const suggested_rule = newCat && autoCategory && newCat !== autoCategory
+      ? `'${label.merchant.split(' ')[0]}' → ${newCat}`
+      : null
+    const toSave = { ...merged, status: newStatus as TrainingLabel['status'], suggested_rule }
+    setLocal(toSave)
+    await onSave(label.merchant, toSave)
+    setSavedFlash(true)
+    setTimeout(() => setSavedFlash(false), 1500)
   }
 
   return (
-    <div className={`border rounded-xl p-4 ${label.holdout ? 'border-amber-200 bg-amber-50' : 'border-gray-200 bg-white'}`}>
-      {/* Header row */}
-      <div className="flex items-start justify-between gap-3 mb-2">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-semibold text-gray-900 text-sm">{label.merchant}</span>
-            {label.holdout && (
-              <span className="text-xs bg-amber-100 text-amber-700 rounded px-1.5 py-0.5">holdout</span>
-            )}
-            <span className={`text-xs rounded px-1.5 py-0.5 ${STATUS_COLORS[label.status] || STATUS_COLORS.pending}`}>
-              {label.status}
-            </span>
-          </div>
-          <div className="text-xs text-gray-400 mt-0.5">
-            {label.transaction_count} txn{label.transaction_count !== 1 ? 's' : ''} · {aud(label.total_spend)} · {fmtDate(label.min_date)}–{fmtDate(label.max_date)}
-          </div>
+    <div className={`border rounded-xl p-4 flex gap-4 items-start ${label.holdout ? 'border-amber-200 bg-amber-50' : 'border-gray-200 bg-white'}`}>
+      {/* Left: read-only context */}
+      <div className="w-44 flex-shrink-0">
+        <div className="font-semibold text-sm text-gray-900 break-words">{label.merchant}</div>
+        <div className="text-xs text-gray-400 mt-0.5">
+          {label.transaction_count} txn{label.transaction_count !== 1 ? 's' : ''} · {aud(label.total_spend)}
         </div>
-        <button
-          onClick={() => setEditing(e => !e)}
-          className="text-xs text-emerald-700 hover:text-emerald-900 underline whitespace-nowrap"
-        >
-          {editing ? 'Cancel' : 'Edit'}
-        </button>
+        <div className="text-xs text-gray-400">{fmtDate(label.min_date)}–{fmtDate(label.max_date)}</div>
+        <div className="flex flex-wrap gap-1 mt-1">
+          {label.holdout && <span className="text-xs bg-amber-100 text-amber-700 rounded px-1.5 py-0.5">holdout</span>}
+          <span className={`text-xs rounded px-1.5 py-0.5 ${STATUS_COLORS[local.status] || STATUS_COLORS.pending}`}>{local.status}</span>
+          {savedFlash && <span className="text-xs text-emerald-600 font-medium">✓ Saved</span>}
+        </div>
       </div>
 
-      {/* Auto-detected */}
-      <div className="text-xs text-gray-400 mb-2">
-        Auto-detected: <span className="text-gray-600">{autoCategory ?? 'null'}</span>
-      </div>
-
-      {/* Mismatch warning (confirmed only) */}
-      {hasMismatch && (
-        <div className="text-xs bg-yellow-50 border border-yellow-200 rounded p-2 mb-2 space-y-1">
-          <p className="text-yellow-800">
-            ⚠️ Auto-detected: <strong>{autoCategory}</strong>. You corrected to: <strong>{label.correct_category}</strong>.
-          </p>
-          {suggestedKeyword && (
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-yellow-700">
-                Suggested rule: keyword &ldquo;{suggestedKeyword}&rdquo; → {label.correct_category}
-              </span>
-              <button
-                onClick={() => navigator.clipboard.writeText(`'${suggestedKeyword}': '${label.correct_category}'`)}
-                className="text-xs bg-yellow-100 hover:bg-yellow-200 text-yellow-800 rounded px-1.5 py-0.5"
-              >
-                Copy rule suggestion
-              </button>
-              <button
-                onClick={() => setRuleImpactKeyword(suggestedKeyword)}
-                className="text-xs bg-yellow-100 hover:bg-yellow-200 text-yellow-800 rounded px-1.5 py-0.5"
-              >
-                Preview impact
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Edit fields */}
-      {editing ? (
-        <div className="space-y-2 mt-2">
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-xs text-gray-500 block mb-1">Category</label>
-              <select
-                value={draft.correct_category || ''}
-                onChange={e => setDraft(d => ({ ...d, correct_category: e.target.value || null }))}
-                className="w-full text-sm border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-              >
-                <option value="">— None —</option>
-                {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-gray-500 block mb-1">Classification</label>
-              <select
-                value={draft.correct_classification || ''}
-                onChange={e => setDraft(d => ({ ...d, correct_classification: e.target.value || null }))}
-                className="w-full text-sm border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-              >
-                <option value="">—</option>
-                {CLASSIFICATION_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-4 text-sm">
-            <label className="flex items-center gap-1.5 cursor-pointer">
-              <input type="checkbox" checked={draft.is_income} onChange={e => setDraft(d => ({ ...d, is_income: e.target.checked }))} className="rounded text-emerald-600" />
-              Income
-            </label>
-            <label className="flex items-center gap-1.5 cursor-pointer">
-              <input type="checkbox" checked={draft.is_transfer} onChange={e => setDraft(d => ({ ...d, is_transfer: e.target.checked }))} className="rounded text-emerald-600" />
-              Transfer
-            </label>
-            <label className="flex items-center gap-1.5 cursor-pointer">
-              <input type="checkbox" checked={draft.is_subscription} onChange={e => setDraft(d => ({ ...d, is_subscription: e.target.checked }))} className="rounded text-emerald-600" />
-              Subscription
-            </label>
-          </div>
-          {draft.is_subscription && (
-            <div>
-              <label className="text-xs text-gray-500 block mb-1">Subscription frequency</label>
-              <select
-                value={draft.subscription_frequency || ''}
-                onChange={e => setDraft(d => ({ ...d, subscription_frequency: e.target.value || null }))}
-                className="text-sm border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-              >
-                <option value="">— Select —</option>
-                {FREQ_OPTIONS.map(f => <option key={f} value={f}>{f}</option>)}
-              </select>
-            </div>
-          )}
-          <div>
-            <label className="text-xs text-gray-500 block mb-1">Notes</label>
-            <input
-              type="text"
-              value={draft.notes}
-              onChange={e => setDraft(d => ({ ...d, notes: e.target.value }))}
-              placeholder="Optional notes"
-              className="w-full text-sm border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-            />
-          </div>
-          <button
-            onClick={handleConfirm}
-            disabled={saving}
-            className="text-sm bg-emerald-700 text-white rounded-lg px-4 py-1.5 hover:bg-emerald-800 disabled:opacity-50"
+      {/* Right: always-editable fields */}
+      <div className="flex-1 min-w-0 space-y-2">
+        <div className="flex gap-2 flex-wrap items-center">
+          <span className="text-xs text-gray-400 whitespace-nowrap">Auto: {autoCategory ?? '—'}</span>
+          <select
+            value={local.correct_category || ''}
+            onChange={e => saveField({ correct_category: e.target.value || null })}
+            className="text-sm border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-emerald-500"
           >
-            {saving ? 'Saving...' : 'Confirm'}
-          </button>
+            <option value="">— None —</option>
+            {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <select
+            value={local.correct_classification || ''}
+            onChange={e => saveField({ correct_classification: e.target.value || null })}
+            className="text-sm border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+          >
+            <option value="">—</option>
+            {CLASSIFICATION_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
         </div>
-      ) : (
-        /* Compact view */
-        <div className="text-xs text-gray-600 flex flex-wrap gap-3">
-          <span>Category: <strong>{label.correct_category || '—'}</strong></span>
-          {label.correct_classification && <span>Classification: <strong>{label.correct_classification}</strong></span>}
-          {label.is_income && <span className="text-emerald-600">Income</span>}
-          {label.is_transfer && <span className="text-blue-600">Transfer</span>}
-          {label.is_subscription && <span className="text-purple-600">Subscription{label.subscription_frequency ? ` (${label.subscription_frequency})` : ''}</span>}
-          {label.notes && <span className="text-gray-400 italic">{label.notes}</span>}
+
+        <div className="flex flex-wrap gap-3 text-sm">
+          {(['is_income', 'is_transfer', 'is_subscription'] as const).map(field => (
+            <label key={field} className="flex items-center gap-1.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={local[field]}
+                onChange={e => saveField({ [field]: e.target.checked })}
+                className="rounded text-emerald-600"
+              />
+              {field === 'is_income' ? 'Income' : field === 'is_transfer' ? 'Transfer' : 'Subscription'}
+            </label>
+          ))}
+          {local.is_subscription && (
+            <select
+              value={local.subscription_frequency || ''}
+              onChange={e => saveField({ subscription_frequency: e.target.value || null })}
+              className="text-sm border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+            >
+              <option value="">Frequency...</option>
+              {FREQ_OPTIONS.map(f => <option key={f} value={f}>{f}</option>)}
+            </select>
+          )}
         </div>
-      )}
+
+        <input
+          type="text"
+          value={local.notes}
+          onChange={e => setLocal(l => ({ ...l, notes: e.target.value }))}
+          onBlur={e => saveField({ notes: e.target.value })}
+          placeholder="Notes..."
+          className="w-full text-sm border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+        />
+
+        {hasMismatch && (
+          <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded p-2 flex flex-wrap items-center gap-2">
+            <span>⚠️ Was: <strong>{autoCategory}</strong> → Corrected to: <strong>{local.correct_category}</strong></span>
+            {suggestedKeyword && (
+              <>
+                <span>· Suggested rule: &lsquo;{suggestedKeyword}&rsquo;</span>
+                <button
+                  onClick={() => navigator.clipboard.writeText(`'${suggestedKeyword}': '${local.correct_category}'`)}
+                  className="bg-amber-100 hover:bg-amber-200 rounded px-1.5 py-0.5"
+                >
+                  Copy
+                </button>
+                <button
+                  onClick={() => setRuleImpactKeyword(suggestedKeyword)}
+                  className="bg-amber-100 hover:bg-amber-200 rounded px-1.5 py-0.5"
+                >
+                  Preview impact
+                </button>
+              </>
+            )}
+          </div>
+        )}
+      </div>
 
       {ruleImpactKeyword && (
         <RuleImpactModal keyword={ruleImpactKeyword} onClose={() => setRuleImpactKeyword(null)} />
