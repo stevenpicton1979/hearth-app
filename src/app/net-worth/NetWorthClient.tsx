@@ -19,6 +19,7 @@ interface AccountRow {
   institution: string | null
   current_balance: number | null
   last_synced_at: string | null
+  scope?: string | null
 }
 
 interface Props {
@@ -360,12 +361,12 @@ export function NetWorthClient({
 
         {showAssets && (
           <div className="border-t border-gray-100">
-            {/* Bank accounts */}
-            {accounts.length > 0 && (
+            {/* Bank accounts (household + investment) */}
+            {accounts.filter(a => a.scope !== 'business').length > 0 && (
               <div className="px-6 py-4">
                 <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-3">Bank Accounts</h3>
                 <div className="space-y-2">
-                  {accounts.map(acc => (
+                  {accounts.filter(a => a.scope !== 'business').map(acc => (
                     <div key={acc.id} className="flex items-center justify-between py-1">
                       <div>
                         <span className="text-sm font-medium text-gray-800">{acc.display_name}</span>
@@ -385,6 +386,27 @@ export function NetWorthClient({
                 <div className="flex justify-between items-center mt-2 pt-2 border-t border-gray-100">
                   <span className="text-xs text-gray-500">Total bank balance</span>
                   <span className="text-sm font-semibold text-gray-900">{aud(bankBalance)}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Business accounts — shown separately, excluded from net worth */}
+            {accounts.filter(a => a.scope === 'business').length > 0 && (
+              <div className="px-6 py-4 border-t border-gray-100">
+                <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Business Accounts</h3>
+                <p className="text-xs text-gray-400 mb-3">Excluded from net worth headline</p>
+                <div className="space-y-2">
+                  {accounts.filter(a => a.scope === 'business').map(acc => (
+                    <div key={acc.id} className="flex items-center justify-between py-1">
+                      <div>
+                        <span className="text-sm font-medium text-gray-700">{acc.display_name}</span>
+                        {acc.institution && <span className="text-xs text-gray-400 ml-2">{acc.institution}</span>}
+                      </div>
+                      <span className="text-sm text-gray-600">
+                        {acc.current_balance !== null ? audFull(acc.current_balance) : <span className="text-gray-400">—</span>}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}

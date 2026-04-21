@@ -13,17 +13,18 @@ export default async function NetWorthPage() {
   ] = await Promise.all([
     supabase.from('assets').select('*').eq('household_id', DEFAULT_HOUSEHOLD_ID).order('asset_type').order('name'),
     supabase.from('liabilities').select('*').eq('household_id', DEFAULT_HOUSEHOLD_ID).order('liability_type').order('name'),
-    supabase.from('accounts').select('id, display_name, institution, current_balance, last_synced_at').eq('household_id', DEFAULT_HOUSEHOLD_ID).eq('is_active', true),
+    supabase.from('accounts').select('id, display_name, institution, current_balance, last_synced_at, scope').eq('household_id', DEFAULT_HOUSEHOLD_ID).eq('is_active', true),
     supabase.from('net_worth_snapshots').select('*').eq('household_id', DEFAULT_HOUSEHOLD_ID).order('recorded_at', { ascending: true }).limit(24),
   ])
 
-  // Compute bank balance from accounts.current_balance — only include accounts where balance is known
+  // Only household + investment accounts count toward net worth headline
   const bankBalance = (accounts || []).reduce((s: number, a) => {
+    const scope = (a as { scope: string | null }).scope
+    if (scope === 'business') return s
     const bal = (a as { current_balance: number | null }).current_balance
     return s + (bal !== null ? bal : 0)
   }, 0)
 
-  // Total assets = manual assets + bank balances
   const manualAssetsTotal = (assets || []).reduce((s: number, a) => s + (a as { value: number }).value, 0)
   const totalAssets = manualAssetsTotal + bankBalance
   const totalLiabilities = (liabilities || []).reduce((s: number, l) => s + (l as { balance: number }).balance, 0)

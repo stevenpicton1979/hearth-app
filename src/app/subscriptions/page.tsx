@@ -71,21 +71,27 @@ function computeTimeline(subscriptions: DetectedSubscription[]): TimelineItem[] 
 export default async function SubscriptionsPage() {
   const supabase = createServerClient()
 
-  const [{ data: transactions }, { data: accounts }] = await Promise.all([
-    supabase
-      .from('transactions')
-      .select('*')
-      .eq('household_id', DEFAULT_HOUSEHOLD_ID)
-      .eq('is_transfer', false)
-      .lt('amount', 0)
-      .order('date', { ascending: false })
-      .limit(2000),
-    supabase
-      .from('accounts')
-      .select('id, display_name')
-      .eq('household_id', DEFAULT_HOUSEHOLD_ID)
-      .eq('is_active', true),
-  ])
+  const { data: allAccounts } = await supabase
+    .from('accounts')
+    .select('id, display_name, scope')
+    .eq('household_id', DEFAULT_HOUSEHOLD_ID)
+    .eq('is_active', true)
+
+  const householdIds = (allAccounts || [])
+    .filter(a => !(a as { scope: string | null }).scope || (a as { scope: string | null }).scope === 'household')
+    .map(a => a.id)
+
+  const txQuery = supabase
+    .from('transactions')
+    .select('*')
+    .eq('household_id', DEFAULT_HOUSEHOLD_ID)
+    .eq('is_transfer', false)
+    .lt('amount', 0)
+    .order('date', { ascending: false })
+    .limit(2000)
+
+  const { data: transactions } = await (householdIds.length > 0 ? txQuery.in('account_id', householdIds) : txQuery)
+  const accounts = (allAccounts || []).map(a => ({ id: a.id, display_name: (a as { display_name: string }).display_name }))
 
   const detected = detectSubscriptions(
     (transactions || []) as Transaction[],

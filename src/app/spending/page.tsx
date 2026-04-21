@@ -60,60 +60,34 @@ export default async function SpendingPage({
 
   const supabase = createServerClient()
 
+  // Fetch household accounts — scope=null treated as household (pre-migration fallback)
+  const { data: allAccounts } = await supabase
+    .from('accounts')
+    .select('id, scope')
+    .eq('household_id', DEFAULT_HOUSEHOLD_ID)
+    .eq('is_active', true)
+
+  const householdIds = (allAccounts || [])
+    .filter(a => !(a as { scope: string | null }).scope || (a as { scope: string | null }).scope === 'household')
+    .map(a => a.id)
+
+  const hh = householdIds
+
+  const qCurrent = supabase.from('transactions').select('category, amount').eq('household_id', DEFAULT_HOUSEHOLD_ID).eq('is_transfer', false).lt('amount', 0).gte('date', from).lte('date', to)
+  const qLast = supabase.from('transactions').select('category, amount').eq('household_id', DEFAULT_HOUSEHOLD_ID).eq('is_transfer', false).lt('amount', 0).gte('date', lmFrom).lte('date', lmTo)
+  const qThreeBack = supabase.from('transactions').select('category, amount').eq('household_id', DEFAULT_HOUSEHOLD_ID).eq('is_transfer', false).lt('amount', 0).gte('date', tmFrom).lte('date', tmTo)
+  const qIncome = supabase.from('transactions').select('amount').eq('household_id', DEFAULT_HOUSEHOLD_ID).eq('is_transfer', false).gt('amount', 0).gte('date', from).lte('date', to)
+  const qLastSameDay = supabase.from('transactions').select('category, amount').eq('household_id', DEFAULT_HOUSEHOLD_ID).eq('is_transfer', false).lt('amount', 0).gte('date', lmFrom).lte('date', sameDayLastMonthTo)
+  const qUncategorised = supabase.from('transactions').select('merchant, amount').eq('household_id', DEFAULT_HOUSEHOLD_ID).eq('is_transfer', false).is('category', null).lt('amount', 0).gte('date', from).lte('date', to)
+
   const [{ data: current }, { data: last }, { data: threeBack }, { data: budgets }, { data: income }, { data: lastSameDay }, { data: uncategorised }] = await Promise.all([
-    supabase
-      .from('transactions')
-      .select('category, amount')
-      .eq('household_id', DEFAULT_HOUSEHOLD_ID)
-      .eq('is_transfer', false)
-      .lt('amount', 0)
-      .gte('date', from)
-      .lte('date', to),
-    supabase
-      .from('transactions')
-      .select('category, amount')
-      .eq('household_id', DEFAULT_HOUSEHOLD_ID)
-      .eq('is_transfer', false)
-      .lt('amount', 0)
-      .gte('date', lmFrom)
-      .lte('date', lmTo),
-    supabase
-      .from('transactions')
-      .select('category, amount')
-      .eq('household_id', DEFAULT_HOUSEHOLD_ID)
-      .eq('is_transfer', false)
-      .lt('amount', 0)
-      .gte('date', tmFrom)
-      .lte('date', tmTo),
-    supabase
-      .from('budgets')
-      .select('category, monthly_limit')
-      .eq('household_id', DEFAULT_HOUSEHOLD_ID),
-    supabase
-      .from('transactions')
-      .select('amount')
-      .eq('household_id', DEFAULT_HOUSEHOLD_ID)
-      .eq('is_transfer', false)
-      .gt('amount', 0)
-      .gte('date', from)
-      .lte('date', to),
-    supabase
-      .from('transactions')
-      .select('category, amount')
-      .eq('household_id', DEFAULT_HOUSEHOLD_ID)
-      .eq('is_transfer', false)
-      .lt('amount', 0)
-      .gte('date', lmFrom)
-      .lte('date', sameDayLastMonthTo),
-    supabase
-      .from('transactions')
-      .select('merchant, amount')
-      .eq('household_id', DEFAULT_HOUSEHOLD_ID)
-      .eq('is_transfer', false)
-      .is('category', null)
-      .lt('amount', 0)
-      .gte('date', from)
-      .lte('date', to),
+    hh.length > 0 ? qCurrent.in('account_id', hh) : qCurrent,
+    hh.length > 0 ? qLast.in('account_id', hh) : qLast,
+    hh.length > 0 ? qThreeBack.in('account_id', hh) : qThreeBack,
+    supabase.from('budgets').select('category, monthly_limit').eq('household_id', DEFAULT_HOUSEHOLD_ID),
+    hh.length > 0 ? qIncome.in('account_id', hh) : qIncome,
+    hh.length > 0 ? qLastSameDay.in('account_id', hh) : qLastSameDay,
+    hh.length > 0 ? qUncategorised.in('account_id', hh) : qUncategorised,
   ])
 
   const currentSummary = computeSummary(current || [])

@@ -44,10 +44,19 @@ export default async function DashboardPage() {
   const sameDayPrevMonthDay = Math.min(now.getDate(), lastDayOfPrevMonth)
   const sameDayPrevMonth = `${prevMonth.getFullYear()}-${String(prevMonth.getMonth() + 1).padStart(2, '0')}-${String(sameDayPrevMonthDay).padStart(2, '0')}`
 
+  const { data: allAccounts } = await supabase
+    .from('accounts')
+    .select('id, display_name, current_balance, scope')
+    .eq('household_id', DEFAULT_HOUSEHOLD_ID)
+    .eq('is_active', true)
+
+  const householdIds = (allAccounts || [])
+    .filter(a => !(a as { scope: string | null }).scope || (a as { scope: string | null }).scope === 'household')
+    .map(a => a.id)
+
   const [
     { data: assets },
     { data: liabilities },
-    { data: accounts },
     { data: snapshots },
     { data: thisMonthTxns },
     { data: prevMonthTxns },
@@ -59,16 +68,23 @@ export default async function DashboardPage() {
   ] = await Promise.all([
     supabase.from('assets').select('value').eq('household_id', DEFAULT_HOUSEHOLD_ID),
     supabase.from('liabilities').select('balance').eq('household_id', DEFAULT_HOUSEHOLD_ID),
-    supabase.from('accounts').select('id, display_name, current_balance').eq('household_id', DEFAULT_HOUSEHOLD_ID).eq('is_active', true),
     supabase.from('net_worth_snapshots').select('*').eq('household_id', DEFAULT_HOUSEHOLD_ID).order('recorded_at', { ascending: false }).limit(2),
-    supabase.from('transactions').select('amount, category').eq('household_id', DEFAULT_HOUSEHOLD_ID).eq('is_transfer', false).gte('date', thisMonthStart).lt('amount', 0),
-    supabase.from('transactions').select('amount').eq('household_id', DEFAULT_HOUSEHOLD_ID).eq('is_transfer', false).gte('date', prevMonthStart).lte('date', sameDayPrevMonth).lt('amount', 0),
+    (householdIds.length > 0
+      ? supabase.from('transactions').select('amount, category').eq('household_id', DEFAULT_HOUSEHOLD_ID).eq('is_transfer', false).gte('date', thisMonthStart).lt('amount', 0).in('account_id', householdIds)
+      : supabase.from('transactions').select('amount, category').eq('household_id', DEFAULT_HOUSEHOLD_ID).eq('is_transfer', false).gte('date', thisMonthStart).lt('amount', 0)),
+    (householdIds.length > 0
+      ? supabase.from('transactions').select('amount').eq('household_id', DEFAULT_HOUSEHOLD_ID).eq('is_transfer', false).gte('date', prevMonthStart).lte('date', sameDayPrevMonth).lt('amount', 0).in('account_id', householdIds)
+      : supabase.from('transactions').select('amount').eq('household_id', DEFAULT_HOUSEHOLD_ID).eq('is_transfer', false).gte('date', prevMonthStart).lte('date', sameDayPrevMonth).lt('amount', 0)),
     supabase.from('budgets').select('*').eq('household_id', DEFAULT_HOUSEHOLD_ID),
     supabase.from('goals').select('*').eq('household_id', DEFAULT_HOUSEHOLD_ID).eq('is_complete', false).order('created_at', { ascending: false }).limit(3),
     supabase.from('transactions').select('id, date, merchant, description, amount, category, classification, accounts(display_name)').eq('household_id', DEFAULT_HOUSEHOLD_ID).eq('is_transfer', false).order('date', { ascending: false }).limit(5),
     supabase.from('transactions').select('*').eq('household_id', DEFAULT_HOUSEHOLD_ID).eq('is_transfer', false).lt('amount', 0).order('date', { ascending: false }).limit(2000),
-    supabase.from('transactions').select('amount').eq('household_id', DEFAULT_HOUSEHOLD_ID).eq('is_transfer', false).gt('amount', 0).gte('date', thisMonthStart),
+    (householdIds.length > 0
+      ? supabase.from('transactions').select('amount').eq('household_id', DEFAULT_HOUSEHOLD_ID).eq('is_transfer', false).gt('amount', 0).gte('date', thisMonthStart).in('account_id', householdIds)
+      : supabase.from('transactions').select('amount').eq('household_id', DEFAULT_HOUSEHOLD_ID).eq('is_transfer', false).gt('amount', 0).gte('date', thisMonthStart)),
   ])
+
+  const accounts = allAccounts
 
   // Net worth
   const bankBalance = (accounts || []).reduce((s, a) => s + ((a as { current_balance: number | null }).current_balance || 0), 0)
