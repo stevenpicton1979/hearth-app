@@ -86,6 +86,7 @@ export async function POST(req: NextRequest) {
       description: p.description,
       is_transfer: p.is_transfer,
       category_hint: p.category,
+      raw_description: p.description,
     }))
 
     const { toUpsert, transfersSkipped } = await processBatch(raws)

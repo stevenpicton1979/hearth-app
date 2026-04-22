@@ -106,6 +106,21 @@ export function parseXeroDate(xeroDate: string): string {
 }
 
 /**
+ * Compose a raw_description string from all available Xero fields.
+ * Returns null if no fields are available.
+ */
+export function composeXeroRawDescription(
+  contactName: string | null | undefined,
+  reference: string | null | undefined,
+  narration: string | null | undefined,
+  lineItemDesc: string | null | undefined,
+): string | null {
+  const parts = [contactName, reference, narration, lineItemDesc].filter((s): s is string => Boolean(s && s.trim()))
+  if (parts.length === 0) return null
+  return parts.join(' | ').slice(0, 300)
+}
+
+/**
  * Clean merchant name from Xero transaction fields, in priority order:
  * line item description > reference > contact name > narration > 'Xero'
  * Skips line item description if it looks like a bare number/amount.

@@ -337,7 +337,7 @@ export function TransactionTable({ initialTransactions, accounts, initialCategor
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-gray-600">{formatDate(t.date)}</td>
                     <td className="px-4 py-3">
-                      <div className="font-medium text-gray-900 truncate max-w-[200px]">{t.merchant}</div>
+                      <div className="font-medium text-gray-900 truncate max-w-[200px]" title={t.raw_description || undefined}>{t.merchant}</div>
                       <div className="flex gap-1 flex-wrap mt-0.5">
                         {t.is_transfer && <span className="text-xs bg-gray-200 text-gray-500 rounded px-1.5 py-0.5">Transfer</span>}
                         {!t.is_transfer && t.amount > 0 && <span className="text-xs bg-emerald-100 text-emerald-700 rounded px-1.5 py-0.5">Income</span>}

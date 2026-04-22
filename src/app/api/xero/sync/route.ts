@@ -6,6 +6,7 @@ import {
   mapXeroAccountToCategory,
   parseXeroDate,
   cleanXeroMerchant,
+  composeXeroRawDescription,
 } from '@/lib/xeroCategories'
 import { processBatch, upsertTransactions } from '@/lib/categoryPipeline'
 import type { RawTransaction } from '@/lib/categoryPipeline'
@@ -140,6 +141,7 @@ export async function POST(req: NextRequest) {
           description: merchant,
           is_transfer: isTransfer,
           category_hint: categoryHint,
+          raw_description: composeXeroRawDescription(xTx.Contact?.Name, xTx.Reference, xTx.Narration, firstLineDesc),
         })
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : 'Unknown error'

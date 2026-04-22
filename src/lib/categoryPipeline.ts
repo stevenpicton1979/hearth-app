@@ -13,6 +13,7 @@ export interface RawTransaction {
   basiq_transaction_id?: string
   is_transfer?: boolean
   category_hint?: string | null
+  raw_description?: string | null
 }
 
 export interface ProcessedTransaction {
@@ -26,6 +27,7 @@ export interface ProcessedTransaction {
   classification: string | null
   is_transfer: boolean
   basiq_transaction_id: string | null
+  raw_description?: string | null
   source?: string
 }
 
@@ -80,6 +82,7 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
         classification: null,
         is_transfer: false,
         basiq_transaction_id: raw.basiq_transaction_id ?? null,
+        raw_description: raw.raw_description ?? null,
       })
       continue
     }
@@ -99,6 +102,7 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
         classification: null,
         is_transfer: true,
         basiq_transaction_id: raw.basiq_transaction_id ?? null,
+        raw_description: raw.raw_description ?? null,
       })
       transfersSkipped++
       continue
@@ -129,6 +133,7 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
       classification,
       is_transfer: false,
       basiq_transaction_id: raw.basiq_transaction_id ?? null,
+      raw_description: raw.raw_description ?? null,
     })
   }
 

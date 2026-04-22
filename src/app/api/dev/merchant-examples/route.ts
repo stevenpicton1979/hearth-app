@@ -9,21 +9,21 @@ export async function GET(req: NextRequest) {
   const supabase = createServerClient()
   const { data, error } = await supabase
     .from('transactions')
-    .select('description')
+    .select('description, raw_description')
     .eq('household_id', DEFAULT_HOUSEHOLD_ID)
     .eq('merchant', merchant)
-    .not('description', 'is', null)
     .limit(20)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // Deduplicate and return up to 3 distinct descriptions
+  // Return up to 3 distinct raw_description values (fall back to description)
   const seen = new Set<string>()
   const examples: string[] = []
   for (const row of data || []) {
-    if (row.description && !seen.has(row.description)) {
-      seen.add(row.description)
-      examples.push(row.description)
+    const text = (row.raw_description || row.description || '').trim()
+    if (text && !seen.has(text)) {
+      seen.add(text)
+      examples.push(text)
       if (examples.length >= 3) break
     }
   }

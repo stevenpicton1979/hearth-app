@@ -5,6 +5,7 @@ import {
   shouldScopeAsHousehold,
   parseXeroDate,
   cleanXeroMerchant,
+  composeXeroRawDescription,
 } from '../xeroCategories'
 
 describe('xeroCategories', () => {
@@ -170,6 +171,39 @@ describe('xeroCategories', () => {
       const long = 'A'.repeat(150)
       const merchant = cleanXeroMerchant(long, null, undefined, undefined)
       expect(merchant).toHaveLength(100)
+    })
+  })
+
+  describe('composeXeroRawDescription', () => {
+    it('joins all non-empty fields with pipe separator', () => {
+      const result = composeXeroRawDescription('Acme Corp', 'INV-001', 'Monthly fee', 'Consulting services')
+      expect(result).toBe('Acme Corp | INV-001 | Monthly fee | Consulting services')
+    })
+
+    it('skips null and undefined fields', () => {
+      const result = composeXeroRawDescription('Acme Corp', null, undefined, 'Software license')
+      expect(result).toBe('Acme Corp | Software license')
+    })
+
+    it('returns null when all fields are empty or null', () => {
+      const result = composeXeroRawDescription(null, null, undefined, undefined)
+      expect(result).toBeNull()
+    })
+
+    it('returns null when all fields are whitespace', () => {
+      const result = composeXeroRawDescription('  ', ' ', undefined, '')
+      expect(result).toBeNull()
+    })
+
+    it('truncates to 300 characters', () => {
+      const long = 'A'.repeat(200)
+      const result = composeXeroRawDescription(long, long, undefined, undefined)
+      expect(result).toHaveLength(300)
+    })
+
+    it('returns single field with no separator', () => {
+      const result = composeXeroRawDescription(null, 'REF-123', null, null)
+      expect(result).toBe('REF-123')
     })
   })
 })

@@ -10,6 +10,7 @@ export interface Transaction {
   classification: string | null
   notes: string | null
   is_transfer: boolean
+  raw_description?: string | null
   created_at: string
   accounts?: { display_name: string; institution: string | null }
 }
