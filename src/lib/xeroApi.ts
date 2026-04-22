@@ -141,6 +141,7 @@ export async function getXeroBankTransactions(
       'Authorization': `Bearer ${connection.access_token}`,
       'Xero-tenant-id': connection.tenant_id,
       'Content-Type': 'application/json',
+      'Accept': 'application/json',
     },
   })
 
@@ -172,6 +173,7 @@ export async function getXeroAccounts(connection: XeroConnection): Promise<Map<s
       'Authorization': `Bearer ${connection.access_token}`,
       'Xero-tenant-id': connection.tenant_id,
       'Content-Type': 'application/json',
+      'Accept': 'application/json',
     },
   })
 
