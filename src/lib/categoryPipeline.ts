@@ -153,8 +153,8 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
   return { toUpsert, transfersSkipped }
 }
 
-export async function upsertTransactions(rows: ProcessedTransaction[]): Promise<{ inserted: number; duplicates: number; autoCategorised: number }> {
-  if (rows.length === 0) return { inserted: 0, duplicates: 0, autoCategorised: 0 }
+export async function upsertTransactions(rows: ProcessedTransaction[]): Promise<{ inserted: number; duplicates: number; autoCategorised: number; backfilled: number }> {
+  if (rows.length === 0) return { inserted: 0, duplicates: 0, autoCategorised: 0, backfilled: 0 }
   const supabase = createServerClient()
 
   // Phase 1: Upsert all rows (insert new, update existing)
@@ -172,21 +172,18 @@ export async function upsertTransactions(rows: ProcessedTransaction[]): Promise<
   // This ensures that even if upserted rows returned nothing (due to no actual changes),
   // rows with a composed raw_description will get populated
   const rowsWithRawDesc = rows.filter(r => r.raw_description !== null)
+  let backfilled = 0
+
   if (rowsWithRawDesc.length > 0) {
+    // Execute all updates in parallel for efficiency
     // Update raw_description only where it's currently NULL
     // Uses the same conflict key to identify rows
-    for (const row of rowsWithRawDesc) {
-      await supabase
+    const updatePromises = rowsWithRawDesc.map(row =>
+      supabase
         .from('transactions')
         .update({ raw_description: row.raw_description })
         .eq('account_id', row.account_id)
         .eq('date', row.date)
         .eq('amount', row.amount)
         .eq('description', row.description)
-        .is('raw_description', null)
-    }
-  }
-
-  return { inserted, duplicates: rows.length - inserted, autoCategorised }
-}
-
+        
