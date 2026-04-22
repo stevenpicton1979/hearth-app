@@ -29,6 +29,7 @@ export async function POST() {
 
     // Fetch Xero bank transactions and accounts (incremental if last_synced_at exists)
     const { transactions } = await getXeroBankTransactions(connection, sinceDate)
+    console.log('XERO_DEBUG first 3 transactions:', JSON.stringify(transactions.slice(0, 3), null, 2))
     const accountsMap = await getXeroAccounts(connection)
 
     if (transactions.length === 0) {
