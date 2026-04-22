@@ -161,6 +161,14 @@ function LabelRow({
   })
   const [savedFlash, setSavedFlash] = useState(false)
   const [ruleImpactKeyword, setRuleImpactKeyword] = useState<string | null>(null)
+  const [examples, setExamples] = useState<string[] | null>(null)
+
+  useEffect(() => {
+    fetch(`/api/dev/merchant-examples?merchant=${encodeURIComponent(label.merchant)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.examples) setExamples(d.examples) })
+      .catch(() => {})
+  }, [label.merchant])
 
   const hasMismatch = autoCategory !== null && local.correct_category !== null && autoCategory !== local.correct_category
   const suggestedKeyword = hasMismatch ? label.merchant.split(' ')[0] : null
@@ -190,6 +198,14 @@ function LabelRow({
         <div className="text-xs text-gray-400">{fmtDate(label.min_date)}–{fmtDate(label.max_date)}</div>
         {label.accounts?.length > 0 && (
           <div className="text-xs text-gray-400 mt-0.5">Accounts: {label.accounts.join(', ')}</div>
+        )}
+        {examples && examples.length > 0 && (
+          <div className="mt-1.5">
+            <div className="text-xs text-gray-400 font-medium mb-0.5">Examples:</div>
+            {examples.map((ex, i) => (
+              <div key={i} className="text-xs text-gray-400 italic truncate" title={ex}>{ex}</div>
+            ))}
+          </div>
         )}
         <div className="flex flex-wrap gap-1 mt-1">
           {label.holdout && <span className="text-xs bg-amber-100 text-amber-700 rounded px-1.5 py-0.5">holdout</span>}
