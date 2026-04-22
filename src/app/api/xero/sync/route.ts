@@ -164,21 +164,4 @@ export async function POST(req: NextRequest) {
     await supabase
       .from('accounts')
       .update({ last_synced_at: nowIso })
-      .eq('household_id', DEFAULT_HOUSEHOLD_ID)
-      .eq('institution', 'Xero')
-
-    await supabase
-      .from('xero_connections')
-      .update({ last_synced_at: nowIso })
-      .eq('household_id', DEFAULT_HOUSEHOLD_ID)
-
-    return NextResponse.json({
-      synced: inserted,
-      skipped: duplicates,
-      errors,
-    })
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : 'Unknown error'
-    return NextResponse.json({ error: msg }, { status: 500 })
-  }
-}
+      .eq('household_id', DEFAULT_HOUSEHOLD_I

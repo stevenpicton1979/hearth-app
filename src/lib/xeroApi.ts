@@ -193,9 +193,4 @@ export async function getXeroAccounts(connection: XeroConnection): Promise<Map<s
   }
 
   const data = await res.json() as { Accounts?: XeroAccount[] }
-  const map = new Map<string, XeroAccount>()
-  for (const account of data.Accounts || []) {
-    map.set(account.Code, account)
-  }
-  return map
-}
+  const map = ne
