@@ -6,9 +6,7 @@ const TOKEN_URL = 'https://identity.xero.com/connect/token'
 const CONNECTIONS_URL = 'https://api.xero.com/connections'
 const CLIENT_ID = process.env.XERO_CLIENT_ID
 const CLIENT_SECRET = process.env.XERO_CLIENT_SECRET
-const REDIRECT_URI = process.env.VERCEL_URL
-  ? `https://${process.env.VERCEL_URL}/api/xero/callback`
-  : 'http://localhost:3000/api/xero/callback'
+const REDIRECT_URI = process.env.XERO_REDIRECT_URI || 'http://localhost:3000/api/xero/callback'
 
 export async function GET(req: NextRequest) {
   try {

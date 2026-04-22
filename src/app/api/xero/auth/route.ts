@@ -3,9 +3,7 @@ import crypto from 'crypto'
 
 const XERO_AUTH_URL = 'https://login.xero.com/identity/connect/authorize'
 const CLIENT_ID = process.env.XERO_CLIENT_ID
-const REDIRECT_URI = process.env.VERCEL_URL
-  ? `https://${process.env.VERCEL_URL}/api/xero/callback`
-  : 'http://localhost:3000/api/xero/callback'
+const REDIRECT_URI = process.env.XERO_REDIRECT_URI || 'http://localhost:3000/api/xero/callback'
 
 const SCOPES = 'openid profile email accounting.transactions.read accounting.accounts.read offline_access'
 
