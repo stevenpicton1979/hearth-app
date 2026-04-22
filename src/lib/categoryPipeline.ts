@@ -186,4 +186,18 @@ export async function upsertTransactions(rows: ProcessedTransaction[]): Promise<
         .eq('date', row.date)
         .eq('amount', row.amount)
         .eq('description', row.description)
-        
+        .is('raw_description', null)
+        .select('id')
+    )
+
+    const updateResults = await Promise.all(updatePromises)
+    // Count how many rows were actually updated
+    for (const result of updateResults) {
+      if (!result.error && result.data) {
+        backfilled += result.data.length
+      }
+    }
+  }
+
+  return { inserted, duplicates: rows.length - inserted, autoCategorised, backfilled }
+}
