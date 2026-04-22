@@ -49,7 +49,7 @@ export async function POST() {
     }
 
     const bankAccountMap = new Map<string, string>() // xeroAccountId → Hearth account id
-    for (const [xeroAccId, displayName] of uniqueBankAccounts) {
+    for (const [xeroAccId, displayName] of Array.from(uniqueBankAccounts.entries())) {
       const { data: existing } = await supabase
         .from('accounts')
         .select('id')
