@@ -98,8 +98,18 @@ export default async function SubscriptionsPage() {
     accounts || []
   )
 
-  const duplicates = computeDuplicates(detected)
-  const timeline = computeTimeline(detected)
+  // Filter out merchants the user has dismissed
+  const { data: dismissedMappings } = await supabase
+    .from('merchant_mappings')
+    .select('merchant')
+    .eq('household_id', DEFAULT_HOUSEHOLD_ID)
+    .eq('classification', 'Not a subscription')
+
+  const dismissedSet = new Set((dismissedMappings || []).map((m: { merchant: string }) => m.merchant))
+  const filteredDetected = detected.filter(s => !dismissedSet.has(s.merchant))
+
+  const duplicates = computeDuplicates(filteredDetected)
+  const timeline = computeTimeline(filteredDetected)
 
   return (
     <div>
@@ -109,7 +119,7 @@ export default async function SubscriptionsPage() {
           Auto-detected recurring charges from your transaction history.
         </p>
       </div>
-      <SubscriptionsClient subscriptions={detected} duplicates={duplicates} timeline={timeline} accounts={accounts || []} />
+      <SubscriptionsClient subscriptions={filteredDetected} duplicates={duplicates} timeline={timeline} accounts={accounts || []} />
     </div>
   )
 }

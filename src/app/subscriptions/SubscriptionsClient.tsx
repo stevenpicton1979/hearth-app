@@ -75,10 +75,30 @@ function getWeekLabel(dateStr: string): string {
 export function SubscriptionsClient({ subscriptions, duplicates, timeline, accounts }: Props) {
   const [tab, setTab] = useState<Tab>('active')
   const [dismissedDuplicates, setDismissedDuplicates] = useState<Set<string>>(new Set())
+  const [confirmedMerchants, setConfirmedMerchants] = useState<Set<string>>(new Set())
+  const [dismissedMerchants, setDismissedMerchants] = useState<Set<string>>(new Set())
 
-  const active = subscriptions.filter(s => !s.is_lapsed)
-  const lapsed = subscriptions.filter(s => s.is_lapsed)
-  const displayed = tab === 'active' ? active : tab === 'lapsed' ? lapsed : subscriptions
+  async function handleConfirmSub(merchant: string) {
+    setConfirmedMerchants(prev => { const n = new Set(prev); n.add(merchant); return n })
+    await fetch('/api/mappings', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ merchant, classification: 'Subscription' }),
+    }).catch(() => {})
+  }
+
+  async function handleDismissSub(merchant: string) {
+    setDismissedMerchants(prev => { const n = new Set(prev); n.add(merchant); return n })
+    await fetch('/api/mappings', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ merchant, classification: 'Not a subscription' }),
+    }).catch(() => {})
+  }
+
+  const active = subscriptions.filter(s => !s.is_lapsed && !dismissedMerchants.has(s.merchant))
+  const lapsed = subscriptions.filter(s => s.is_lapsed && !dismissedMerchants.has(s.merchant))
+  const displayed = (tab === 'active' ? active : tab === 'lapsed' ? lapsed : subscriptions.filter(s => !dismissedMerchants.has(s.merchant)))
 
   const activeAnnual = active.reduce((s, sub) => s + sub.annual_estimate, 0)
   const totalAnnual = subscriptions.reduce((s, sub) => s + sub.annual_estimate, 0)
@@ -225,6 +245,27 @@ export function SubscriptionsClient({ subscriptions, duplicates, timeline, accou
                           Possibly cancelled
                         </span>
                       )}
+                    </div>
+
+                    <div className="flex items-center gap-2 mt-3">
+                      {confirmedMerchants.has(sub.merchant) ? (
+                        <span className="text-xs text-emerald-700 font-medium bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-0.5">
+                          ✓ Confirmed
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => handleConfirmSub(sub.merchant)}
+                          className="text-xs bg-emerald-700 text-white rounded-full px-3 py-1 hover:bg-emerald-800 transition-colors"
+                        >
+                          Confirm
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleDismissSub(sub.merchant)}
+                        className="text-xs text-gray-500 border border-gray-200 rounded-full px-3 py-1 hover:bg-gray-50 hover:text-gray-700 transition-colors"
+                      >
+                        Dismiss
+                      </button>
                     </div>
                   </div>
                 </div>

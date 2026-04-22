@@ -26,6 +26,20 @@ export async function PUT(req: NextRequest) {
   return NextResponse.json({ ok: true })
 }
 
+export async function PATCH(req: NextRequest) {
+  const { merchant, ...fields } = await req.json()
+  if (!merchant) return NextResponse.json({ error: 'merchant required' }, { status: 400 })
+  const supabase = createServerClient()
+  const { error } = await supabase
+    .from('merchant_mappings')
+    .upsert(
+      { household_id: DEFAULT_HOUSEHOLD_ID, merchant, ...fields, updated_at: new Date().toISOString() },
+      { onConflict: 'household_id,merchant' }
+    )
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ ok: true })
+}
+
 export async function DELETE(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const merchant = searchParams.get('merchant')
