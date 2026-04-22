@@ -105,7 +105,11 @@ interface XeroBankTransaction {
   Status: string // 'AUTHORISED'
   Date: string // '/Date(1234567890000)/'
   Reference?: string
+  Narration?: string
+  SubTotal?: number
+  TotalTax?: number
   Contact: { Name?: string }
+  BankAccount?: { Name?: string; Code?: string }
   LineItems: Array<{
     Description?: string
     Quantity?: number

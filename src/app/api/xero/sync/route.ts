@@ -99,7 +99,11 @@ export async function POST() {
         const amount = isSpend ? -Math.abs(totalAmount) : Math.abs(totalAmount)
 
         const date = parseXeroDate(xTx.Date)
-        const merchant = cleanXeroMerchant(xTx.Reference || '', xTx.Contact?.Name || null)
+        const firstLineDesc = xTx.LineItems?.[0]?.Description
+        let merchant = cleanXeroMerchant(xTx.Reference, xTx.Contact?.Name ?? null, firstLineDesc, xTx.Narration)
+        if (isSpend && xTx.BankAccount?.Name) {
+          merchant = `${merchant} → ${xTx.BankAccount.Name}`
+        }
 
         raws.push({
           account_id: accountId,

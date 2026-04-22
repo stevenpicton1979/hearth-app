@@ -85,10 +85,29 @@ export function parseXeroDate(xeroDate: string): string {
 }
 
 /**
- * Clean merchant name from Xero reference.
+ * Clean merchant name from Xero transaction fields, in priority order:
+ * line item description > reference > contact name > narration > 'Xero'
+ * Skips line item description if it looks like a bare number/amount.
  */
-export function cleanXeroMerchant(reference: string, contactName: string | null): string {
-  const name = contactName || reference || 'Xero'
-  // Remove extra whitespace
-  return name.trim()
+export function cleanXeroMerchant(
+  reference: string | undefined,
+  contactName: string | null,
+  lineItemDescription: string | undefined,
+  narration: string | undefined
+): string {
+  const isNumeric = (s: string) => /^\$?£?€?[\d,.\s]+$/.test(s)
+
+  const lineDesc = lineItemDescription?.trim()
+  if (lineDesc && !isNumeric(lineDesc)) return lineDesc.slice(0, 100)
+
+  const ref = reference?.trim()
+  if (ref) return ref.slice(0, 100)
+
+  const contact = contactName?.trim()
+  if (contact) return contact.slice(0, 100)
+
+  const narr = narration?.trim()
+  if (narr) return narr.slice(0, 100)
+
+  return 'Xero'
 }

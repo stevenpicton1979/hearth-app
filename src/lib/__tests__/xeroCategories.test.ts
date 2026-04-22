@@ -97,24 +97,50 @@ describe('xeroCategories', () => {
   })
 
   describe('cleanXeroMerchant', () => {
-    it('uses contact name when available', () => {
-      const merchant = cleanXeroMerchant('REF123', 'Acme Corp')
+    it('uses line item description when available', () => {
+      const merchant = cleanXeroMerchant('REF123', 'Acme Corp', 'Invoice for services', undefined)
+      expect(merchant).toBe('Invoice for services')
+    })
+
+    it('skips line item description that is just a number', () => {
+      const merchant = cleanXeroMerchant('REF123', 'Acme Corp', '1234.56', undefined)
+      expect(merchant).toBe('REF123')
+    })
+
+    it('uses reference over contact name', () => {
+      const merchant = cleanXeroMerchant('REF123', 'Acme Corp', undefined, undefined)
+      expect(merchant).toBe('REF123')
+    })
+
+    it('falls back to contact name when reference is empty', () => {
+      const merchant = cleanXeroMerchant('', 'Acme Corp', undefined, undefined)
       expect(merchant).toBe('Acme Corp')
     })
 
     it('falls back to reference when contact name is null', () => {
-      const merchant = cleanXeroMerchant('SUPPLIER REF', null)
+      const merchant = cleanXeroMerchant('SUPPLIER REF', null, undefined, undefined)
       expect(merchant).toBe('SUPPLIER REF')
     })
 
-    it('defaults to Xero when both are empty', () => {
-      const merchant = cleanXeroMerchant('', null)
+    it('falls back to narration when reference and contact are empty', () => {
+      const merchant = cleanXeroMerchant('', null, undefined, 'Payment narration')
+      expect(merchant).toBe('Payment narration')
+    })
+
+    it('defaults to Xero when all fields are empty', () => {
+      const merchant = cleanXeroMerchant('', null, undefined, undefined)
       expect(merchant).toBe('Xero')
     })
 
     it('trims whitespace', () => {
-      const merchant = cleanXeroMerchant('  ', '  Company Name  ')
+      const merchant = cleanXeroMerchant('  ', '  Company Name  ', undefined, undefined)
       expect(merchant).toBe('Company Name')
+    })
+
+    it('truncates to 100 characters', () => {
+      const long = 'A'.repeat(150)
+      const merchant = cleanXeroMerchant(long, null, undefined, undefined)
+      expect(merchant).toHaveLength(100)
     })
   })
 })
