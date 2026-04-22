@@ -709,7 +709,7 @@ export default function TrainingPage() {
     })
     setLabels(prev => prev.map(l => l.merchant === merchant ? { ...l, ...updates } : l))
     if (updates.status === 'confirmed') {
-      setRecentlyConfirmed(prev => new Set([...prev, merchant]))
+      setRecentlyConfirmed(prev => { const next = new Set(prev); next.add(merchant); return next })
       setTimeout(() => {
         setRecentlyConfirmed(prev => {
           const next = new Set(prev)
