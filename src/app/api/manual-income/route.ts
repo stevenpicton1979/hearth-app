@@ -36,6 +36,30 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ entry: data })
 }
 
+export async function PUT(req: NextRequest) {
+  const { id, date, amount, description, category, recipient, financial_year } = await req.json()
+  if (!id || !date || !amount || !description) {
+    return NextResponse.json({ error: 'id, date, amount, description required' }, { status: 400 })
+  }
+  const supabase = createServerClient()
+  const { data, error } = await supabase
+    .from('manual_income_entries')
+    .update({
+      date,
+      amount: parseFloat(amount),
+      description,
+      category: category || 'Director Income',
+      recipient: recipient || null,
+      financial_year: financial_year || null,
+    })
+    .eq('id', id)
+    .eq('household_id', DEFAULT_HOUSEHOLD_ID)
+    .select()
+    .single()
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ entry: data })
+}
+
 export async function DELETE(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const id = searchParams.get('id')
