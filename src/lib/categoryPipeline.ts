@@ -26,6 +26,7 @@ export interface ProcessedTransaction {
   classification: string | null
   is_transfer: boolean
   basiq_transaction_id: string | null
+  source?: string
 }
 
 export async function applyMappings(merchant: string): Promise<{ category: string | null; classification: string | null }> {

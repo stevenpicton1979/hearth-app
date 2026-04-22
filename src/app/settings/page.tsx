@@ -7,6 +7,7 @@ import {
   AdjustmentsHorizontalIcon,
   ArrowDownTrayIcon,
   DocumentTextIcon,
+  SparklesIcon,
 } from '@heroicons/react/24/outline'
 
 const SECTIONS = [
@@ -39,6 +40,12 @@ const SECTIONS = [
     icon: TagIcon,
     label: 'Merchant Mappings',
     description: 'Edit category rules',
+  },
+  {
+    href: '/settings/xero',
+    icon: SparklesIcon,
+    label: 'Xero Integration',
+    description: 'Sync Xero business transactions',
   },
   {
     href: '/import',
