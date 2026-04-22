@@ -123,42 +123,48 @@ interface XeroAccount {
 }
 
 /**
- * Fetch bank transactions from Xero API.
+ * Fetch bank transactions from Xero API with optional incremental sync.
+ * Paginates through all pages (up to 20) and returns combined results.
+ * If sinceDate is provided, uses If-Modified-Since to fetch only new/changed transactions.
  */
 export async function getXeroBankTransactions(
   connection: XeroConnection,
-  page: number = 1
-): Promise<{ transactions: XeroBankTransaction[]; total: number }> {
+  sinceDate?: string
+): Promise<{ transactions: XeroBankTransaction[] }> {
   const where = 'Status=="AUTHORISED"'
   const order = 'Date DESC'
-  const params = new URLSearchParams({ where, order, page: page.toString() })
+  const MAX_PAGES = 20
+  const all: XeroBankTransaction[] = []
 
-  const url = `${XERO_API_BASE}/BankTransactions?${params.toString()}`
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    const params = new URLSearchParams({ where, order, page: page.toString() })
+    const url = `${XERO_API_BASE}/BankTransactions?${params.toString()}`
 
-  const res = await fetch(url, {
-    method: 'GET',
-    headers: {
+    const headers: Record<string, string> = {
       'Authorization': `Bearer ${connection.access_token}`,
       'Xero-tenant-id': connection.tenant_id,
       'Content-Type': 'application/json',
       'Accept': 'application/json',
-    },
-  })
+    }
+    if (sinceDate) {
+      headers['If-Modified-Since'] = new Date(sinceDate).toUTCString()
+    }
 
-  if (!res.ok) {
-    const err = await res.text()
-    throw new Error(`Failed to fetch Xero transactions: ${err}`)
+    const res = await fetch(url, { method: 'GET', headers })
+
+    if (!res.ok) {
+      const err = await res.text()
+      throw new Error(`Failed to fetch Xero transactions: ${err}`)
+    }
+
+    const data = await res.json() as { BankTransactions?: XeroBankTransaction[] }
+    const page_txns = data.BankTransactions || []
+    all.push(...page_txns)
+
+    if (page_txns.length === 0) break
   }
 
-  const data = await res.json() as {
-    BankTransactions?: XeroBankTransaction[]
-    ApiResponseStatusCode?: number
-  }
-
-  return {
-    transactions: data.BankTransactions || [],
-    total: data.BankTransactions?.length || 0,
-  }
+  return { transactions: all }
 }
 
 /**

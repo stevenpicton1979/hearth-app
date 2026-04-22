@@ -18,8 +18,17 @@ export async function POST() {
       return NextResponse.json({ error: 'Xero not connected' }, { status: 400 })
     }
 
-    // Fetch Xero bank transactions and accounts
-    const { transactions } = await getXeroBankTransactions(connection)
+    // Read last_synced_at for incremental sync
+    const supabaseConn = createServerClient()
+    const { data: connRow } = await supabaseConn
+      .from('xero_connections')
+      .select('last_synced_at')
+      .eq('household_id', DEFAULT_HOUSEHOLD_ID)
+      .maybeSingle()
+    const sinceDate = connRow?.last_synced_at ?? undefined
+
+    // Fetch Xero bank transactions and accounts (incremental if last_synced_at exists)
+    const { transactions } = await getXeroBankTransactions(connection, sinceDate)
     const accountsMap = await getXeroAccounts(connection)
 
     if (transactions.length === 0) {
@@ -118,11 +127,19 @@ export async function POST() {
     // Upsert into database
     const { inserted, duplicates } = await upsertTransactions(xeroTransactions)
 
+    const nowIso = new Date().toISOString()
+
     // Update last_synced_at for the account
     await supabase
       .from('accounts')
-      .update({ last_synced_at: new Date().toISOString() })
+      .update({ last_synced_at: nowIso })
       .eq('id', accountId)
+
+    // Update last_synced_at on xero_connections for next incremental sync
+    await supabase
+      .from('xero_connections')
+      .update({ last_synced_at: nowIso })
+      .eq('household_id', DEFAULT_HOUSEHOLD_ID)
 
     return NextResponse.json({
       synced: inserted,
