@@ -19,6 +19,7 @@ export default function XeroSettingsPage() {
   const [connection, setConnection] = useState<Connection | null>(null)
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
+  const [fullSyncing, setFullSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState<SyncResult | null>(null)
   const [showErrors, setShowErrors] = useState(false)
 
@@ -56,6 +57,22 @@ export default function XeroSettingsPage() {
       setSyncResult({ error: msg })
     } finally {
       setSyncing(false)
+    }
+  }
+
+  const handleFullSync = async () => {
+    if (!confirm('This will re-import all Xero transactions from scratch. Continue?')) return
+    setFullSyncing(true)
+    setSyncResult(null)
+    try {
+      const res = await fetch('/api/xero/sync?full=true', { method: 'POST' })
+      const data = await res.json() as SyncResult
+      setSyncResult(data)
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Unknown error'
+      setSyncResult({ error: msg })
+    } finally {
+      setFullSyncing(false)
     }
   }
 
@@ -123,14 +140,24 @@ export default function XeroSettingsPage() {
             <p className="text-sm text-gray-600 mb-4">
               Sync authorised bank transactions from Xero into Hearth. Transactions are categorised automatically based on Xero account mappings.
             </p>
-            <button
-              onClick={handleSync}
-              disabled={syncing}
-              className="bg-emerald-700 text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-emerald-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              {syncing && <ArrowPathIcon className="h-4 w-4 animate-spin" />}
-              {syncing ? 'Syncing...' : 'Sync Now'}
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleSync}
+                disabled={syncing || fullSyncing}
+                className="bg-emerald-700 text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-emerald-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {syncing && <ArrowPathIcon className="h-4 w-4 animate-spin" />}
+                {syncing ? 'Syncing...' : 'Sync Now'}
+              </button>
+              <button
+                onClick={handleFullSync}
+                disabled={syncing || fullSyncing}
+                className="border border-gray-300 text-gray-700 rounded-lg px-4 py-2 text-sm font-medium hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {fullSyncing && <ArrowPathIcon className="h-4 w-4 animate-spin" />}
+                {fullSyncing ? 'Re-syncing...' : 'Full Re-sync'}
+              </button>
+            </div>
 
             {syncResult && (
               <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">

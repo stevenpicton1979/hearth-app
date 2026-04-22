@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
 import { DEFAULT_HOUSEHOLD_ID } from '@/lib/constants'
 import { getXeroConnection, getXeroBankTransactions, getXeroAccounts } from '@/lib/xeroApi'
@@ -10,7 +10,8 @@ import {
 import { processBatch, upsertTransactions } from '@/lib/categoryPipeline'
 import type { RawTransaction } from '@/lib/categoryPipeline'
 
-export async function POST() {
+export async function POST(req: NextRequest) {
+  const isFull = req.nextUrl.searchParams.get('full') === 'true'
   try {
     const connection = await getXeroConnection()
     if (!connection) {
@@ -18,6 +19,14 @@ export async function POST() {
     }
 
     const supabaseConn = createServerClient()
+
+    if (isFull) {
+      await supabaseConn
+        .from('xero_connections')
+        .update({ last_synced_at: null })
+        .eq('household_id', DEFAULT_HOUSEHOLD_ID)
+    }
+
     const { data: connRow } = await supabaseConn
       .from('xero_connections')
       .select('last_synced_at')
