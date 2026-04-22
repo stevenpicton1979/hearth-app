@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
 import { DEFAULT_HOUSEHOLD_ID } from '@/lib/constants'
 import { getXeroConnection, getXeroBankTransactions, getXeroAccounts } from '@/lib/xeroApi'
@@ -10,7 +10,7 @@ import {
 import { processBatch, upsertTransactions } from '@/lib/categoryPipeline'
 import type { RawTransaction } from '@/lib/categoryPipeline'
 
-export async function POST(_req: NextRequest) {
+export async function POST() {
   try {
     // Get Xero connection (with auto-refresh)
     const connection = await getXeroConnection()
@@ -68,7 +68,6 @@ export async function POST(_req: NextRequest) {
         // Sum all line items to get total amount
         let totalAmount = 0
         let categoryHint: string | null = null
-        let accountType = 'EXPENSE'
 
         for (const line of xTx.LineItems || []) {
           const unitAmount = line.UnitAmount || 0
@@ -78,7 +77,6 @@ export async function POST(_req: NextRequest) {
           // Get account info for category mapping
           if (line.AccountCode && accountsMap.has(line.AccountCode)) {
             const account = accountsMap.get(line.AccountCode)!
-            accountType = account.Type
             if (!categoryHint) {
               categoryHint = mapXeroAccountToCategory(account.Type, account.Code, account.Name)
             }

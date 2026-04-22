@@ -185,7 +185,7 @@ export default function XeroSettingsPage() {
 
           <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
             <p className="text-sm text-blue-800">
-              <strong>How it works:</strong> Xero bank transactions are imported into your "Xero (Business)" account. Transactions are categorised based on their Xero account type. Income transactions are classified as income, expenses as expense items.
+              <strong>How it works:</strong> Xero bank transactions are imported into your &quot;Xero (Business)&quot; account. Transactions are categorised based on their Xero account type. Income transactions are classified as income, expenses as expense items.
             </p>
           </div>
         </>

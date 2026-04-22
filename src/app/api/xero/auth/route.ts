@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import crypto from 'crypto'
 
 const XERO_AUTH_URL = 'https://login.xero.com/identity/connect/authorize'
@@ -9,7 +9,7 @@ const REDIRECT_URI = process.env.VERCEL_URL
 
 const SCOPES = 'openid profile email accounting.transactions.read accounting.accounts.read offline_access'
 
-export async function GET(_req: NextRequest) {
+export async function GET() {
   if (!CLIENT_ID) {
     return NextResponse.json({ error: 'XERO_CLIENT_ID not configured' }, { status: 500 })
   }

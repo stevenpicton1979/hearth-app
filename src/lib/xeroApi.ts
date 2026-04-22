@@ -40,10 +40,19 @@ export async function getXeroConnection(): Promise<XeroConnection | null> {
   return connection
 }
 
+interface XeroConnectionRow {
+  id: string
+  household_id: string
+  tenant_id: string
+  access_token: string
+  refresh_token: string
+  expires_at: string
+}
+
 /**
  * Refresh Xero access token using refresh_token.
  */
-async function refreshXeroToken(connection: any): Promise<XeroConnection> {
+async function refreshXeroToken(connection: XeroConnectionRow): Promise<XeroConnection> {
   if (!CLIENT_ID || !CLIENT_SECRET) {
     throw new Error('XERO_CLIENT_ID or XERO_CLIENT_SECRET not configured')
   }
