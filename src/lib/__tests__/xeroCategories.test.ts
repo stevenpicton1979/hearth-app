@@ -48,6 +48,35 @@ describe('xeroCategories', () => {
       const category = mapXeroAccountToCategory('EXPENSE', '6700', 'Miscellaneous')
       expect(category).toBe('Business')
     })
+
+    it('maps AU standard code 477 to Director Income', () => {
+      expect(mapXeroAccountToCategory('EXPENSE', '477', 'Wages & Salaries')).toBe('Director Income')
+    })
+
+    it('maps AU standard code 493 to Transport', () => {
+      expect(mapXeroAccountToCategory('EXPENSE', '493', 'Motor Vehicle')).toBe('Transport')
+    })
+
+    it('maps AU standard code 489 to Technology', () => {
+      expect(mapXeroAccountToCategory('EXPENSE', '489', 'Subscriptions')).toBe('Technology')
+    })
+
+    it('maps AU standard code 420 to Eating Out', () => {
+      expect(mapXeroAccountToCategory('EXPENSE', '420', 'Entertainment')).toBe('Eating Out')
+    })
+
+    it('maps AU standard code 433 to Insurance', () => {
+      expect(mapXeroAccountToCategory('EXPENSE', '433', 'Insurance')).toBe('Insurance')
+    })
+
+    it('maps AU standard code 404 to Shopping', () => {
+      expect(mapXeroAccountToCategory('EXPENSE', '404', 'Advertising')).toBe('Shopping')
+    })
+
+    it('code mapping takes priority over name keywords', () => {
+      // code 489 = Technology, even if name says 'wages'
+      expect(mapXeroAccountToCategory('EXPENSE', '489', 'wages software')).toBe('Technology')
+    })
   })
 
   describe('mapXeroTransactionClassification', () => {

@@ -12,13 +12,11 @@ import type { RawTransaction } from '@/lib/categoryPipeline'
 
 export async function POST() {
   try {
-    // Get Xero connection (with auto-refresh)
     const connection = await getXeroConnection()
     if (!connection) {
       return NextResponse.json({ error: 'Xero not connected' }, { status: 400 })
     }
 
-    // Read last_synced_at for incremental sync
     const supabaseConn = createServerClient()
     const { data: connRow } = await supabaseConn
       .from('xero_connections')
@@ -27,7 +25,6 @@ export async function POST() {
       .maybeSingle()
     const sinceDate = connRow?.last_synced_at ?? undefined
 
-    // Fetch Xero bank transactions and accounts (incremental if last_synced_at exists)
     const { transactions } = await getXeroBankTransactions(connection, sinceDate)
     console.log('XERO_DEBUG first 3 transactions:', JSON.stringify(transactions.slice(0, 3), null, 2))
     const accountsMap = await getXeroAccounts(connection)
@@ -38,44 +35,60 @@ export async function POST() {
 
     const supabase = createServerClient()
 
-    // Ensure a Xero virtual account exists
-    const { data: xeroAccount } = await supabase
-      .from('accounts')
-      .select('id')
-      .eq('household_id', DEFAULT_HOUSEHOLD_ID)
-      .eq('display_name', 'Xero (Business)')
-      .maybeSingle()
-
-    let accountId = xeroAccount?.id
-
-    if (!accountId) {
-      // Create Xero account
-      const { data, error } = await supabase
-        .from('accounts')
-        .insert({
-          household_id: DEFAULT_HOUSEHOLD_ID,
-          display_name: 'Xero (Business)',
-          account_type: 'business_feed',
-          institution: 'Xero',
-          scope: 'business',
-        })
-        .select('id')
-        .single()
-
-      if (error) {
-        return NextResponse.json({ error: `Failed to create Xero account: ${error.message}` }, { status: 500 })
+    // Phase 1: Resolve unique Xero bank accounts → Hearth account IDs
+    const uniqueBankAccounts = new Map<string, string>() // xeroAccountId → display_name
+    for (const xTx of transactions) {
+      if (xTx.BankAccount?.AccountID && xTx.BankAccount?.Name) {
+        uniqueBankAccounts.set(xTx.BankAccount.AccountID, xTx.BankAccount.Name)
       }
-
-      accountId = data.id
+    }
+    // Ensure fallback account for transactions with no BankAccount data
+    const needsFallback = transactions.some(t => !t.BankAccount?.AccountID)
+    if (needsFallback || uniqueBankAccounts.size === 0) {
+      uniqueBankAccounts.set('__default__', 'Xero (Business)')
     }
 
-    // Build raw transactions from Xero data
+    const bankAccountMap = new Map<string, string>() // xeroAccountId → Hearth account id
+    for (const [xeroAccId, displayName] of uniqueBankAccounts) {
+      const { data: existing } = await supabase
+        .from('accounts')
+        .select('id')
+        .eq('household_id', DEFAULT_HOUSEHOLD_ID)
+        .eq('institution', 'Xero')
+        .eq('display_name', displayName)
+        .maybeSingle()
+
+      if (existing?.id) {
+        bankAccountMap.set(xeroAccId, existing.id)
+      } else {
+        const { data: created, error } = await supabase
+          .from('accounts')
+          .insert({
+            household_id: DEFAULT_HOUSEHOLD_ID,
+            display_name: displayName,
+            account_type: 'business_feed',
+            institution: 'Xero',
+            scope: 'business',
+          })
+          .select('id')
+          .single()
+
+        if (error) {
+          return NextResponse.json({ error: `Failed to create Xero account: ${error.message}` }, { status: 500 })
+        }
+        bankAccountMap.set(xeroAccId, created.id)
+      }
+    }
+
+    // Phase 2: Build raw transactions
     const raws: RawTransaction[] = []
     const errors: string[] = []
 
     for (const xTx of transactions) {
       try {
-        // Sum all line items to get total amount
+        // Skip RECEIVE-TRANSFER — transfers appear twice in Xero; only import SPEND-TRANSFER side
+        if (xTx.Type === 'RECEIVE-TRANSFER') continue
+
         let totalAmount = 0
         let categoryHint: string | null = null
 
@@ -84,7 +97,6 @@ export async function POST() {
           const qty = line.Quantity || 1
           totalAmount += unitAmount * qty
 
-          // Get account info for category mapping
           if (line.AccountCode && accountsMap.has(line.AccountCode)) {
             const account = accountsMap.get(line.AccountCode)!
             if (!categoryHint) {
@@ -95,23 +107,29 @@ export async function POST() {
 
         if (totalAmount === 0) continue
 
-        // Determine amount sign based on transaction type
-        const isSpend = xTx.Type === 'SPEND'
+        const isTransfer = xTx.Type === 'SPEND-TRANSFER'
+        const isSpend = xTx.Type === 'SPEND' || isTransfer
         const amount = isSpend ? -Math.abs(totalAmount) : Math.abs(totalAmount)
 
         const date = parseXeroDate(xTx.Date)
         const firstLineDesc = xTx.LineItems?.[0]?.Description
         let merchant = cleanXeroMerchant(xTx.Reference, xTx.Contact?.Name ?? null, firstLineDesc, xTx.Narration)
-        if (isSpend && xTx.BankAccount?.Name) {
+        if (xTx.Type === 'SPEND' && xTx.BankAccount?.Name) {
           merchant = `${merchant} → ${xTx.BankAccount.Name}`
         }
 
+        const hearthAccountId = xTx.BankAccount?.AccountID
+          ? (bankAccountMap.get(xTx.BankAccount.AccountID) ?? bankAccountMap.get('__default__'))
+          : bankAccountMap.get('__default__')
+
+        if (!hearthAccountId) continue
+
         raws.push({
-          account_id: accountId,
+          account_id: hearthAccountId,
           date,
           amount,
           description: merchant,
-          is_transfer: false,
+          is_transfer: isTransfer,
           category_hint: categoryHint,
         })
       } catch (e: unknown) {
@@ -120,27 +138,24 @@ export async function POST() {
       }
     }
 
-    // Process batch (apply merchant mappings, detect transfers, auto-categorize)
     const { toUpsert } = await processBatch(raws)
 
-    // Add Xero-specific fields
     const xeroTransactions = toUpsert.map(tx => ({
       ...tx,
       source: 'xero' as const,
     }))
 
-    // Upsert into database
     const { inserted, duplicates } = await upsertTransactions(xeroTransactions)
 
     const nowIso = new Date().toISOString()
 
-    // Update last_synced_at for the account
+    // Update last_synced_at on all Xero accounts for this household
     await supabase
       .from('accounts')
       .update({ last_synced_at: nowIso })
-      .eq('id', accountId)
+      .eq('household_id', DEFAULT_HOUSEHOLD_ID)
+      .eq('institution', 'Xero')
 
-    // Update last_synced_at on xero_connections for next incremental sync
     await supabase
       .from('xero_connections')
       .update({ last_synced_at: nowIso })

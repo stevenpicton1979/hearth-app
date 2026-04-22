@@ -1,41 +1,62 @@
-import { Category } from './constants'
-
 /**
- * Maps Xero account types and names to Hearth categories.
- * Priority: account type > account name keywords
+ * Maps Xero account type/code/name to a Hearth category.
+ * Priority: account code (AU standard chart) > type > name keywords
  */
-export function mapXeroAccountToCategory(
-  accountType: string,
-  accountCode: string,
-  accountName: string
-): Category {
-  const name = accountName.toLowerCase()
-  const type = accountType.toUpperCase()
-
-  // EQUITY accounts (drawings, personal) -> Director Income
-  if (type === 'EQUITY' || name.includes('drawing') || name.includes('personal')) {
-    return 'Director Income'
+export function mapXeroAccountToCategory(type: string, code: string, name: string): string {
+  const codeMap: Record<string, string> = {
+    // Income
+    '200': 'Business', '201': 'Business', '202': 'Business',
+    // Cost of Sales
+    '300': 'Business', '301': 'Business', '302': 'Business', '303': 'Business',
+    // Expenses
+    '400': 'Business',
+    '404': 'Shopping',        // Advertising
+    '408': 'Business',        // Bank Fees
+    '412': 'Business',        // Cleaning
+    '416': 'Business',        // Consulting & Accounting
+    '420': 'Eating Out',      // Entertainment
+    '424': 'Business',        // Freight & Courier
+    '425': 'Business',        // Freight & Courier
+    '429': 'Business',        // General Expenses
+    '433': 'Insurance',       // Insurance
+    '437': 'Business',        // Interest Expense
+    '441': 'Business',        // Legal & Professional
+    '445': 'Business',        // Light, Power, Heating
+    '449': 'Business',        // Motor Vehicle Expenses (generic)
+    '453': 'Business',        // Office Supplies
+    '457': 'Business',        // Printing & Stationery
+    '461': 'Business',        // Printing & Stationery
+    '463': 'Business',        // Repairs & Maintenance
+    '469': 'Household',       // Rent
+    '473': 'Business',        // Repairs & Maintenance
+    '477': 'Director Income', // Wages & Salaries
+    '478': 'Director Income', // Wages & Salaries
+    '479': 'Director Income', // Employer Superannuation
+    '480': 'Business',        // Superannuation
+    '485': 'Travel',          // Travel - National
+    '486': 'Travel',          // Travel - International
+    '489': 'Technology',      // Subscriptions
+    '490': 'Technology',      // Subscriptions
+    '493': 'Transport',       // Motor Vehicle / Uber
+    '494': 'Transport',       // Motor Vehicle
+    '495': 'Business',        // Parking
   }
 
-  // REVENUE/INCOME type -> Business
-  if (type === 'REVENUE' || type === 'INCOME') {
-    return 'Business'
-  }
+  if (code && codeMap[code]) return codeMap[code]
 
-  // EXPENSE type: map by keywords
-  if (type === 'EXPENSE') {
-    if (name.includes('advertising') || name.includes('marketing')) return 'Shopping'
-    if (name.includes('travel') || name.includes('mileage') || name.includes('motor')) return 'Transport'
-    if (name.includes('entertainment') || name.includes('meals') || name.includes('conference') || name.includes('meal') || name.includes('food and beverage')) return 'Eating Out'
-    if (name.includes('phone') || name.includes('internet') || name.includes('software') || name.includes('subscription') || name.includes('saas')) return 'Technology'
-    if (name.includes('office') || name.includes('stationery') || name.includes('supplies')) return 'Business'
-    if (name.includes('insurance')) return 'Insurance'
-    if (name.includes('wages') || name.includes('salary') || name.includes('director fees')) return 'Director Income'
-    // Default expense
-    return 'Business'
-  }
+  // Fall back to type-based mapping
+  if (type === 'REVENUE' || type === 'SALES') return 'Business'
+  if (type === 'EQUITY') return 'Director Income'
 
-  // Default fallback
+  // Fall back to name keyword matching
+  const n = name.toLowerCase()
+  if (n.includes('wage') || n.includes('salary') || n.includes('payroll')) return 'Director Income'
+  if (n.includes('travel') || n.includes('transport') || n.includes('vehicle')) return 'Transport'
+  if (n.includes('entertainment') || n.includes('meal')) return 'Eating Out'
+  if (n.includes('subscription') || n.includes('software') || n.includes('phone') || n.includes('internet')) return 'Technology'
+  if (n.includes('insurance')) return 'Insurance'
+  if (n.includes('advertising') || n.includes('marketing')) return 'Shopping'
+
   return 'Business'
 }
 

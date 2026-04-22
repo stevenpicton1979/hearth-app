@@ -109,7 +109,7 @@ interface XeroBankTransaction {
   SubTotal?: number
   TotalTax?: number
   Contact: { Name?: string }
-  BankAccount?: { Name?: string; Code?: string }
+  BankAccount?: { AccountID?: string; Name?: string; Code?: string }
   LineItems: Array<{
     Description?: string
     Quantity?: number
