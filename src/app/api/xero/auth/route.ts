@@ -5,7 +5,7 @@ const XERO_AUTH_URL = 'https://login.xero.com/identity/connect/authorize'
 const CLIENT_ID = process.env.XERO_CLIENT_ID
 const REDIRECT_URI = process.env.XERO_REDIRECT_URI || 'http://localhost:3000/api/xero/callback'
 
-const SCOPES = 'openid profile email accounting.transactions.read accounting.settings.read offline_access'
+const SCOPES = 'openid profile email accounting.banktransactions.read accounting.settings.read offline_access'
 
 export async function GET() {
   if (!CLIENT_ID) {
