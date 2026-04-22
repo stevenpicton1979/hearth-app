@@ -63,15 +63,25 @@ export function shouldScopeAsHousehold(accountType: string, accountName: string)
 }
 
 /**
- * Parse Xero's /Date(timestamp)/ format.
+ * Parse Xero date — handles /Date(ms)/ and ISO 8601 formats.
  * Returns ISO date string (YYYY-MM-DD).
  */
 export function parseXeroDate(xeroDate: string): string {
-  const match = xeroDate.match(/\/Date\((\d+)\)\//)
-  if (!match) return new Date().toISOString().split('T')[0]
-  const ms = parseInt(match[1], 10)
-  const date = new Date(ms)
-  return date.toISOString().split('T')[0]
+  if (!xeroDate) return new Date().toISOString().split('T')[0]
+
+  // Format 1: /Date(1234567890000+0000)/ or /Date(1234567890000)/
+  const msMatch = xeroDate.match(/\/Date\((\d+)/)
+  if (msMatch) {
+    return new Date(parseInt(msMatch[1], 10)).toISOString().split('T')[0]
+  }
+
+  // Format 2: ISO 8601 — "2024-03-15T00:00:00" or "2024-03-15"
+  const iso = new Date(xeroDate)
+  if (!isNaN(iso.getTime())) {
+    return iso.toISOString().split('T')[0]
+  }
+
+  return new Date().toISOString().split('T')[0]
 }
 
 /**
