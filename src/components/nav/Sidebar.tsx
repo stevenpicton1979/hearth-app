@@ -12,6 +12,7 @@ import {
   ArrowTrendingUpIcon,
   FlagIcon,
   Cog6ToothIcon,
+  BriefcaseIcon,
 } from '@heroicons/react/24/outline'
 import {
   HomeIcon as HomeIconSolid,
@@ -21,12 +22,14 @@ import {
   ArrowTrendingUpIcon as ArrowTrendingUpIconSolid,
   FlagIcon as FlagIconSolid,
   Cog6ToothIcon as Cog6ToothIconSolid,
+  BriefcaseIcon as BriefcaseIconSolid,
 } from '@heroicons/react/24/solid'
 
 const ICON_MAP: Record<string, { outline: React.ElementType; solid: React.ElementType }> = {
   home: { outline: HomeIcon, solid: HomeIconSolid },
   list: { outline: ListBulletIcon, solid: ListBulletIconSolid },
   'chart-pie': { outline: ChartPieIcon, solid: ChartPieIconSolid },
+  briefcase: { outline: BriefcaseIcon, solid: BriefcaseIconSolid },
   repeat: { outline: ArrowPathIcon, solid: ArrowPathIconSolid },
   'trending-up': { outline: ArrowTrendingUpIcon, solid: ArrowTrendingUpIconSolid },
   target: { outline: FlagIcon, solid: FlagIconSolid },
