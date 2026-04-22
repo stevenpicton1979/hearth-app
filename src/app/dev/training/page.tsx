@@ -828,7 +828,7 @@ export default function TrainingPage() {
                       autoCategory={autoCatMap[label.merchant] ?? null}
                       onSave={handleSave}
                     />
-                    {recentlyConfirmed.has(label.merchant) && (
+                    {filter === 'pending' && recentlyConfirmed.has(label.merchant) && (
                       <div className="absolute inset-0 flex items-center justify-center bg-green-500/10 rounded-xl pointer-events-none">
                         <span className="bg-green-600 text-white text-sm font-semibold px-4 py-2 rounded-full shadow-md">
                           ✓ Confirmed!
