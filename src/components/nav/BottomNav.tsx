@@ -12,6 +12,7 @@ import {
   FlagIcon,
   Cog6ToothIcon,
   BriefcaseIcon,
+  TagIcon,
 } from '@heroicons/react/24/outline'
 import {
   HomeIcon as HomeIconSolid,
@@ -22,6 +23,7 @@ import {
   FlagIcon as FlagIconSolid,
   Cog6ToothIcon as Cog6ToothIconSolid,
   BriefcaseIcon as BriefcaseIconSolid,
+  TagIcon as TagIconSolid,
 } from '@heroicons/react/24/solid'
 
 const ICON_MAP: Record<string, { outline: React.ElementType; solid: React.ElementType }> = {
@@ -30,6 +32,7 @@ const ICON_MAP: Record<string, { outline: React.ElementType; solid: React.Elemen
   'chart-pie': { outline: ChartPieIcon, solid: ChartPieIconSolid },
   briefcase: { outline: BriefcaseIcon, solid: BriefcaseIconSolid },
   repeat: { outline: ArrowPathIcon, solid: ArrowPathIconSolid },
+  tag: { outline: TagIcon, solid: TagIconSolid },
   'trending-up': { outline: ArrowTrendingUpIcon, solid: ArrowTrendingUpIconSolid },
   target: { outline: FlagIcon, solid: FlagIconSolid },
   settings: { outline: Cog6ToothIcon, solid: Cog6ToothIconSolid },
