@@ -651,6 +651,7 @@ export default function TrainingPage() {
   const [filter, setFilter] = useState<'all' | 'pending' | 'confirmed' | 'actioned' | 'mismatches'>('all')
   const [seeding, setSeeding] = useState(false)
   const [seedResult, setSeedResult] = useState<string | null>(null)
+  const [recentlyConfirmed, setRecentlyConfirmed] = useState<Set<string>>(new Set())
 
   // Auto-category map (computed once)
   const [autoCatMap, setAutoCatMap] = useState<Record<string, string | null>>({})
@@ -698,6 +699,16 @@ export default function TrainingPage() {
       body: JSON.stringify({ merchant, ...updates }),
     })
     setLabels(prev => prev.map(l => l.merchant === merchant ? { ...l, ...updates } : l))
+    if (updates.status === 'confirmed') {
+      setRecentlyConfirmed(prev => new Set([...prev, merchant]))
+      setTimeout(() => {
+        setRecentlyConfirmed(prev => {
+          const next = new Set(prev)
+          next.delete(merchant)
+          return next
+        })
+      }, 1500)
+    }
   }
 
   async function handleSeed() {
@@ -719,7 +730,7 @@ export default function TrainingPage() {
   const progressPct = nonHoldout.length > 0 ? Math.round((confirmed / nonHoldout.length) * 100) : 0
 
   const filtered = nonHoldout.filter(l => {
-    if (filter === 'pending') return l.status === 'pending'
+    if (filter === 'pending') return l.status === 'pending' || recentlyConfirmed.has(l.merchant)
     if (filter === 'confirmed') return l.status === 'confirmed'
     if (filter === 'actioned') return l.status === 'actioned'
     if (filter === 'mismatches') return l.status === 'confirmed' && autoCatMap[l.merchant] !== l.correct_category
@@ -811,12 +822,20 @@ export default function TrainingPage() {
             ) : (
               <div className="space-y-3">
                 {filtered.map(label => (
-                  <LabelRow
-                    key={label.merchant}
-                    label={label}
-                    autoCategory={autoCatMap[label.merchant] ?? null}
-                    onSave={handleSave}
-                  />
+                  <div key={label.merchant} className="relative">
+                    <LabelRow
+                      label={label}
+                      autoCategory={autoCatMap[label.merchant] ?? null}
+                      onSave={handleSave}
+                    />
+                    {recentlyConfirmed.has(label.merchant) && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-green-500/10 rounded-xl pointer-events-none">
+                        <span className="bg-green-600 text-white text-sm font-semibold px-4 py-2 rounded-full shadow-md">
+                          ✓ Confirmed!
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 ))}
               </div>
             )}
