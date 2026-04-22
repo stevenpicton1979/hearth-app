@@ -45,6 +45,13 @@ interface EvalResult {
   possibleOverfit: boolean
 }
 
+interface ExampleTransaction {
+  raw_description: string | null
+  date: string
+  amount: number
+  description: string | null
+}
+
 interface SubAuditRow {
   merchant: string
   count: number
@@ -163,7 +170,8 @@ function LabelRow({
   })
   const [savedFlash, setSavedFlash] = useState(false)
   const [ruleImpactKeyword, setRuleImpactKeyword] = useState<string | null>(null)
-  const [examples, setExamples] = useState<string[] | null>(null)
+  const [examples, setExamples] = useState<ExampleTransaction[] | null>(null)
+  const [showDetails, setShowDetails] = useState(false)
 
   useEffect(() => {
     fetch(`/api/dev/merchant-examples?merchant=${encodeURIComponent(label.merchant)}`)
@@ -203,10 +211,42 @@ function LabelRow({
         )}
         {examples && examples.length > 0 && (
           <div className="mt-1.5">
-            <div className="text-xs text-gray-400 font-medium mb-0.5">Examples:</div>
+            <button
+              onClick={() => setShowDetails(!showDetails)}
+              className="text-xs text-gray-400 font-medium mb-0.5 hover:text-gray-600 transition-colors flex items-center gap-1"
+            >
+              <span>{showDetails ? '▼' : '▶'}</span>
+              <span>Examples</span>
+            </button>
             {examples.map((ex, i) => (
-              <div key={i} className="text-xs text-gray-400 italic truncate" title={ex}>{ex}</div>
+              <div key={i} className="text-xs text-gray-400 italic truncate" title={typeof ex === 'string' ? ex : ex.raw_description || ex.description || ''}>
+                {typeof ex === 'string' ? ex : ex.raw_description || ex.description || '—'}
+              </div>
             ))}
+            {showDetails && examples.length > 0 && (
+              <div className="mt-2 bg-gray-50 rounded border border-gray-100 p-2">
+                <div className="text-xs space-y-1.5">
+                  {examples.map((ex, i) => (
+                    <div key={i} className="pb-1.5 border-b border-gray-200 last:pb-0 last:border-b-0">
+                      <div className="text-gray-600 font-medium text-xs mb-0.5">
+                        {new Date(ex.date + 'T00:00:00').toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: '2-digit' })}
+                      </div>
+                      <div className="space-y-1">
+                        <div className="text-gray-600">
+                          <span className="text-gray-500">Raw:</span> <span className="font-medium text-xs">{ex.raw_description || '—'}</span>
+                        </div>
+                        <div className="text-gray-600">
+                          <span className="text-gray-500">Amount:</span> <span className="font-medium text-xs">{aud(ex.amount)}</span>
+                        </div>
+                        <div className="text-gray-600">
+                          <span className="text-gray-500">Cleaned:</span> <span className="font-medium text-xs">{ex.description || '—'}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
         <div className="flex flex-wrap gap-1 mt-1">
@@ -811,41 +851,4 @@ export default function TrainingPage() {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-1 bg-white border border-gray-200 rounded-xl p-1 w-fit">
-          {(['label', 'evaluate', 'subscriptions'] as const).map(t => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors capitalize ${tab === t ? 'bg-emerald-700 text-white' : 'text-gray-600 hover:text-gray-900'}`}
-            >
-              {t === 'subscriptions' ? 'Subscription Audit' : t.charAt(0).toUpperCase() + t.slice(1)}
-            </button>
-          ))}
-        </div>
-
-        {/* Label tab */}
-        {tab === 'label' && (
-          <div className="space-y-4">
-            {/* Progress */}
-            {nonHoldout.length > 0 && (
-              <div className="bg-white border border-gray-200 rounded-xl p-4">
-                <div className="flex items-center justify-between text-sm mb-2">
-                  <span className="font-medium text-gray-700">{confirmed} of {nonHoldout.length} confirmed ({progressPct}%)</span>
-                  <span className="text-xs text-gray-400">{labels.filter(l => l.holdout).length} holdout reserved</span>
-                </div>
-                <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                  <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${progressPct}%` }} />
-                </div>
-              </div>
-            )}
-
-            {/* Filter bar */}
-            <div className="flex items-center gap-2 flex-wrap">
-              <div className="flex gap-1 flex-wrap">
-                {(['all', 'pending', 'confirmed', 'actioned', 'mismatches'] as const).map(f => (
-                  <button
-                    key={f}
-                    onClick={() => setFilter(f)}
-                    className={`text-xs px-3 py-1.5 rounded-full border transition-colors capitalize ${filter === f ? 'bg-emerald-700 text-white border-emerald-700' : 'bg-white text-gray-600 border-gray-200 hover:border-emerald-400'}`}
-                  >
-                    {f === 'mismatches' ? 'Mismatches o
+        <div className="flex ga
