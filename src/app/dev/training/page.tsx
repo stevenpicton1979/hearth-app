@@ -143,10 +143,12 @@ function LabelRow({
   label,
   autoCategory,
   onSave,
+  onSkip,
 }: {
   label: TrainingLabel
   autoCategory: string | null
   onSave: (merchant: string, updates: Partial<TrainingLabel>) => Promise<void>
+  onSkip: (merchant: string) => void
 }) {
   const [local, setLocal] = useState({
     correct_category: label.correct_category,
@@ -270,12 +272,20 @@ function LabelRow({
         />
 
         {local.status === 'pending' && (
-          <button
-            onClick={() => saveField({})}
-            className="text-sm bg-emerald-700 text-white rounded-lg px-3 py-1.5 hover:bg-emerald-800 transition-colors"
-          >
-            Confirm
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => saveField({})}
+              className="text-sm bg-emerald-700 text-white rounded-lg px-3 py-1.5 hover:bg-emerald-800 transition-colors"
+            >
+              Confirm
+            </button>
+            <button
+              onClick={() => onSkip(label.merchant)}
+              className="text-sm text-gray-400 hover:text-gray-600 rounded-lg px-3 py-1.5 border border-gray-200 hover:border-gray-300 transition-colors"
+            >
+              Skip
+            </button>
+          </div>
         )}
 
         {hasMismatch && (
@@ -677,6 +687,7 @@ export default function TrainingPage() {
   const [seeding, setSeeding] = useState(false)
   const [seedResult, setSeedResult] = useState<string | null>(null)
   const [recentlyConfirmed, setRecentlyConfirmed] = useState<Set<string>>(new Set())
+  const [skippedMerchants, setSkippedMerchants] = useState<Set<string>>(new Set())
 
   // Auto-category map (computed once)
   const [autoCatMap, setAutoCatMap] = useState<Record<string, string | null>>({})
@@ -736,6 +747,10 @@ export default function TrainingPage() {
     }
   }
 
+  function handleSkip(merchant: string) {
+    setSkippedMerchants(prev => { const next = new Set(prev); next.add(merchant); return next })
+  }
+
   async function handleSeed() {
     setSeeding(true)
     setSeedResult(null)
@@ -755,6 +770,7 @@ export default function TrainingPage() {
   const progressPct = nonHoldout.length > 0 ? Math.round((confirmed / nonHoldout.length) * 100) : 0
 
   const filtered = nonHoldout.filter(l => {
+    if (skippedMerchants.has(l.merchant) && !recentlyConfirmed.has(l.merchant)) return false
     if (filter === 'pending') return l.status === 'pending' || recentlyConfirmed.has(l.merchant)
     if (filter === 'confirmed') return l.status === 'confirmed'
     if (filter === 'actioned') return l.status === 'actioned'
@@ -824,16 +840,21 @@ export default function TrainingPage() {
             )}
 
             {/* Filter bar */}
-            <div className="flex gap-1 flex-wrap">
-              {(['all', 'pending', 'confirmed', 'actioned', 'mismatches'] as const).map(f => (
-                <button
-                  key={f}
-                  onClick={() => setFilter(f)}
-                  className={`text-xs px-3 py-1.5 rounded-full border transition-colors capitalize ${filter === f ? 'bg-emerald-700 text-white border-emerald-700' : 'bg-white text-gray-600 border-gray-200 hover:border-emerald-400'}`}
-                >
-                  {f === 'mismatches' ? 'Mismatches only' : f}
-                </button>
-              ))}
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex gap-1 flex-wrap">
+                {(['all', 'pending', 'confirmed', 'actioned', 'mismatches'] as const).map(f => (
+                  <button
+                    key={f}
+                    onClick={() => setFilter(f)}
+                    className={`text-xs px-3 py-1.5 rounded-full border transition-colors capitalize ${filter === f ? 'bg-emerald-700 text-white border-emerald-700' : 'bg-white text-gray-600 border-gray-200 hover:border-emerald-400'}`}
+                  >
+                    {f === 'mismatches' ? 'Mismatches only' : f}
+                  </button>
+                ))}
+              </div>
+              {skippedMerchants.size > 0 && (
+                <span className="text-xs text-gray-400">{skippedMerchants.size} skipped this session</span>
+              )}
             </div>
 
             {loading ? (
@@ -852,6 +873,7 @@ export default function TrainingPage() {
                       label={label}
                       autoCategory={autoCatMap[label.merchant] ?? null}
                       onSave={handleSave}
+                      onSkip={handleSkip}
                     />
                     {filter === 'pending' && recentlyConfirmed.has(label.merchant) && (
                       <div className="absolute inset-0 flex items-center justify-center bg-green-500/10 rounded-xl pointer-events-none">
