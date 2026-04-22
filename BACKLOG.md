@@ -66,8 +66,44 @@ Add a section to each card showing 2–3 example raw `description` values from t
 
 ---
 
+## [x] 8. Add `raw_description` column to transactions — store unprocessed Xero context
+
+**Problem:** For Xero transactions, `cleanXeroMerchant` picks the best single string and discards the rest. When the contact name is just initials (e.g. "D E") there's nothing more to show in the training UI or transaction list.
+
+**Solution:**
+1. Add a `raw_description` TEXT column to the transactions table (nullable). Run this migration in Supabase (save as `scripts/addRawDescription.sql`):
+   ```sql
+   ALTER TABLE transactions ADD COLUMN IF NOT EXISTS raw_description TEXT;
+   ```
+2. In `src/app/api/xero/sync/route.ts`, when building each transaction, compose a raw_description string from all available Xero fields:
+   `"ContactName | Reference | Narration | LineItem[0].Description"` — include only non-empty fields, pipe-separated, max 300 chars.
+3. In `categoryPipeline.ts` / `upsertTransactions`, pass `raw_description` through to the upsert (it's an extra column, no unique constraint involvement).
+4. For CSV transactions, `raw_description` can store the original unprocessed bank description string (before cleanMerchant runs) — update `src/app/api/import/route.ts` to capture this.
+5. In `/dev/training`, update the `merchant-examples` endpoint to return `raw_description` instead of (or in addition to) `description`. Display it in the card under "Examples:".
+6. In `/transactions`, show `raw_description` as a tooltip or expandable detail on each transaction row.
+
+After deploying: run a Full Re-sync from Settings → Xero to repopulate Xero transactions with raw_description. CSV transactions will get raw_description on next re-import.
+
+Add tests for the raw_description composition logic.
+
+---
+
+## [x] 9. Training card — Skip/Defer button
+
+**Problem:** Some merchants can't be confidently classified without looking them up externally (e.g. "D E" with only initials as context). Guessing wrong pollutes the ground truth dataset.
+
+**Solution:** Add a "Skip" button to each pending training card. When clicked:
+- Sets the card's local status to 'skipped' (client-side only, not persisted — just hides it from the current session)
+- The merchant remains as `status: 'pending'` in the DB
+- Skipped cards reappear on next page load (so they're not permanently dismissed, just deferred)
+- Show a small count of skipped cards in the session: "3 skipped this session"
+
+This is purely a UI change — no API or DB changes needed.
+
+---
+
 ## Done when:
-- All 7 tasks committed and pushed
+- All 9 tasks committed and pushed
 - `npm test` passes (297+ tests) after all changes
 - Vercel deployment is READY (check deploy status)
 - Update STATE_HEARTH.md in C:\dev\portfoliostate\ with what shipped, then commit and push portfoliostate
