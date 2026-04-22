@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
 import { DEFAULT_HOUSEHOLD_ID } from '@/lib/constants'
 import { getXeroConnection, getXeroBankTransactions, getXeroAccounts } from '@/lib/xeroApi'
@@ -6,28 +6,20 @@ import {
   mapXeroAccountToCategory,
   parseXeroDate,
   cleanXeroMerchant,
-  composeXeroRawDescription,
 } from '@/lib/xeroCategories'
 import { processBatch, upsertTransactions } from '@/lib/categoryPipeline'
 import type { RawTransaction } from '@/lib/categoryPipeline'
 
-export async function POST(req: NextRequest) {
-  const isFull = req.nextUrl.searchParams.get('full') === 'true'
+export async function POST() {
   try {
+    // Get Xero connection (with auto-refresh)
     const connection = await getXeroConnection()
     if (!connection) {
       return NextResponse.json({ error: 'Xero not connected' }, { status: 400 })
     }
 
+    // Read last_synced_at for incremental sync
     const supabaseConn = createServerClient()
-
-    if (isFull) {
-      await supabaseConn
-        .from('xero_connections')
-        .update({ last_synced_at: null })
-        .eq('household_id', DEFAULT_HOUSEHOLD_ID)
-    }
-
     const { data: connRow } = await supabaseConn
       .from('xero_connections')
       .select('last_synced_at')
@@ -35,8 +27,8 @@ export async function POST(req: NextRequest) {
       .maybeSingle()
     const sinceDate = connRow?.last_synced_at ?? undefined
 
+    // Fetch Xero bank transactions and accounts (incremental if last_synced_at exists)
     const { transactions } = await getXeroBankTransactions(connection, sinceDate)
-    console.log('XERO_DEBUG first 3 transactions:', JSON.stringify(transactions.slice(0, 3), null, 2))
     const accountsMap = await getXeroAccounts(connection)
 
     if (transactions.length === 0) {
@@ -45,60 +37,44 @@ export async function POST(req: NextRequest) {
 
     const supabase = createServerClient()
 
-    // Phase 1: Resolve unique Xero bank accounts → Hearth account IDs
-    const uniqueBankAccounts = new Map<string, string>() // xeroAccountId → display_name
-    for (const xTx of transactions) {
-      if (xTx.BankAccount?.AccountID && xTx.BankAccount?.Name) {
-        uniqueBankAccounts.set(xTx.BankAccount.AccountID, xTx.BankAccount.Name)
-      }
-    }
-    // Ensure fallback account for transactions with no BankAccount data
-    const needsFallback = transactions.some(t => !t.BankAccount?.AccountID)
-    if (needsFallback || uniqueBankAccounts.size === 0) {
-      uniqueBankAccounts.set('__default__', 'Xero (Business)')
-    }
+    // Ensure a Xero virtual account exists
+    const { data: xeroAccount } = await supabase
+      .from('accounts')
+      .select('id')
+      .eq('household_id', DEFAULT_HOUSEHOLD_ID)
+      .eq('display_name', 'Xero (Business)')
+      .maybeSingle()
 
-    const bankAccountMap = new Map<string, string>() // xeroAccountId → Hearth account id
-    for (const [xeroAccId, displayName] of Array.from(uniqueBankAccounts.entries())) {
-      const { data: existing } = await supabase
+    let accountId = xeroAccount?.id
+
+    if (!accountId) {
+      // Create Xero account
+      const { data, error } = await supabase
         .from('accounts')
+        .insert({
+          household_id: DEFAULT_HOUSEHOLD_ID,
+          display_name: 'Xero (Business)',
+          account_type: 'business_feed',
+          institution: 'Xero',
+          scope: 'business',
+        })
         .select('id')
-        .eq('household_id', DEFAULT_HOUSEHOLD_ID)
-        .eq('institution', 'Xero')
-        .eq('display_name', displayName)
-        .maybeSingle()
+        .single()
 
-      if (existing?.id) {
-        bankAccountMap.set(xeroAccId, existing.id)
-      } else {
-        const { data: created, error } = await supabase
-          .from('accounts')
-          .insert({
-            household_id: DEFAULT_HOUSEHOLD_ID,
-            display_name: displayName,
-            account_type: 'business_feed',
-            institution: 'Xero',
-            scope: 'business',
-          })
-          .select('id')
-          .single()
-
-        if (error) {
-          return NextResponse.json({ error: `Failed to create Xero account: ${error.message}` }, { status: 500 })
-        }
-        bankAccountMap.set(xeroAccId, created.id)
+      if (error) {
+        return NextResponse.json({ error: `Failed to create Xero account: ${error.message}` }, { status: 500 })
       }
+
+      accountId = data.id
     }
 
-    // Phase 2: Build raw transactions
+    // Build raw transactions from Xero data
     const raws: RawTransaction[] = []
     const errors: string[] = []
 
     for (const xTx of transactions) {
       try {
-        // Skip RECEIVE-TRANSFER — transfers appear twice in Xero; only import SPEND-TRANSFER side
-        if (xTx.Type === 'RECEIVE-TRANSFER') continue
-
+        // Sum all line items to get total amount
         let totalAmount = 0
         let categoryHint: string | null = null
 
@@ -107,6 +83,7 @@ export async function POST(req: NextRequest) {
           const qty = line.Quantity || 1
           totalAmount += unitAmount * qty
 
+          // Get account info for category mapping
           if (line.AccountCode && accountsMap.has(line.AccountCode)) {
             const account = accountsMap.get(line.AccountCode)!
             if (!categoryHint) {
@@ -117,31 +94,24 @@ export async function POST(req: NextRequest) {
 
         if (totalAmount === 0) continue
 
-        const isTransfer = xTx.Type === 'SPEND-TRANSFER'
-        const isSpend = xTx.Type === 'SPEND' || isTransfer
+        // Determine amount sign based on transaction type
+        const isSpend = xTx.Type === 'SPEND'
         const amount = isSpend ? -Math.abs(totalAmount) : Math.abs(totalAmount)
 
         const date = parseXeroDate(xTx.Date)
         const firstLineDesc = xTx.LineItems?.[0]?.Description
         let merchant = cleanXeroMerchant(xTx.Reference, xTx.Contact?.Name ?? null, firstLineDesc, xTx.Narration)
-        if (xTx.Type === 'SPEND' && xTx.BankAccount?.Name) {
+        if (isSpend && xTx.BankAccount?.Name) {
           merchant = `${merchant} → ${xTx.BankAccount.Name}`
         }
 
-        const hearthAccountId = xTx.BankAccount?.AccountID
-          ? (bankAccountMap.get(xTx.BankAccount.AccountID) ?? bankAccountMap.get('__default__'))
-          : bankAccountMap.get('__default__')
-
-        if (!hearthAccountId) continue
-
         raws.push({
-          account_id: hearthAccountId,
+          account_id: accountId,
           date,
           amount,
           description: merchant,
-          is_transfer: isTransfer,
+          is_transfer: false,
           category_hint: categoryHint,
-          raw_description: composeXeroRawDescription(xTx.Contact?.Name, xTx.Reference, xTx.Narration, firstLineDesc),
         })
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : 'Unknown error'
@@ -149,19 +119,39 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Process batch (apply merchant mappings, detect transfers, auto-categorize)
     const { toUpsert } = await processBatch(raws)
 
+    // Add Xero-specific fields
     const xeroTransactions = toUpsert.map(tx => ({
       ...tx,
       source: 'xero' as const,
     }))
 
+    // Upsert into database
     const { inserted, duplicates } = await upsertTransactions(xeroTransactions)
 
     const nowIso = new Date().toISOString()
 
-    // Update last_synced_at on all Xero accounts for this household
+    // Update last_synced_at for the account
     await supabase
       .from('accounts')
       .update({ last_synced_at: nowIso })
-      .eq('household_id', DEFAULT_HOUSEHOLD_I
+      .eq('id', accountId)
+
+    // Update last_synced_at on xero_connections for next incremental sync
+    await supabase
+      .from('xero_connections')
+      .update({ last_synced_at: nowIso })
+      .eq('household_id', DEFAULT_HOUSEHOLD_ID)
+
+    return NextResponse.json({
+      synced: inserted,
+      skipped: duplicates,
+      errors,
+    })
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Unknown error'
+    return NextResponse.json({ error: msg }, { status: 500 })
+  }
+}

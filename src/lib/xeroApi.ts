@@ -101,15 +101,15 @@ async function refreshXeroToken(connection: XeroConnectionRow): Promise<XeroConn
 
 interface XeroBankTransaction {
   BankTransactionID: string
-  Type: string // 'SPEND' | 'RECEIVE'
-  Status: string // 'AUTHORISED'
-  Date: string // '/Date(1234567890000)/'
+  Type: string
+  Status: string
+  Date: string
   Reference?: string
   Narration?: string
   SubTotal?: number
   TotalTax?: number
   Contact: { Name?: string }
-  BankAccount?: { AccountID?: string; Name?: string; Code?: string }
+  BankAccount?: { Name?: string; Code?: string }
   LineItems: Array<{
     Description?: string
     Quantity?: number
@@ -193,4 +193,9 @@ export async function getXeroAccounts(connection: XeroConnection): Promise<Map<s
   }
 
   const data = await res.json() as { Accounts?: XeroAccount[] }
-  const map = ne
+  const map = new Map<string, XeroAccount>()
+  for (const account of data.Accounts || []) {
+    map.set(account.Code, account)
+  }
+  return map
+}
