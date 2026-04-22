@@ -253,6 +253,15 @@ function LabelRow({
           className="w-full text-sm border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-emerald-500"
         />
 
+        {local.status === 'pending' && (
+          <button
+            onClick={() => saveField({})}
+            className="text-sm bg-emerald-700 text-white rounded-lg px-3 py-1.5 hover:bg-emerald-800 transition-colors"
+          >
+            Confirm
+          </button>
+        )}
+
         {hasMismatch && (
           <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded p-2 flex flex-wrap items-center gap-2">
             <span>⚠️ Was: <strong>{autoCategory}</strong> → Corrected to: <strong>{local.correct_category}</strong></span>
