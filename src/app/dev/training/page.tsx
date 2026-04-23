@@ -225,8 +225,14 @@ function LabelRow({
       {/* Left: read-only context */}
       <div className="w-44 flex-shrink-0">
         <div className="font-semibold text-sm text-gray-900 break-words">{label.merchant}</div>
-        <div className="text-xs text-gray-400 mt-0.5">
-          {label.transaction_count} txn{label.transaction_count !== 1 ? 's' : ''} · {aud(label.total_spend)}
+        <div className="text-xs text-gray-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
+          <span>{label.transaction_count} txn{label.transaction_count !== 1 ? 's' : ''} · {aud(label.total_spend)}</span>
+          {local.is_transfer
+            ? <span className="font-medium rounded px-1.5 py-0.5 bg-gray-100 text-gray-500">TRANSFER</span>
+            : local.is_income
+              ? <span className="font-medium rounded px-1.5 py-0.5 bg-green-100 text-green-700">CREDIT</span>
+              : <span className="font-medium rounded px-1.5 py-0.5 bg-red-100 text-red-700">DEBIT</span>
+          }
         </div>
         <div className="text-xs text-gray-400">{fmtDate(label.min_date)}–{fmtDate(label.max_date)}</div>
         {label.accounts?.length > 0 && (
