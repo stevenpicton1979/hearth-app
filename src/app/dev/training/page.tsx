@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, Fragment } from 'react'
 import { CATEGORIES } from '@/lib/constants'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -57,19 +57,41 @@ interface SubAuditRow {
   labelFrequency: string | null
 }
 
-interface ExampleTransaction {
-  raw: string
-  date: string
-  amount: number
-  cleaned: string
-}
-
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const aud = (n: number) =>
   new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(n)
 
 const fmtDate = (s: string | null) => s ? new Date(s + 'T00:00:00').toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: '2-digit' }) : '—'
+
+const CURRENCY_KEY_RE = /amount|total|gross|net/i
+const DATE_KEY_RE = /^date$|_at$/i
+const EX_PRIORITY_KEYS = ['date', 'amount', 'raw_description']
+
+function formatExValue(key: string, val: unknown): { text: string; pre: boolean } {
+  if (typeof val === 'boolean') return { text: String(val), pre: false }
+  if (typeof val === 'number') {
+    if (CURRENCY_KEY_RE.test(key)) return { text: aud(val), pre: false }
+    return { text: String(val), pre: false }
+  }
+  if (typeof val === 'string') {
+    if (DATE_KEY_RE.test(key)) {
+      const d = new Date(val)
+      if (!isNaN(d.getTime())) {
+        return { text: d.toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: '2-digit' }), pre: false }
+      }
+    }
+    return { text: val, pre: key === 'raw_description' }
+  }
+  return { text: JSON.stringify(val, null, 2), pre: true }
+}
+
+function sortExKeys(keys: string[]): string[] {
+  return [
+    ...EX_PRIORITY_KEYS.filter(k => keys.includes(k)),
+    ...keys.filter(k => !EX_PRIORITY_KEYS.includes(k)).sort(),
+  ]
+}
 
 const FREQ_OPTIONS = ['weekly', 'fortnightly', 'monthly', 'quarterly', 'annual']
 
@@ -170,7 +192,7 @@ function LabelRow({
   })
   const [savedFlash, setSavedFlash] = useState(false)
   const [ruleImpactKeyword, setRuleImpactKeyword] = useState<string | null>(null)
-  const [examples, setExamples] = useState<ExampleTransaction[] | null>(null)
+  const [examples, setExamples] = useState<Record<string, unknown>[] | null>(null)
   const [showExamples, setShowExamples] = useState(false)
 
   useEffect(() => {
@@ -324,19 +346,34 @@ function LabelRow({
             {showExamples ? '▼ Hide details' : '▶ Show details'}
           </button>
           {showExamples && (
-            <div className="mt-2 space-y-1.5">
-              {examples.map((ex, i) => (
-                <div key={i} className="text-xs bg-gray-50 rounded p-1.5 space-y-0.5">
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">{fmtDate(ex.date)}</span>
-                    <span className="font-medium text-gray-600">{aud(ex.amount)}</span>
+            <div className="mt-2 space-y-2">
+              {examples.map((ex, i) => {
+                const visibleKeys = sortExKeys(
+                  Object.keys(ex).filter(k => {
+                    const v = ex[k]
+                    return v !== null && v !== undefined && v !== ''
+                  })
+                )
+                return (
+                  <div key={i} className="text-xs bg-gray-50 border border-gray-100 rounded p-2">
+                    <div className="grid gap-x-3 gap-y-0.5" style={{ gridTemplateColumns: 'auto 1fr' }}>
+                      {visibleKeys.map(k => {
+                        const { text, pre } = formatExValue(k, ex[k])
+                        return (
+                          <Fragment key={k}>
+                            <span className="text-gray-400 font-mono whitespace-nowrap self-start">{k}</span>
+                            {pre ? (
+                              <span className="text-gray-700 whitespace-pre-wrap break-all">{text}</span>
+                            ) : (
+                              <span className="text-gray-700 break-all">{text}</span>
+                            )}
+                          </Fragment>
+                        )
+                      })}
+                    </div>
                   </div>
-                  <div className="text-gray-600 truncate" title={ex.raw}>{ex.raw || '—'}</div>
-                  {ex.cleaned && ex.cleaned !== ex.raw && (
-                    <div className="text-gray-400 truncate" title={ex.cleaned}>→ {ex.cleaned}</div>
-                  )}
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>
