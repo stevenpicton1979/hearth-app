@@ -57,6 +57,13 @@ interface SubAuditRow {
   labelFrequency: string | null
 }
 
+interface ExampleTransaction {
+  raw: string
+  date: string
+  amount: number
+  cleaned: string
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const aud = (n: number) =>
@@ -163,7 +170,8 @@ function LabelRow({
   })
   const [savedFlash, setSavedFlash] = useState(false)
   const [ruleImpactKeyword, setRuleImpactKeyword] = useState<string | null>(null)
-  const [examples, setExamples] = useState<string[] | null>(null)
+  const [examples, setExamples] = useState<ExampleTransaction[] | null>(null)
+  const [showExamples, setShowExamples] = useState(false)
 
   useEffect(() => {
     fetch(`/api/dev/merchant-examples?merchant=${encodeURIComponent(label.merchant)}`)
@@ -190,7 +198,8 @@ function LabelRow({
   }
 
   return (
-    <div className={`border rounded-xl p-4 flex gap-4 items-start ${label.holdout ? 'border-amber-200 bg-amber-50' : 'border-gray-200 bg-white'}`}>
+    <div className={`border rounded-xl p-4 ${label.holdout ? 'border-amber-200 bg-amber-50' : 'border-gray-200 bg-white'}`}>
+      <div className="flex gap-4 items-start">
       {/* Left: read-only context */}
       <div className="w-44 flex-shrink-0">
         <div className="font-semibold text-sm text-gray-900 break-words">{label.merchant}</div>
@@ -200,14 +209,6 @@ function LabelRow({
         <div className="text-xs text-gray-400">{fmtDate(label.min_date)}–{fmtDate(label.max_date)}</div>
         {label.accounts?.length > 0 && (
           <div className="text-xs text-gray-400 mt-0.5">Accounts: {label.accounts.join(', ')}</div>
-        )}
-        {examples && examples.length > 0 && (
-          <div className="mt-1.5">
-            <div className="text-xs text-gray-400 font-medium mb-0.5">Examples:</div>
-            {examples.map((ex, i) => (
-              <div key={i} className="text-xs text-gray-400 italic truncate" title={ex}>{ex}</div>
-            ))}
-          </div>
         )}
         <div className="flex flex-wrap gap-1 mt-1">
           {label.holdout && <span className="text-xs bg-amber-100 text-amber-700 rounded px-1.5 py-0.5">holdout</span>}
@@ -311,6 +312,35 @@ function LabelRow({
           </div>
         )}
       </div>
+
+      </div>{/* end inner flex */}
+
+      {examples && examples.length > 0 && (
+        <div className="mt-2 pt-2 border-t border-gray-100">
+          <button
+            onClick={() => setShowExamples(s => !s)}
+            className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1"
+          >
+            {showExamples ? '▼ Hide details' : '▶ Show details'}
+          </button>
+          {showExamples && (
+            <div className="mt-2 space-y-1.5">
+              {examples.map((ex, i) => (
+                <div key={i} className="text-xs bg-gray-50 rounded p-1.5 space-y-0.5">
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">{fmtDate(ex.date)}</span>
+                    <span className="font-medium text-gray-600">{aud(ex.amount)}</span>
+                  </div>
+                  <div className="text-gray-600 truncate" title={ex.raw}>{ex.raw || '—'}</div>
+                  {ex.cleaned && ex.cleaned !== ex.raw && (
+                    <div className="text-gray-400 truncate" title={ex.cleaned}>→ {ex.cleaned}</div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {ruleImpactKeyword && (
         <RuleImpactModal keyword={ruleImpactKeyword} onClose={() => setRuleImpactKeyword(null)} />
