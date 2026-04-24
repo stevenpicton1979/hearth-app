@@ -6,6 +6,7 @@ import {
   mapXeroAccountToCategory,
   parseXeroDate,
   cleanXeroMerchant,
+  composeXeroRawDescription,
 } from '@/lib/xeroCategories'
 import { processBatch, upsertTransactions } from '@/lib/categoryPipeline'
 import type { RawTransaction } from '@/lib/categoryPipeline'
@@ -105,6 +106,13 @@ export async function POST() {
           merchant = `${merchant} → ${xTx.BankAccount.Name}`
         }
 
+        const rawDescription = composeXeroRawDescription(
+          xTx.Contact?.Name ?? null,
+          xTx.Reference ?? null,
+          xTx.Narration ?? null,
+          firstLineDesc ?? null,
+        )
+
         raws.push({
           account_id: accountId,
           date,
@@ -112,6 +120,7 @@ export async function POST() {
           description: merchant,
           is_transfer: false,
           category_hint: categoryHint,
+          raw_description: rawDescription,
         })
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : 'Unknown error'
@@ -129,7 +138,7 @@ export async function POST() {
     }))
 
     // Upsert into database
-    const { inserted, duplicates } = await upsertTransactions(xeroTransactions)
+    const { inserted, duplicates, backfilled } = await upsertTransactions(xeroTransactions)
 
     const nowIso = new Date().toISOString()
 
@@ -148,6 +157,7 @@ export async function POST() {
     return NextResponse.json({
       synced: inserted,
       skipped: duplicates,
+      backfilled,
       errors,
     })
   } catch (e: unknown) {

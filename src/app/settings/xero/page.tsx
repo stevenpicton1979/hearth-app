@@ -11,6 +11,7 @@ interface Connection {
 interface SyncResult {
   synced?: number
   skipped?: number
+  backfilled?: number
   errors?: string[]
   error?: string
 }
@@ -184,6 +185,11 @@ export default function XeroSettingsPage() {
                       {(syncResult.skipped || 0) > 0 && (
                         <p className="text-gray-600">
                           <span className="font-medium">{syncResult.skipped}</span> duplicate{(syncResult.skipped || 0) !== 1 ? 's' : ''} skipped
+                        </p>
+                      )}
+                      {(syncResult.backfilled || 0) > 0 && (
+                        <p className="text-gray-600">
+                          <span className="font-medium">{syncResult.backfilled}</span> raw description{(syncResult.backfilled || 0) !== 1 ? 's' : ''} backfilled
                         </p>
                       )}
                       {syncResult.errors && syncResult.errors.length > 0 && (
