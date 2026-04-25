@@ -4,7 +4,7 @@ export const CATEGORIES = [
   'Business', 'Charity & Donations', 'Clothing & Apparel', 'Director Income', 'Eating Out',
   'Education', 'Entertainment', 'Family', 'Food & Groceries', 'Government & Tax', 'Health & Fitness',
   'Holiday', 'Household', 'Insurance', 'Medical', 'Mortgage', 'Personal Care',
-  'Pets', 'Shopping', 'Technology', 'Transport', 'Travel', 'Utilities', 'Other',
+  'Payroll Expense', 'Pets', 'Salary', 'Shopping', 'Technology', 'Transport', 'Travel', 'Utilities', 'Other',
 ] as const
 export type Category = typeof CATEGORIES[number]
 
