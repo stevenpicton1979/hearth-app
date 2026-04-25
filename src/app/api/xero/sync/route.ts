@@ -113,6 +113,7 @@ export async function POST(req: NextRequest) {
           xTx.Reference ?? null,
           xTx.Narration ?? null,
           firstLineDesc ?? null,
+          xTx.BankAccount?.Name ?? null,
         )
 
         raws.push({

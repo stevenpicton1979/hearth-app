@@ -107,6 +107,8 @@ export function parseXeroDate(xeroDate: string): string {
 
 /**
  * Compose a raw_description string from all available Xero fields.
+ * bankAccountName is the Xero bank account on the transaction (source for SPEND,
+ * destination for RECEIVE) — included to show transfer endpoint in the training UI.
  * Returns null if no fields are available.
  */
 export function composeXeroRawDescription(
@@ -114,8 +116,9 @@ export function composeXeroRawDescription(
   reference: string | null | undefined,
   narration: string | null | undefined,
   lineItemDesc: string | null | undefined,
+  bankAccountName?: string | null,
 ): string | null {
-  const parts = [contactName, reference, narration, lineItemDesc].filter((s): s is string => Boolean(s && s.trim()))
+  const parts = [contactName, reference, narration, lineItemDesc, bankAccountName].filter((s): s is string => Boolean(s && s.trim()))
   if (parts.length === 0) return null
   return parts.join(' | ').slice(0, 300)
 }

@@ -205,5 +205,15 @@ describe('xeroCategories', () => {
       const result = composeXeroRawDescription(null, 'REF-123', null, null)
       expect(result).toBe('REF-123')
     })
+
+    it('includes bankAccountName as 5th part when provided', () => {
+      const result = composeXeroRawDescription('Brisbane Health Tech', null, null, null, 'Business Cheque Account')
+      expect(result).toBe('Brisbane Health Tech | Business Cheque Account')
+    })
+
+    it('omits bankAccountName when null', () => {
+      const result = composeXeroRawDescription('Brisbane Health Tech', null, null, null, null)
+      expect(result).toBe('Brisbane Health Tech')
+    })
   })
 })
