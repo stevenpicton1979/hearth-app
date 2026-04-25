@@ -22,9 +22,16 @@ export async function GET(req: NextRequest) {
   console.log('[me] raw linked_transfer_ids:', data?.map(r => r.linked_transfer_id))
 
   // De-dup by raw key, keep up to 5
+  // Transfers are always kept individually (each has a distinct destination account)
   const seen = new Set<string>()
   const examples: Record<string, unknown>[] = []
   for (const rawRow of (data || []) as Record<string, unknown>[]) {
+    // Always include transfer rows — de-duping would lose linked_transfer_id pairs
+    if (rawRow.is_transfer || rawRow.linked_transfer_id) {
+      examples.push({ ...rawRow })
+      if (examples.length >= 5) break
+      continue
+    }
     const raw = ((rawRow.raw_description as string) || '').trim()
     const cleaned = ((rawRow.description as string) || '').trim()
     const key = raw || cleaned
