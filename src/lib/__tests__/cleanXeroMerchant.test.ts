@@ -94,9 +94,18 @@ describe('cleanXeroMerchant — legitimate short values are kept', () => {
 })
 
 describe('cleanXeroMerchant — BPAY normalisation', () => {
-  it('normalises ATO BPAY reference to "ATO"', () => {
+  it('normalises ATO BPAY reference to "ATO" (uppercase)', () => {
     expect(cleanXeroMerchant(
       '003009534934729521 COMMBANK APP BPA',
+      null,
+      undefined,
+      undefined,
+    )).toBe('ATO')
+  })
+
+  it('normalises ATO BPAY reference to "ATO" (mixed case — actual Xero format)', () => {
+    expect(cleanXeroMerchant(
+      '003009534934729521 CommBank app BPA',
       null,
       undefined,
       undefined,
@@ -108,7 +117,7 @@ describe('cleanXeroMerchant — BPAY normalisation', () => {
       undefined,
       null,
       undefined,
-      '003009534934729521 COMMBANK APP BPA',
+      '003009534934729521 CommBank app BPA',
     )).toBe('ATO')
   })
 

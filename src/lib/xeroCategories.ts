@@ -184,7 +184,7 @@ export function cleanXeroMerchant(
   const ref = reference?.trim()
   if (ref) {
     // BPAY to ATO: long numeric CRN followed by bank BPAY marker
-    if (/^\d{10,}\s+COMMBANK APP BPA/i.test(ref)) return 'ATO'
+    if (/^\d{10,}\s+commbank\s+app\s+bpa/i.test(ref)) return 'ATO'
     return ref.slice(0, 100)
   }
 
@@ -193,7 +193,7 @@ export function cleanXeroMerchant(
 
   const narr = narration?.trim()
   if (narr) {
-    if (/^\d{10,}\s+COMMBANK APP BPA/i.test(narr)) return 'ATO'
+    if (/^\d{10,}\s+commbank\s+app\s+bpa/i.test(narr)) return 'ATO'
     return narr.slice(0, 100)
   }
 
