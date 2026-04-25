@@ -12,19 +12,7 @@ export async function POST() {
 
     const supabase = createServerClient()
 
-    const { data: xeroAccount } = await supabase
-      .from('accounts')
-      .select('id')
-      .eq('household_id', DEFAULT_HOUSEHOLD_ID)
-      .eq('display_name', 'Xero (Business)')
-      .maybeSingle()
-
-    if (!xeroAccount) {
-      return NextResponse.json({ crossDuped: 0 })
-    }
-
     const { data, error } = await supabase.rpc('cross_account_dedup', {
-      p_xero_account_id: xeroAccount.id,
       p_household_id: DEFAULT_HOUSEHOLD_ID,
     })
 
