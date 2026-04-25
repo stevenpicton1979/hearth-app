@@ -141,7 +141,7 @@ export default async function TransactionsPage({
           </div>
 
           <TransactionTable
-            transactions={transactions || []}
+            initialTransactions={transactions || []}
             accounts={accounts}
           />
         </>
