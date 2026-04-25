@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, NextRequest } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
 import { DEFAULT_HOUSEHOLD_ID } from '@/lib/constants'
 import { getXeroConnection, getXeroBankTransactions, getXeroAccounts } from '@/lib/xeroApi'
@@ -11,13 +11,15 @@ import {
 import { processBatch, upsertTransactions } from '@/lib/categoryPipeline'
 import type { RawTransaction } from '@/lib/categoryPipeline'
 
-export async function POST() {
+export async function POST(req: NextRequest) {
   try {
     // Get Xero connection (with auto-refresh)
     const connection = await getXeroConnection()
     if (!connection) {
       return NextResponse.json({ error: 'Xero not connected' }, { status: 400 })
     }
+
+    const isFull = req.nextUrl.searchParams.get('full') === 'true'
 
     // Read last_synced_at for incremental sync
     const supabaseConn = createServerClient()
@@ -26,7 +28,7 @@ export async function POST() {
       .select('last_synced_at')
       .eq('household_id', DEFAULT_HOUSEHOLD_ID)
       .maybeSingle()
-    const sinceDate = connRow?.last_synced_at ?? undefined
+    const sinceDate = isFull ? undefined : (connRow?.last_synced_at ?? undefined)
 
     // Fetch Xero bank transactions and accounts (incremental if last_synced_at exists)
     const { transactions } = await getXeroBankTransactions(connection, sinceDate)
