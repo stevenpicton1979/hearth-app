@@ -273,7 +273,7 @@ function LabelRow({
               <input
                 type="checkbox"
                 checked={local[field]}
-                onChange={e => saveField({ [field]: e.target.checked })}
+                onChange={e => setLocal(l => ({ ...l, [field]: e.target.checked }))}
                 className="rounded text-emerald-600"
               />
               {field === 'is_income' ? 'Income' : field === 'is_transfer' ? 'Transfer' : 'Subscription'}
