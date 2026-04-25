@@ -89,8 +89,10 @@ function ExampleCard({ ex }: { ex: Record<string, unknown> }) {
 
   const transferDest = ex.transfer_destination as string | null
 
-  const toLabel  = transferDest || merchant
+  // For credits (money IN), the linked account is the sender, current account is receiver — swap labels
   const isCredit = amount !== null && amount >= 0
+  const fromLabel = transferDest ? (isCredit ? transferDest : (account || '—')) : (account || '—')
+  const toLabel   = transferDest ? (isCredit ? (account || '—') : transferDest) : merchant
 
   const formattedDate = date
     ? new Date(date + 'T00:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -106,7 +108,7 @@ function ExampleCard({ ex }: { ex: Record<string, unknown> }) {
     <div className="text-xs bg-gray-50 border border-gray-100 rounded p-2.5">
       <div className="grid gap-x-3 gap-y-1" style={{ gridTemplateColumns: '5rem 1fr' }}>
         <span className="text-gray-400 uppercase tracking-wide text-[10px] pt-px">From</span>
-        <span className="text-gray-700">{account || '—'}</span>
+        <span className="text-gray-700">{fromLabel}</span>
 
         <span className="text-gray-400 uppercase tracking-wide text-[10px] pt-px">To</span>
         <span className="text-gray-700 font-medium">{toLabel}</span>
