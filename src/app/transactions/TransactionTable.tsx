@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { CATEGORIES, CLASSIFICATIONS } from '@/lib/constants'
 import { Transaction } from '@/lib/types'
-import { MagnifyingGlassIcon, EllipsisHorizontalIcon, XMarkIcon, ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
+import { MagnifyingGlassIcon, EllipsisHorizontalIcon, XMarkIcon, ChevronLeftIcon, ChevronRightIcon, ChevronUpIcon, ChevronDownIcon } from '@heroicons/react/24/outline'
 
 interface Props {
   initialTransactions: Transaction[]
@@ -56,6 +56,20 @@ export function TransactionTable({ initialTransactions, accounts, initialCategor
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
 
+  // Sort
+  const [sortBy, setSortBy] = useState<'date' | 'amount' | 'merchant' | 'category'>('date')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+
+  const toggleSort = (col: 'date' | 'amount' | 'merchant' | 'category') => {
+    if (sortBy === col) {
+      setSortDir(d => d === 'desc' ? 'asc' : 'desc')
+    } else {
+      setSortBy(col)
+      setSortDir(col === 'amount' ? 'asc' : 'desc')
+    }
+    setPage(0)
+  }
+
   // Debounce search input by 300ms
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(filterSearch), 300)
@@ -73,6 +87,8 @@ export function TransactionTable({ initialTransactions, accounts, initialCategor
       if (filterTo) params.set('to', filterTo)
       if (debouncedSearch) params.set('search', debouncedSearch)
       if (showTransfers) params.set('show_transfers', 'true')
+      params.set('sort_by', sortBy)
+      params.set('sort_dir', sortDir)
       params.set('page', String(p))
       const res = await fetch(`/api/transactions?${params}`)
       const data = await res.json()
@@ -81,12 +97,12 @@ export function TransactionTable({ initialTransactions, accounts, initialCategor
     } finally {
       setIsLoading(false)
     }
-  }, [filterAccount, filterCategory, filterClassification, filterFrom, filterTo, debouncedSearch, showTransfers])
+  }, [filterAccount, filterCategory, filterClassification, filterFrom, filterTo, debouncedSearch, showTransfers, sortBy, sortDir])
 
   useEffect(() => {
     setPage(0)
     setSelectedIds(new Set())
-  }, [filterAccount, filterCategory, filterClassification, filterFrom, filterTo, debouncedSearch, showTransfers])
+  }, [filterAccount, filterCategory, filterClassification, filterFrom, filterTo, debouncedSearch, showTransfers, sortBy, sortDir])
 
   useEffect(() => {
     fetchTransactions(page)
@@ -315,11 +331,31 @@ export function TransactionTable({ initialTransactions, accounts, initialCategor
                       className="rounded text-emerald-600"
                     />
                   </th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Date</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Merchant</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">
+                    <button onClick={() => toggleSort('date')} className="flex items-center gap-1 hover:text-gray-900">
+                      Date
+                      {sortBy === 'date' ? (sortDir === 'desc' ? <ChevronDownIcon className="h-3 w-3" /> : <ChevronUpIcon className="h-3 w-3" />) : <ChevronDownIcon className="h-3 w-3 opacity-0" />}
+                    </button>
+                  </th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">
+                    <button onClick={() => toggleSort('merchant')} className="flex items-center gap-1 hover:text-gray-900">
+                      Merchant
+                      {sortBy === 'merchant' ? (sortDir === 'desc' ? <ChevronDownIcon className="h-3 w-3" /> : <ChevronUpIcon className="h-3 w-3" />) : <ChevronDownIcon className="h-3 w-3 opacity-0" />}
+                    </button>
+                  </th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600 hidden md:table-cell">Account</th>
-                  <th className="text-right px-4 py-3 font-medium text-gray-600">Amount</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Category</th>
+                  <th className="text-right px-4 py-3 font-medium text-gray-600">
+                    <button onClick={() => toggleSort('amount')} className="flex items-center gap-1 ml-auto hover:text-gray-900">
+                      Amount
+                      {sortBy === 'amount' ? (sortDir === 'desc' ? <ChevronDownIcon className="h-3 w-3" /> : <ChevronUpIcon className="h-3 w-3" />) : <ChevronDownIcon className="h-3 w-3 opacity-0" />}
+                    </button>
+                  </th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">
+                    <button onClick={() => toggleSort('category')} className="flex items-center gap-1 hover:text-gray-900">
+                      Category
+                      {sortBy === 'category' ? (sortDir === 'desc' ? <ChevronDownIcon className="h-3 w-3" /> : <ChevronUpIcon className="h-3 w-3" />) : <ChevronDownIcon className="h-3 w-3 opacity-0" />}
+                    </button>
+                  </th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600 hidden lg:table-cell">Classification</th>
                   <th className="w-10 px-4 py-3"></th>
                 </tr>
@@ -337,7 +373,10 @@ export function TransactionTable({ initialTransactions, accounts, initialCategor
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-gray-600">{formatDate(t.date)}</td>
                     <td className="px-4 py-3">
-                      <div className="font-medium text-gray-900 truncate max-w-[200px]" title={t.raw_description || undefined}>{t.merchant}</div>
+                      <div className="font-medium text-gray-900 truncate max-w-[200px]">{t.merchant}</div>
+                      {t.raw_description && t.raw_description !== t.merchant && (
+                        <div className="text-xs text-gray-400 truncate max-w-[260px] mt-0.5 font-mono" title={t.raw_description}>{t.raw_description}</div>
+                      )}
                       <div className="flex gap-1 flex-wrap mt-0.5">
                         {t.is_transfer && <span className="text-xs bg-gray-200 text-gray-500 rounded px-1.5 py-0.5">Transfer</span>}
                         {!t.is_transfer && t.amount > 0 && <span className="text-xs bg-emerald-100 text-emerald-700 rounded px-1.5 py-0.5">Income</span>}
