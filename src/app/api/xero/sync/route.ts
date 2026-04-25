@@ -9,7 +9,75 @@ import {
   composeXeroRawDescription,
 } from '@/lib/xeroCategories'
 import { processBatch, upsertTransactions } from '@/lib/categoryPipeline'
-import type { RawTransaction } from '@/lib/categoryPipeline'
+import type { RawTransaction, ProcessedTransaction } from '@/lib/categoryPipeline'
+
+/**
+ * Find Xero transactions that have a matching CSV transaction (same date/amount/merchant,
+ * different account). Flag both rows as is_transfer=true and annotate raw_description.
+ * Idempotent — rows already flagged as transfers are skipped.
+ */
+async function markCrossAccountDuplicates(
+  xeroTxns: Array<ProcessedTransaction & { source: string }>,
+  xeroAccountId: string,
+): Promise<number> {
+  const supabase = createServerClient()
+  let count = 0
+  const seen = new Set<string>()
+
+  for (const tx of xeroTxns) {
+    if (tx.is_transfer) continue
+    const key = `${tx.date}|${tx.amount}|${tx.merchant}`
+    if (seen.has(key)) continue
+    seen.add(key)
+
+    // Look for matching CSV rows (source IS NULL) on a different account
+    const { data: csvRows } = await supabase
+      .from('transactions')
+      .select('id, raw_description')
+      .eq('household_id', DEFAULT_HOUSEHOLD_ID)
+      .eq('date', tx.date)
+      .eq('amount', tx.amount)
+      .eq('merchant', tx.merchant)
+      .is('source', null)
+      .neq('account_id', xeroAccountId)
+      .eq('is_transfer', false)
+
+    if (!csvRows?.length) continue
+
+    // Flag each matching CSV row
+    for (const row of csvRows) {
+      await supabase
+        .from('transactions')
+        .update({
+          is_transfer: true,
+          raw_description: row.raw_description
+            ? `${row.raw_description} [dup:xero]`
+            : '[dup:xero]',
+        })
+        .eq('id', row.id)
+    }
+
+    // Flag the Xero row
+    await supabase
+      .from('transactions')
+      .update({
+        is_transfer: true,
+        raw_description: tx.raw_description
+          ? `${tx.raw_description} [dup:csv]`
+          : '[dup:csv]',
+      })
+      .eq('household_id', DEFAULT_HOUSEHOLD_ID)
+      .eq('date', tx.date)
+      .eq('amount', tx.amount)
+      .eq('merchant', tx.merchant)
+      .eq('account_id', xeroAccountId)
+      .eq('is_transfer', false)
+
+    count += csvRows.length
+  }
+
+  return count
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -108,13 +176,21 @@ export async function POST(req: NextRequest) {
           merchant = `${merchant} → ${xTx.BankAccount.Name}`
         }
 
-        const rawDescription = composeXeroRawDescription(
-          xTx.Contact?.Name ?? null,
-          xTx.Reference ?? null,
-          xTx.Narration ?? null,
-          firstLineDesc ?? null,
-          xTx.BankAccount?.Name ?? null,
-        )
+        const allLineDescs = (xTx.LineItems || []).map(li => li.Description ?? null)
+        const tracking = Array.from(new Set(
+          (xTx.LineItems || [])
+            .flatMap(li => li.Tracking || [])
+            .map(t => `${t.Name}: ${t.Option}`)
+        ))
+        const rawDescription = composeXeroRawDescription({
+          contactName: xTx.Contact?.Name,
+          reference: xTx.Reference,
+          narration: xTx.Narration,
+          lineItemDescs: allLineDescs,
+          bankAccountName: xTx.BankAccount?.Name,
+          tracking,
+          url: xTx.Url,
+        })
 
         raws.push({
           account_id: accountId,
@@ -153,6 +229,9 @@ export async function POST(req: NextRequest) {
     // Upsert into database
     const { inserted, duplicates, backfilled } = await upsertTransactions(deduped)
 
+    // Cross-account dedup: flag Xero+CSV rows that represent the same real-world payment
+    const crossDuped = await markCrossAccountDuplicates(deduped, accountId)
+
     const nowIso = new Date().toISOString()
 
     // Update last_synced_at for the account
@@ -171,6 +250,7 @@ export async function POST(req: NextRequest) {
       synced: inserted,
       skipped: duplicates,
       backfilled,
+      crossDuped,
       errors,
     })
   } catch (e: unknown) {

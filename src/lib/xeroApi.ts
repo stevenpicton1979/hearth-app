@@ -106,6 +106,7 @@ interface XeroBankTransaction {
   Date: string
   Reference?: string
   Narration?: string
+  Url?: string
   SubTotal?: number
   TotalTax?: number
   Contact: { Name?: string }

@@ -12,6 +12,7 @@ export async function GET(req: NextRequest) {
     .select('*, accounts!account_id(display_name)')
     .eq('household_id', DEFAULT_HOUSEHOLD_ID)
     .eq('merchant', merchant)
+    .order('source', { ascending: true, nullsFirst: true })
     .order('date', { ascending: false })
     .limit(20)
 

@@ -176,44 +176,101 @@ describe('xeroCategories', () => {
 
   describe('composeXeroRawDescription', () => {
     it('joins all non-empty fields with pipe separator', () => {
-      const result = composeXeroRawDescription('Acme Corp', 'INV-001', 'Monthly fee', 'Consulting services')
+      const result = composeXeroRawDescription({
+        contactName: 'Acme Corp',
+        reference: 'INV-001',
+        narration: 'Monthly fee',
+        lineItemDescs: ['Consulting services'],
+      })
       expect(result).toBe('Acme Corp | INV-001 | Monthly fee | Consulting services')
     })
 
     it('skips null and undefined fields', () => {
-      const result = composeXeroRawDescription('Acme Corp', null, undefined, 'Software license')
+      const result = composeXeroRawDescription({
+        contactName: 'Acme Corp',
+        reference: null,
+        narration: undefined,
+        lineItemDescs: ['Software license'],
+      })
       expect(result).toBe('Acme Corp | Software license')
     })
 
     it('returns null when all fields are empty or null', () => {
-      const result = composeXeroRawDescription(null, null, undefined, undefined)
+      const result = composeXeroRawDescription({
+        contactName: null,
+        reference: null,
+        narration: undefined,
+        lineItemDescs: [],
+      })
       expect(result).toBeNull()
     })
 
     it('returns null when all fields are whitespace', () => {
-      const result = composeXeroRawDescription('  ', ' ', undefined, '')
+      const result = composeXeroRawDescription({
+        contactName: '  ',
+        reference: ' ',
+        narration: undefined,
+        lineItemDescs: [''],
+      })
       expect(result).toBeNull()
     })
 
-    it('truncates to 300 characters', () => {
-      const long = 'A'.repeat(200)
-      const result = composeXeroRawDescription(long, long, undefined, undefined)
-      expect(result).toHaveLength(300)
+    it('truncates to 500 characters', () => {
+      const long = 'A'.repeat(300)
+      const result = composeXeroRawDescription({ contactName: long, reference: long })
+      expect(result).toHaveLength(500)
     })
 
     it('returns single field with no separator', () => {
-      const result = composeXeroRawDescription(null, 'REF-123', null, null)
+      const result = composeXeroRawDescription({ reference: 'REF-123' })
       expect(result).toBe('REF-123')
     })
 
-    it('includes bankAccountName as 5th part when provided', () => {
-      const result = composeXeroRawDescription('Brisbane Health Tech', null, null, null, 'Business Cheque Account')
+    it('includes bankAccountName', () => {
+      const result = composeXeroRawDescription({
+        contactName: 'Brisbane Health Tech',
+        bankAccountName: 'Business Cheque Account',
+      })
       expect(result).toBe('Brisbane Health Tech | Business Cheque Account')
     })
 
     it('omits bankAccountName when null', () => {
-      const result = composeXeroRawDescription('Brisbane Health Tech', null, null, null, null)
+      const result = composeXeroRawDescription({
+        contactName: 'Brisbane Health Tech',
+        bankAccountName: null,
+      })
       expect(result).toBe('Brisbane Health Tech')
+    })
+
+    it('deduplicates identical line item descriptions', () => {
+      const result = composeXeroRawDescription({
+        contactName: 'Acme Corp',
+        lineItemDescs: ['Consulting', 'Consulting', 'Consulting'],
+      })
+      expect(result).toBe('Acme Corp | Consulting')
+    })
+
+    it('includes all unique line item descriptions', () => {
+      const result = composeXeroRawDescription({
+        lineItemDescs: ['Phase 1', 'Phase 2', 'Phase 3'],
+      })
+      expect(result).toBe('Phase 1 | Phase 2 | Phase 3')
+    })
+
+    it('includes tracking categories', () => {
+      const result = composeXeroRawDescription({
+        contactName: 'Acme Corp',
+        tracking: ['Project: Infrastructure', 'Region: QLD'],
+      })
+      expect(result).toBe('Acme Corp | Project: Infrastructure | Region: QLD')
+    })
+
+    it('includes url', () => {
+      const result = composeXeroRawDescription({
+        contactName: 'Acme Corp',
+        url: 'https://example.com/inv/001',
+      })
+      expect(result).toBe('Acme Corp | https://example.com/inv/001')
     })
   })
 })

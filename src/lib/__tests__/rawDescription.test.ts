@@ -5,43 +5,57 @@ import type { RawTransaction, ProcessedTransaction } from '../categoryPipeline'
 describe('raw_description handling', () => {
   describe('composeXeroRawDescription', () => {
     it('composes all non-empty fields with pipe separator', () => {
-      const result = composeXeroRawDescription('Acme Corp', 'INV-001', 'Monthly fee', 'Consulting services')
+      const result = composeXeroRawDescription({
+        contactName: 'Acme Corp', reference: 'INV-001',
+        narration: 'Monthly fee', lineItemDescs: ['Consulting services'],
+      })
       expect(result).toBe('Acme Corp | INV-001 | Monthly fee | Consulting services')
     })
 
     it('filters out null and undefined fields', () => {
-      const result = composeXeroRawDescription('Acme Corp', null, undefined, 'Software license')
+      const result = composeXeroRawDescription({
+        contactName: 'Acme Corp', reference: null,
+        narration: undefined, lineItemDescs: ['Software license'],
+      })
       expect(result).toBe('Acme Corp | Software license')
     })
 
     it('filters out whitespace-only fields', () => {
-      const result = composeXeroRawDescription('Acme Corp', '  ', '\t', 'Software')
+      const result = composeXeroRawDescription({
+        contactName: 'Acme Corp', reference: '  ',
+        narration: '\t', lineItemDescs: ['Software'],
+      })
       expect(result).toBe('Acme Corp | Software')
     })
 
     it('returns null when all fields are empty', () => {
-      const result = composeXeroRawDescription(null, null, undefined, undefined)
+      const result = composeXeroRawDescription({ contactName: null, reference: null })
       expect(result).toBeNull()
     })
 
     it('returns null when all fields are whitespace', () => {
-      const result = composeXeroRawDescription('  ', ' ', undefined, '')
+      const result = composeXeroRawDescription({
+        contactName: '  ', reference: ' ', lineItemDescs: [''],
+      })
       expect(result).toBeNull()
     })
 
-    it('truncates to 300 characters', () => {
-      const long = 'A'.repeat(200)
-      const result = composeXeroRawDescription(long, long, undefined, undefined)
-      expect(result).toHaveLength(300)
+    it('truncates to 500 characters', () => {
+      const long = 'A'.repeat(300)
+      const result = composeXeroRawDescription({ contactName: long, reference: long })
+      expect(result).toHaveLength(500)
     })
 
     it('handles single field gracefully', () => {
-      const result = composeXeroRawDescription(null, 'REF-123', null, null)
+      const result = composeXeroRawDescription({ reference: 'REF-123' })
       expect(result).toBe('REF-123')
     })
 
-    it('preserves order: contactName > reference > narration > lineItemDesc', () => {
-      const result = composeXeroRawDescription('Contact', 'Ref', 'Narration', 'LineItem')
+    it('preserves order: contactName > reference > narration > lineItemDescs > bankAccountName > tracking > url', () => {
+      const result = composeXeroRawDescription({
+        contactName: 'Contact', reference: 'Ref',
+        narration: 'Narration', lineItemDescs: ['LineItem'],
+      })
       expect(result).toBe('Contact | Ref | Narration | LineItem')
     })
   })

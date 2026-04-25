@@ -105,22 +105,47 @@ export function parseXeroDate(xeroDate: string): string {
   return new Date().toISOString().split('T')[0]
 }
 
+export interface XeroRawDescriptionParams {
+  contactName?: string | null
+  reference?: string | null
+  narration?: string | null
+  /** All line item descriptions — duplicates are collapsed. */
+  lineItemDescs?: (string | null | undefined)[]
+  bankAccountName?: string | null
+  /** Tracking category strings, e.g. ["Project: Infrastructure", "Region: QLD"]. */
+  tracking?: string[]
+  url?: string | null
+}
+
 /**
- * Compose a raw_description string from all available Xero fields.
- * bankAccountName is the Xero bank account on the transaction (source for SPEND,
- * destination for RECEIVE) — included to show transfer endpoint in the training UI.
- * Returns null if no fields are available.
+ * Compose a raw_description string from all available Xero transaction fields.
+ * All non-empty values are joined with " | " so a human can read the full context.
+ * Duplicate line item descriptions are collapsed to one entry.
+ * Returns null if no fields produce any content.
  */
-export function composeXeroRawDescription(
-  contactName: string | null | undefined,
-  reference: string | null | undefined,
-  narration: string | null | undefined,
-  lineItemDesc: string | null | undefined,
-  bankAccountName?: string | null,
-): string | null {
-  const parts = [contactName, reference, narration, lineItemDesc, bankAccountName].filter((s): s is string => Boolean(s && s.trim()))
+export function composeXeroRawDescription(params: XeroRawDescriptionParams): string | null {
+  const {
+    contactName, reference, narration,
+    lineItemDescs = [], bankAccountName,
+    tracking = [], url,
+  } = params
+
+  const uniqueLineDescs = Array.from(
+    new Set(lineItemDescs.filter((s): s is string => Boolean(s && s.trim())))
+  )
+
+  const parts = [
+    contactName,
+    reference,
+    narration,
+    ...uniqueLineDescs,
+    bankAccountName,
+    ...tracking,
+    url,
+  ].filter((s): s is string => Boolean(s && s.trim()))
+
   if (parts.length === 0) return null
-  return parts.join(' | ').slice(0, 300)
+  return parts.join(' | ').slice(0, 500)
 }
 
 /**

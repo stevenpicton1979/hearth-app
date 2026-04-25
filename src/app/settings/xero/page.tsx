@@ -12,6 +12,7 @@ interface SyncResult {
   synced?: number
   skipped?: number
   backfilled?: number
+  crossDuped?: number
   errors?: string[]
   error?: string
 }
@@ -190,6 +191,11 @@ export default function XeroSettingsPage() {
                       {(syncResult.backfilled || 0) > 0 && (
                         <p className="text-gray-600">
                           <span className="font-medium">{syncResult.backfilled}</span> raw description{(syncResult.backfilled || 0) !== 1 ? 's' : ''} backfilled
+                        </p>
+                      )}
+                      {(syncResult.crossDuped || 0) > 0 && (
+                        <p className="text-amber-700">
+                          <span className="font-medium">{syncResult.crossDuped}</span> cross-account duplicate{(syncResult.crossDuped || 0) !== 1 ? 's' : ''} flagged as transfers
                         </p>
                       )}
                       {syncResult.errors && syncResult.errors.length > 0 && (
