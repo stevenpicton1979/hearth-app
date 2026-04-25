@@ -196,11 +196,12 @@ function LabelRow({
   const [showExamples, setShowExamples] = useState(false)
 
   useEffect(() => {
+    if (!showExamples) return
     fetch(`/api/dev/merchant-examples?merchant=${encodeURIComponent(label.merchant)}`)
       .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d?.examples) setExamples(d.examples) })
+      .then(d => { setExamples(d?.examples ?? null) })
       .catch(() => {})
-  }, [label.merchant])
+  }, [label.merchant, showExamples])
 
   const hasMismatch = autoCategory !== null && local.correct_category !== null && autoCategory !== local.correct_category
   const suggestedKeyword = hasMismatch ? label.merchant.split(' ')[0] : null
@@ -343,15 +344,14 @@ function LabelRow({
 
       </div>{/* end inner flex */}
 
-      {examples && examples.length > 0 && (
-        <div className="mt-2 pt-2 border-t border-gray-100">
-          <button
-            onClick={() => setShowExamples(s => !s)}
-            className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1"
-          >
-            {showExamples ? '▼ Hide details' : '▶ Show details'}
-          </button>
-          {showExamples && (
+      <div className="mt-2 pt-2 border-t border-gray-100">
+        <button
+          onClick={() => setShowExamples(s => !s)}
+          className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1"
+        >
+          {showExamples ? '▼ Hide details' : '▶ Show details'}
+        </button>
+        {showExamples && examples && examples.length > 0 && (
             <div className="mt-2 space-y-2">
               {examples.map((ex, i) => {
                 const visibleKeys = sortExKeys(
@@ -383,7 +383,6 @@ function LabelRow({
             </div>
           )}
         </div>
-      )}
 
       {ruleImpactKeyword && (
         <RuleImpactModal keyword={ruleImpactKeyword} onClose={() => setRuleImpactKeyword(null)} />
