@@ -45,14 +45,17 @@ export async function GET(req: NextRequest) {
   )
   if (transferExamples.length > 0) {
     await Promise.all(transferExamples.map(async (ex) => {
+      // Select account_id so PostgREST anchors the row; without a main-table
+      // column the embedded join can return null even when the row exists.
       const { data: linked } = await supabase
         .from('transactions')
-        .select('accounts!account_id(display_name)')
+        .select('account_id, accounts!account_id(display_name)')
         .eq('id', ex.linked_transfer_id as string)
         .single()
 
       if (linked) {
-        const join = (linked as Record<string, unknown>).accounts as { display_name?: string } | null
+        const row = linked as Record<string, unknown>
+        const join = row.accounts as { display_name?: string } | null
         ex.transfer_destination = join?.display_name ?? null
       }
     }))
