@@ -48,20 +48,37 @@ export async function GET(req: NextRequest) {
     .filter((id): id is string => typeof id === 'string')
 
   if (linkedIds.length > 0) {
-    const { data: linkedRows } = await supabase
+    // Step 1: get account_id for each linked transaction
+    const { data: linkedTxns } = await supabase
       .from('transactions')
-      .select('id, accounts!account_id(display_name)')
+      .select('id, account_id')
       .in('id', linkedIds)
 
-    const toAccountMap = new Map<string, string>()
-    for (const lr of (linkedRows ?? []) as Record<string, unknown>[]) {
-      const join = lr.accounts as { display_name?: string } | null
-      if (join?.display_name) toAccountMap.set(lr.id as string, join.display_name)
+    // Build linked_transfer_id → account_id map
+    const txnToAccount = new Map<string, string>()
+    for (const lt of (linkedTxns ?? []) as { id: string; account_id: string }[]) {
+      if (lt.account_id) txnToAccount.set(lt.id, lt.account_id)
     }
 
+    // Step 2: fetch display names for those account_ids
+    const accountIds = Array.from(new Set(txnToAccount.values()))
+    const { data: accts } = await supabase
+      .from('accounts')
+      .select('id, display_name')
+      .in('id', accountIds)
+
+    const accountNameMap = new Map<string, string>()
+    for (const a of (accts ?? []) as { id: string; display_name: string }[]) {
+      if (a.display_name) accountNameMap.set(a.id, a.display_name)
+    }
+
+    // Populate transfer_destination on each example
     for (const ex of examples) {
       const lid = ex.linked_transfer_id as string | null
-      if (lid) ex.transfer_destination = toAccountMap.get(lid) ?? null
+      if (lid) {
+        const acctId = txnToAccount.get(lid)
+        ex.transfer_destination = acctId ? (accountNameMap.get(acctId) ?? null) : null
+      }
     }
   }
 
