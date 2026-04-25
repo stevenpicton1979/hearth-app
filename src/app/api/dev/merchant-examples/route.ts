@@ -87,6 +87,18 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // Build a suffix → account name map for resolving "TRANSFER TO XXnnnn" descriptions
+  const { data: allAccounts } = await supabase
+    .from('accounts')
+    .select('account_suffix, display_name')
+    .eq('household_id', DEFAULT_HOUSEHOLD_ID)
+    .not('account_suffix', 'is', null)
+
+  const suffixToName = new Map<string, string>()
+  for (const a of (allAccounts ?? []) as { account_suffix: string; display_name: string }[]) {
+    if (a.account_suffix) suffixToName.set(a.account_suffix.toUpperCase(), a.display_name)
+  }
+
   // Annotate each example with from_account and transfer_destination
   // INVARIANT: transfer_destination must be set for ALL transfer transactions, even if linked_transfer_id is null.
   // If linked_transfer_id is null, transfer_destination will be null but should still be present.
@@ -99,8 +111,11 @@ export async function GET(req: NextRequest) {
       const linkedAcctId = linkedTxnToAccount.get(lid)
       ex.transfer_destination = linkedAcctId ? (accountNameMap.get(linkedAcctId) ?? null) : null
     } else {
-      // Transfer with no linked_id: transfer_destination is null but still defined
-      ex.transfer_destination = null
+      // No linked_id — try to resolve destination from "TRANSFER TO XXnnnn" description pattern
+      const desc = ((ex.description as string) || '').toUpperCase()
+      const suffixMatch = desc.match(/\bXX(\d{4})\b/)
+      const suffix = suffixMatch ? `XX${suffixMatch[1]}` : null
+      ex.transfer_destination = suffix ? (suffixToName.get(suffix) ?? null) : null
     }
 
     delete ex.account_id
