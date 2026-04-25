@@ -125,4 +125,52 @@ describe('linkSalaryPairs', () => {
     const count = await linkSalaryPairs(['2025-08-11'])
     expect(count).toBe(0)
   })
+
+  it('links two separate salary pairs on the same date', async () => {
+    const rows = [
+      { id: 'xero-1', account_id: 'bht',      date: '2025-08-11', amount: -4000, category: 'Salary' },
+      { id: 'cba-1',  account_id: 'bills',     date: '2025-08-11', amount:  4000, category: 'Salary' },
+      { id: 'xero-2', account_id: 'bht',       date: '2025-08-11', amount: -3500, category: 'Salary' },
+      { id: 'cba-2',  account_id: 'personal',  date: '2025-08-11', amount:  3500, category: 'Salary' },
+    ]
+
+    const updatedIds: string[] = []
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'transactions') {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          in: vi.fn().mockReturnThis(),
+          is: vi.fn().mockResolvedValue({ data: rows, error: null }),
+          update: vi.fn().mockReturnValue({
+            eq: vi.fn().mockImplementation((_field: string, id: string) => {
+              updatedIds.push(id)
+              return Promise.resolve({ error: null })
+            }),
+          }),
+        }
+      }
+      return {}
+    })
+
+    const count = await linkSalaryPairs(['2025-08-11'])
+    expect(count).toBe(2)             // 2 pairs linked
+    expect(updatedIds).toHaveLength(4) // 4 update calls (both sides of each pair)
+  })
+
+  it('does not re-link rows that already have linked_transfer_id set', async () => {
+    // The DB query filters on IS NULL, so the mock returns only unlinked rows.
+    // If all rows are already linked the mock returns [] and count should be 0.
+    mockFrom.mockReturnValue({
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      in: vi.fn().mockReturnThis(),
+      is: vi.fn().mockResolvedValue({ data: [], error: null }),
+    })
+
+    const count = await linkSalaryPairs(['2025-08-11'])
+    expect(count).toBe(0)
+  })
+
 })
