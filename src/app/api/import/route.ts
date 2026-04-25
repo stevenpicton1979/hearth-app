@@ -17,10 +17,8 @@ export async function POST(req: NextRequest) {
 
     const supabase = createServerClient()
 
-    // Read all file texts upfront (needed for NAB detection and parsing)
     const fileTexts = await Promise.all(files.map(f => f.text()))
 
-    // Auto-detect NAB or Amex account from file content when no account provided
     if (!accountId) {
       for (const text of fileTexts) {
         const nabName = extractNABAccountName(text)
@@ -55,7 +53,6 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Create CBA/other account if needed
     if (!accountId && accountName) {
       const { data, error } = await supabase
         .from('accounts')
@@ -74,9 +71,7 @@ export async function POST(req: NextRequest) {
     for (const text of fileTexts) {
       const parsed = parseCSV(text)
       allParsed.push(...parsed)
-      // Count rows that failed to parse (invalid date/amount) — transfers are now in parsed
       totalTransfers += Math.max(0, text.split('\n').filter(l => l.trim()).length - 1 - parsed.length)
-      // Extract balance directly from raw CSV (independent of transfer filtering)
       const bal = extractBalance(text)
       if (bal !== undefined) latestBalance = bal
     }
@@ -93,9 +88,6 @@ export async function POST(req: NextRequest) {
 
     const { toUpsert, transfersSkipped } = await processBatch(raws)
 
-    // Deduplicate by conflict key before upsert — CSV files can contain
-    // duplicate rows that would trigger "ON CONFLICT DO UPDATE command
-    // cannot affect row a second time". Keep last occurrence (latest in file).
     const deduped = Array.from(
       toUpsert
         .reduce((map, tx) => {
@@ -107,14 +99,12 @@ export async function POST(req: NextRequest) {
 
     const { inserted, duplicates, autoCategorised } = await upsertTransactions(deduped)
 
-    // Link transfer pairs and salary pairs for all dates in this batch
     const batchDates = Array.from(new Set(deduped.map(tx => tx.date)))
     await Promise.all([
       linkTransferPairs(batchDates),
       linkSalaryPairs(batchDates),
     ])
 
-    // Update account current_balance from the raw CSV balance (most recent row)
     if (latestBalance !== undefined) {
       await supabase
         .from('accounts')
@@ -130,13 +120,7 @@ export async function POST(req: NextRequest) {
       errors: [],
     })
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : 'Unknown error'
-    return NextResponse.json({ error: msg }, { status: 500 })
-  }
-}
     const msg = e instanceof Error ? e.message : String(e)
     return NextResponse.json({ error: msg }, { status: 500 })
-  }
-}
   }
 }
