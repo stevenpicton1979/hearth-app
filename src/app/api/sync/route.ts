@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
         date: (t['postDate'] || t['transactionDate']) as string,
         amount: parseFloat(t['amount'] as string),
         description: (t['description'] || t['narration'] || '') as string,
-        basiq_transaction_id: t['id'] as string,
+        external_id: t['id'] as string,
       }))
       const { toUpsert } = await processBatch(raws)
       const { inserted, duplicates } = await upsertTransactions(toUpsert)

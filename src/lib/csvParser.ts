@@ -274,7 +274,7 @@ export function extractBalance(text: string): number | undefined {
       return bal !== null ? bal : undefined
     }
     if (format === 'westpac') {
-      const bal = parseAmount(firstCols[7])
+          const bal = parseAmount(firstCols[7])
       return bal !== null ? bal : undefined
     }
   } catch { /* ignore */ }

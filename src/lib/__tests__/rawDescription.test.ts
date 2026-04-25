@@ -106,7 +106,7 @@ describe('raw_description handling', () => {
         category: 'Food & Groceries',
         classification: null,
         is_transfer: false,
-        basiq_transaction_id: null,
+        external_id: null,
         raw_description: 'Original bank description or Xero fields',
       }
       expect(tx.raw_description).toBe('Original bank description or Xero fields')
@@ -123,7 +123,7 @@ describe('raw_description handling', () => {
         category: 'Food & Groceries',
         classification: null,
         is_transfer: false,
-        basiq_transaction_id: null,
+        external_id: null,
         raw_description: 'Xero contact name | ref | narration',
         source: 'xero',
       }

@@ -9,7 +9,7 @@ vi.mock('../supabase/server', () => ({
   createServerClient: () => ({ from: mockFrom }),
 }))
 
-import { processBatch, type RawTransaction } from '../categoryPipeline'
+import { processBatch, upsertTransactions, type RawTransaction, type ProcessedTransaction } from '../categoryPipeline'
 
 // ---------------------------------------------------------------------------
 // Mock helpers
@@ -227,5 +227,152 @@ describe('processBatch', () => {
     ])
     expect(toUpsert).toHaveLength(3)
     expect(transfersSkipped).toBe(2)
+  })
+
+  // ── external_id passthrough ───────────────────────────────────────────────
+
+  it('passes external_id through to the output row when provided', async () => {
+    setupMocks()
+    const { toUpsert } = await processBatch([
+      raw({ external_id: 'xero-uuid-abc123' }),
+    ])
+    expect(toUpsert[0].external_id).toBe('xero-uuid-abc123')
+  })
+
+  it('sets external_id to null when not provided', async () => {
+    setupMocks()
+    const { toUpsert } = await processBatch([raw()])
+    expect(toUpsert[0].external_id).toBeNull()
+  })
+
+  it('external_id is preserved through transfer branch', async () => {
+    setupMocks()
+    const { toUpsert } = await processBatch([
+      raw({ description: 'TRANSFER TO XX5426', amount: -1000, external_id: 'xero-transfer-999' }),
+    ])
+    expect(toUpsert[0].is_transfer).toBe(true)
+    expect(toUpsert[0].external_id).toBe('xero-transfer-999')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// upsertTransactions — external_id split + backfill logic
+// ---------------------------------------------------------------------------
+
+function makeProcessed(overrides: Partial<ProcessedTransaction> = {}): ProcessedTransaction {
+  return {
+    household_id: 'hh-1',
+    account_id: 'acc-001',
+    date: '2025-01-15',
+    amount: -100,
+    description: 'MERCHANT A',
+    merchant: 'MERCHANT A',
+    category: 'Business',
+    classification: 'Steven',
+    is_transfer: false,
+    external_id: null,
+    ...overrides,
+  }
+}
+
+describe('upsertTransactions', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('rows WITH external_id upsert on external_id conflict', async () => {
+    const capturedConflicts: string[] = []
+
+    mockFrom.mockImplementation(() => ({
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      in: vi.fn().mockReturnThis(),
+      is: vi.fn().mockResolvedValue({ data: [], error: null }),
+      upsert: vi.fn().mockImplementation((_rows: unknown, opts: { onConflict?: string }) => {
+        if (opts?.onConflict) capturedConflicts.push(opts.onConflict)
+        return { select: vi.fn().mockResolvedValue({ data: [{ id: '1', category: 'Business' }], error: null }) }
+      }),
+    }))
+
+    const rows = [makeProcessed({ external_id: 'xero-uuid-abc' })]
+    await upsertTransactions(rows)
+    expect(capturedConflicts).toContain('external_id')
+    expect(capturedConflicts).not.toContain('account_id,date,amount,description')
+  })
+
+  it('rows WITHOUT external_id upsert on composite key', async () => {
+    const capturedConflicts: string[] = []
+
+    mockFrom.mockImplementation(() => ({
+      upsert: vi.fn().mockImplementation((_rows: unknown, opts: { onConflict?: string }) => {
+        if (opts?.onConflict) capturedConflicts.push(opts.onConflict)
+        return { select: vi.fn().mockResolvedValue({ data: [{ id: '1', category: null }], error: null }) }
+      }),
+    }))
+
+    const rows = [makeProcessed({ external_id: null })]
+    await upsertTransactions(rows)
+    expect(capturedConflicts).toContain('account_id,date,amount,description')
+    expect(capturedConflicts).not.toContain('external_id')
+  })
+
+  it('mixed batch: rows are split by external_id presence', async () => {
+    const capturedConflicts: string[] = []
+
+    mockFrom.mockImplementation(() => ({
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      in: vi.fn().mockReturnThis(),
+      is: vi.fn().mockResolvedValue({ data: [], error: null }),
+      upsert: vi.fn().mockImplementation((_rows: unknown, opts: { onConflict?: string }) => {
+        if (opts?.onConflict) capturedConflicts.push(opts.onConflict)
+        return { select: vi.fn().mockResolvedValue({ data: [{ id: '1', category: null }], error: null }) }
+      }),
+    }))
+
+    const rows = [
+      makeProcessed({ external_id: 'xero-uuid-1' }),
+      makeProcessed({ external_id: null, description: 'CSV IMPORT', merchant: 'CSV IMPORT' }),
+    ]
+    await upsertTransactions(rows)
+    expect(capturedConflicts).toContain('external_id')
+    expect(capturedConflicts).toContain('account_id,date,amount,description')
+  })
+
+  it('backfill: stamps an existing null-external_id row before upserting', async () => {
+    const updatedIds: string[] = []
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'transactions') {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          in: vi.fn().mockReturnThis(),
+          is: vi.fn().mockResolvedValue({
+            data: [{ id: 'existing-row-id', date: '2025-01-15', amount: -100, external_id: null }],
+            error: null,
+          }),
+          update: vi.fn().mockImplementation(() => ({
+            eq: vi.fn().mockImplementation((_col: string, id: string) => {
+              updatedIds.push(id)
+              return Promise.resolve({ error: null })
+            }),
+          })),
+          upsert: vi.fn().mockReturnValue({
+            select: vi.fn().mockResolvedValue({ data: [{ id: 'existing-row-id', category: 'Business' }], error: null }),
+          }),
+        }
+      }
+      return {}
+    })
+
+    const rows = [makeProcessed({ external_id: 'xero-brand-new-uuid', date: '2025-01-15', amount: -100 })]
+    const result = await upsertTransactions(rows)
+
+    expect(updatedIds).toContain('existing-row-id')
+    expect(result.backfilled).toBe(1)
+  })
+
+  it('returns 0 for everything when given an empty array', async () => {
+    const result = await upsertTransactions([])
+    expect(result).toEqual({ inserted: 0, duplicates: 0, autoCategorised: 0, backfilled: 0 })
   })
 })

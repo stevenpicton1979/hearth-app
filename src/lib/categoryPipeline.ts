@@ -11,7 +11,8 @@ export interface RawTransaction {
   date: string
   amount: number
   description: string
-  basiq_transaction_id?: string
+  /** Stable external ID for upsert deduplication — Xero BankTransactionID or Basiq transaction ID */
+  external_id?: string
   is_transfer?: boolean
   forced_is_transfer?: boolean
   category_hint?: string | null
@@ -31,7 +32,8 @@ export interface ProcessedTransaction {
   category: string | null
   classification: string | null
   is_transfer: boolean
-  basiq_transaction_id: string | null
+  /** Stable external ID — Xero BankTransactionID or Basiq transaction ID. Used as upsert key when present. */
+  external_id: string | null
   raw_description?: string | null
   source?: string
   needs_review?: boolean
@@ -100,7 +102,7 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
         category: directorResult.category,
         classification: null,
         is_transfer: false,
-        basiq_transaction_id: raw.basiq_transaction_id ?? null,
+        external_id: raw.external_id ?? null,
         raw_description: raw.raw_description ?? null,
         needs_review: raw.needs_review ?? false,
         gl_account: raw.gl_account ?? null,
@@ -124,7 +126,7 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
         category: raw.category_hint ?? null,
         classification: null,
         is_transfer: true,
-        basiq_transaction_id: raw.basiq_transaction_id ?? null,
+        external_id: raw.external_id ?? null,
         raw_description: raw.raw_description ?? null,
         needs_review: raw.needs_review ?? false,
         gl_account: raw.gl_account ?? null,
@@ -154,7 +156,7 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
         category: null,
         classification,
         is_transfer: true,
-        basiq_transaction_id: raw.basiq_transaction_id ?? null,
+        external_id: raw.external_id ?? null,
         raw_description: raw.raw_description ?? null,
         needs_review: raw.needs_review ?? false,
         gl_account: raw.gl_account ?? null,
@@ -201,7 +203,7 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
       category,
       classification,
       is_transfer: false,
-      basiq_transaction_id: raw.basiq_transaction_id ?? null,
+      external_id: raw.external_id ?? null,
       raw_description: raw.raw_description ?? null,
       needs_review: raw.needs_review ?? false,
       gl_account: raw.gl_account ?? null,
@@ -228,16 +230,83 @@ export async function upsertTransactions(rows: ProcessedTransaction[]): Promise<
   if (rows.length === 0) return { inserted: 0, duplicates: 0, autoCategorised: 0, backfilled: 0 }
   const supabase = createServerClient()
 
-  // Single upsert — ON CONFLICT DO UPDATE sets all columns including raw_description
-  // and needs_review, so no per-row backfill loop is needed.
-  const { data, error } = await supabase
-    .from('transactions')
-    .upsert(rows, { onConflict: 'account_id,date,amount,description' })
-    .select('id, category')
+  const rowsWithExtId = rows.filter(r => r.external_id != null)
+  const rowsWithoutExtId = rows.filter(r => r.external_id == null)
+  let backfilled = 0
 
-  if (error) throw new Error(error.message)
-  const inserted = data?.length ?? 0
-  const autoCategorised = data?.filter(r => r.category !== null).length ?? 0
+  // ── Backfill step ─────────────────────────────────────────────────────────
+  // Rows arriving with an external_id (e.g. Xero BankTransactionID) may already
+  // exist in the DB from a previous sync that lacked an external_id. Find those
+  // existing rows by (account_id, date, amount) and stamp them with the external_id
+  // so the upsert below updates the right row rather than creating a duplicate.
+  if (rowsWithExtId.length > 0) {
+    const byAccount = new Map<string, ProcessedTransaction[]>()
+    for (const r of rowsWithExtId) {
+      const list = byAccount.get(r.account_id) ?? []
+      list.push(r)
+      byAccount.set(r.account_id, list)
+    }
 
-  return { inserted, duplicates: 0, autoCategorised, backfilled: 0 }
+    for (const [accountId, accountRows] of Array.from(byAccount.entries())) {
+      const dates = Array.from(new Set(accountRows.map(r => r.date)))
+      const { data: existing } = await supabase
+        .from('transactions')
+        .select('id, date, amount, external_id')
+        .eq('account_id', accountId)
+        .in('date', dates)
+        .is('external_id', null)
+
+      if (!existing?.length) continue
+
+      // Track matched rows to avoid double-assigning the same existing row
+      const usedIds = new Set<string>()
+
+      for (const newRow of accountRows) {
+        const candidates = existing.filter(
+          e => !usedIds.has(e.id) &&
+               e.date === newRow.date &&
+               Math.abs(e.amount - newRow.amount) < 0.001
+        )
+        if (candidates.length === 1) {
+          // Exactly one unambiguous match — safe to stamp with external_id
+          await supabase
+            .from('transactions')
+            .update({ external_id: newRow.external_id })
+            .eq('id', candidates[0].id)
+          usedIds.add(candidates[0].id)
+          backfilled++
+        }
+        // 0 or 2+ matches: leave alone — either a genuine new row or ambiguous
+      }
+    }
+  }
+
+  let inserted = 0
+  let autoCategorised = 0
+
+  // ── Upsert rows that have an external_id ──────────────────────────────────
+  // After the backfill above, any matching existing rows now have external_id set,
+  // so this upsert will find and update them rather than inserting duplicates.
+  if (rowsWithExtId.length > 0) {
+    const { data, error } = await supabase
+      .from('transactions')
+      .upsert(rowsWithExtId, { onConflict: 'external_id' })
+      .select('id, category')
+    if (error) throw new Error(`upsert (external_id): ${error.message}`)
+    inserted += data?.length ?? 0
+    autoCategorised += data?.filter(r => r.category !== null).length ?? 0
+  }
+
+  // ── Upsert rows without an external_id (CSV imports, legacy Basiq) ────────
+  if (rowsWithoutExtId.length > 0) {
+    const { data, error } = await supabase
+      .from('transactions')
+      .upsert(rowsWithoutExtId, { onConflict: 'account_id,date,amount,description' })
+      .select('id, category')
+    if (error) throw new Error(`upsert (composite key): ${error.message}`)
+    inserted += data?.length ?? 0
+    autoCategorised += data?.filter(r => r.category !== null).length ?? 0
+  }
+
+  return { inserted, duplicates: 0, autoCategorised, backfilled }
 }

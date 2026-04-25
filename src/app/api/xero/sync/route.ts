@@ -223,6 +223,7 @@ export async function POST(req: NextRequest) {
           date,
           amount,
           description: merchant,
+          external_id: xTx.BankTransactionID,
           is_transfer: txType === 'SPEND-TRANSFER' || txType === 'RECEIVE-TRANSFER',
           forced_is_transfer: forcedIsTransfer,
           category_hint: ruleCategory ?? categoryHint,
@@ -241,12 +242,16 @@ export async function POST(req: NextRequest) {
     // ----------------------------------------------------------------
     const { toUpsert, transfersSkipped } = await processBatch(raws)
 
-    // Deduplicate by conflict key before upsert — Xero can return the same
-    // transaction twice in a full sync (e.g. amended transactions).
+    // Deduplicate before upsert — Xero can return the same transaction twice in
+    // a full sync (e.g. amended transactions). Prefer external_id as key when
+    // present; fall back to the composite key for rows without one.
     const deduped = Array.from(
       toUpsert
         .reduce((map, tx) => {
-          map.set(`${tx.account_id}|${tx.date}|${tx.amount}|${tx.description}`, tx)
+          const key = tx.external_id
+            ? `ext:${tx.external_id}`
+            : `composite:${tx.account_id}|${tx.date}|${tx.amount}|${tx.description}`
+          map.set(key, tx)
           return map
         }, new Map<string, (typeof toUpsert)[0]>())
         .values()

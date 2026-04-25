@@ -23,7 +23,6 @@ export function cleanMerchant(desc: string): string {
   // Strip CommBank BPAY CRN (10+ digit customer reference number) and any short suffix after it.
   // Specifically targets: "...BPAY NNNN CRN [suffix]" patterns from CommBank descriptions.
   // e.g. "CITIBANK CREDITCARDS CommBank app BPAY 49502 5327803311171237 pay cc"
-  //   → "CITIBANK CREDITCARDS CommBank app BPAY 49502"
   s = s.replace(/\s+\d{10,}(\s+[a-z]{1,6})*\s*$/i, '')
 
   // Normalise whitespace and uppercase
