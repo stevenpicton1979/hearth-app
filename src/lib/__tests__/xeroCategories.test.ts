@@ -20,14 +20,14 @@ describe('xeroCategories', () => {
       expect(category).toBe('Business')
     })
 
-    it('maps EXPENSE with advertising keyword to Shopping', () => {
+    it('maps EXPENSE with advertising keyword to Business', () => {
       const category = mapXeroAccountToCategory('EXPENSE', '6200', 'Advertising Costs')
-      expect(category).toBe('Shopping')
+      expect(category).toBe('Business')
     })
 
-    it('maps EXPENSE with travel keyword to Transport', () => {
+    it('maps EXPENSE with travel keyword to Travel', () => {
       const category = mapXeroAccountToCategory('EXPENSE', '6300', 'Travel & Mileage')
-      expect(category).toBe('Transport')
+      expect(category).toBe('Travel')
     })
 
     it('maps EXPENSE with meals keyword to Eating Out', () => {
@@ -50,8 +50,8 @@ describe('xeroCategories', () => {
       expect(category).toBe('Business')
     })
 
-    it('maps AU standard code 477 to Director Income', () => {
-      expect(mapXeroAccountToCategory('EXPENSE', '477', 'Wages & Salaries')).toBe('Director Income')
+    it('maps AU standard code 477 to Payroll Expense (employee wages, not director drawings)', () => {
+      expect(mapXeroAccountToCategory('EXPENSE', '477', 'Wages & Salaries')).toBe('Payroll Expense')
     })
 
     it('maps AU standard code 493 to Transport', () => {
@@ -70,8 +70,8 @@ describe('xeroCategories', () => {
       expect(mapXeroAccountToCategory('EXPENSE', '433', 'Insurance')).toBe('Insurance')
     })
 
-    it('maps AU standard code 404 to Shopping', () => {
-      expect(mapXeroAccountToCategory('EXPENSE', '404', 'Advertising')).toBe('Shopping')
+    it('maps AU standard code 404 to Business (advertising & marketing)', () => {
+      expect(mapXeroAccountToCategory('EXPENSE', '404', 'Advertising')).toBe('Business')
     })
 
     it('code mapping takes priority over name keywords', () => {
