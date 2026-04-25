@@ -99,6 +99,7 @@ export function TransactionTable({ initialTransactions, accounts, initialCategor
   const [page, setPage]                 = useState(0)
   const [isLoading, setIsLoading]       = useState(false)
   const [expandedId, setExpandedId]     = useState<string | null>(null)
+  const [showMoreFilters, setShowMoreFilters] = useState(false)
   const [menuOpenId, setMenuOpenId]     = useState<string | null>(null)
 
   // Filters
@@ -200,61 +201,84 @@ export function TransactionTable({ initialTransactions, accounts, initialCategor
     <div className="space-y-4">
 
       {/* ── Filters ────────────────────────────────────────────────────────── */}
-      <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
-          <div className="relative col-span-2 md:col-span-2">
-            <MagnifyingGlassIcon className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-            <input type="text" placeholder="Search merchant..." value={filterSearch}
-              onChange={e => setFilterSearch(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+      {(() => {
+        const extraCount = [filterFrom, filterTo, filterAmountMin, filterAmountMax].filter(Boolean).length
+        return (
+          <div className="bg-white border border-gray-200 rounded-xl p-3">
+            {/* Primary row */}
+            <div className="flex gap-2 flex-wrap items-center">
+              <div className="relative flex-1 min-w-[160px]">
+                <MagnifyingGlassIcon className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+                <input type="text" placeholder="Search merchant..." value={filterSearch}
+                  onChange={e => setFilterSearch(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+              </div>
+
+              <select value={filterAccount} onChange={e => setFilterAccount(e.target.value)}
+                className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                <option value="">All accounts</option>
+                {accounts.map(a => <option key={a.id} value={a.id}>{a.display_name}</option>)}
+              </select>
+
+              <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)}
+                className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                <option value="">All categories</option>
+                <option value="__uncategorised">Uncategorised</option>
+                {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+
+              <select value={filterClassification} onChange={e => setFilterClassification(e.target.value)}
+                className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                <option value="">All</option>
+                {CLASSIFICATIONS.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+
+              <label className="flex items-center gap-1.5 text-sm text-gray-600 cursor-pointer select-none whitespace-nowrap">
+                <input type="checkbox" checked={showTransfers} onChange={e => setShowTransfers(e.target.checked)}
+                  className="rounded text-emerald-600" />
+                Transfers
+              </label>
+
+              {/* More filters toggle */}
+              <button
+                onClick={() => setShowMoreFilters(s => !s)}
+                className={`flex items-center gap-1.5 text-sm px-3 py-2 rounded-lg border transition-colors whitespace-nowrap ${showMoreFilters || extraCount > 0 ? "border-emerald-400 bg-emerald-50 text-emerald-700" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
+              >
+                Filters
+                {extraCount > 0 && (
+                  <span className="bg-emerald-600 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-medium">
+                    {extraCount}
+                  </span>
+                )}
+              </button>
+
+              <span className="ml-auto text-sm text-gray-400 whitespace-nowrap">{count} transactions</span>
+            </div>
+
+            {/* Secondary row — date + amount */}
+            {showMoreFilters && (
+              <div className="flex gap-2 flex-wrap mt-2 pt-2 border-t border-gray-100">
+                <input type="date" value={filterFrom} onChange={e => setFilterFrom(e.target.value)}
+                  className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                <input type="date" value={filterTo} onChange={e => setFilterTo(e.target.value)}
+                  className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                <input type="number" placeholder="Min amount" value={filterAmountMin}
+                  onChange={e => setFilterAmountMin(e.target.value)}
+                  className="w-32 text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                <input type="number" placeholder="Max amount" value={filterAmountMax}
+                  onChange={e => setFilterAmountMax(e.target.value)}
+                  className="w-32 text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                {extraCount > 0 && (
+                  <button onClick={() => { setFilterFrom(''); setFilterTo(''); setFilterAmountMin(''); setFilterAmountMax('') }}
+                    className="text-sm text-gray-400 hover:text-gray-600 px-2">
+                    Clear
+                  </button>
+                )}
+              </div>
+            )}
           </div>
-
-          <select value={filterAccount} onChange={e => setFilterAccount(e.target.value)}
-            className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-            <option value="">All accounts</option>
-            {accounts.map(a => <option key={a.id} value={a.id}>{a.display_name}</option>)}
-          </select>
-
-          <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)}
-            className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-            <option value="">All categories</option>
-            <option value="__uncategorised">Uncategorised</option>
-            {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-
-          <select value={filterClassification} onChange={e => setFilterClassification(e.target.value)}
-            className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-            <option value="">All classifications</option>
-            {CLASSIFICATIONS.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-
-          <input type="date" value={filterFrom} onChange={e => setFilterFrom(e.target.value)}
-            className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-
-          <input type="date" value={filterTo} onChange={e => setFilterTo(e.target.value)}
-            className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-
-          <input type="number" placeholder="Min amount" value={filterAmountMin}
-            onChange={e => setFilterAmountMin(e.target.value)}
-            className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-        </div>
-
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <input type="number" placeholder="Max amount" value={filterAmountMax}
-            onChange={e => setFilterAmountMax(e.target.value)}
-            className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-
-          <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
-            <input type="checkbox" checked={showTransfers} onChange={e => setShowTransfers(e.target.checked)}
-              className="rounded text-emerald-600" />
-            Show excluded / transfers
-          </label>
-
-          <div className="col-span-2 flex justify-end">
-            <span className="text-sm text-gray-400 self-center">{count} transactions</span>
-          </div>
-        </div>
-      </div>
+        )
+      })()}
 
       {/* ── Table ──────────────────────────────────────────────────────────── */}
       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
