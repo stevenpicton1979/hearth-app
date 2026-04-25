@@ -18,6 +18,10 @@ export async function GET() {
   // case-insensitive. This prevents drift between training_labels.merchant
   // and transactions.merchant caused by Xero re-syncs, cleanMerchant changes,
   // or labels created before certain pipeline normalisations were in place.
+  //
+  // transactions.merchant is ALWAYS uppercase (cleanMerchant guarantees it), so
+  // uppercasing the label merchant names before the IN clause is enough to bridge
+  // any casing discrepancy without fetching all transactions.
   type MerchantStats = {
     count: number
     totalSpend: number
@@ -30,11 +34,16 @@ export async function GET() {
   }
   const statsByMerchantUpper = new Map<string, MerchantStats>()
 
-  {
+  const merchants = (data || []).map(r => r.merchant)
+  // Deduplicate + uppercase so the IN clause matches the always-uppercase transactions.merchant
+  const uppercaseMerchants = Array.from(new Set(merchants.map((m: string) => (m ?? '').toUpperCase()))).filter(Boolean)
+
+  if (uppercaseMerchants.length > 0) {
     const { data: txns } = await supabase
       .from('transactions')
       .select('merchant, amount, date, account_id, category, gl_account')
       .eq('household_id', DEFAULT_HOUSEHOLD_ID)
+      .in('merchant', uppercaseMerchants)
 
     for (const t of txns || []) {
       const key = (t.merchant ?? '').toUpperCase()
