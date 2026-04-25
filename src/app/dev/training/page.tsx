@@ -263,8 +263,10 @@ function LabelRow({
   const hasMismatch = autoCategory !== null && local.correct_category !== null && autoCategory !== local.correct_category
   const suggestedKeyword = hasMismatch ? label.merchant.split(' ')[0] : null
 
-  async function saveField(updates: Partial<typeof local>) {
-    const newStatus = local.status === 'pending' ? 'confirmed' : local.status
+  async function saveField(updates: Partial<typeof local>, confirmNow = false) {
+    // Only promote to 'confirmed' when the user explicitly clicks Confirm.
+    // Dropdown/checkbox changes save the value but leave status as-is.
+    const newStatus = (confirmNow && local.status === 'pending') ? 'confirmed' : local.status
     const merged = { ...local, ...updates }
     const newCat = merged.correct_category
     const suggested_rule = newCat && autoCategory && newCat !== autoCategory
@@ -361,7 +363,7 @@ function LabelRow({
         {local.status === 'pending' && (
           <div className="flex gap-2">
             <button
-              onClick={() => saveField({})}
+              onClick={() => saveField({}, true)}
               className="text-sm bg-emerald-700 text-white rounded-lg px-3 py-1.5 hover:bg-emerald-800 transition-colors"
             >
               Confirm
