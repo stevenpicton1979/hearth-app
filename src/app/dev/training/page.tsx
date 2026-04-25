@@ -78,15 +78,18 @@ const STATUS_COLORS: Record<string, string> = {
 // ─── Example Card ────────────────────────────────────────────────────────────
 
 function ExampleCard({ ex }: { ex: Record<string, unknown> }) {
-  const account    = ex.account         as string | null
-  const merchant   = (ex.merchant       as string | null) || (ex.description as string | null) || '—'
-  const date       = ex.date            as string | null
-  const amount     = ex.amount          as number | null
-  const source     = ex.source          as string | null
-  const rawDesc    = ex.raw_description as string | null
-  const category   = ex.category        as string | null
-  const classif    = ex.classification  as string | null
+  const account      = ex.account              as string | null
+  const merchant     = (ex.merchant            as string | null) || (ex.description as string | null) || '—'
+  const date         = ex.date                 as string | null
+  const amount       = ex.amount               as number | null
+  const source       = ex.source               as string | null
+  const rawDesc      = ex.raw_description      as string | null
+  const category     = ex.category             as string | null
+  const classif      = ex.classification       as string | null
+  const isTransfer   = ex.is_transfer          as boolean | null
+  const transferDest = ex.transfer_destination as string | null
 
+  const toLabel  = isTransfer && transferDest ? transferDest : merchant
   const isCredit = amount !== null && amount >= 0
 
   const formattedDate = date
@@ -105,7 +108,7 @@ function ExampleCard({ ex }: { ex: Record<string, unknown> }) {
       <div className="flex items-center gap-1.5 text-gray-700">
         <span className="text-gray-400">{account || '—'}</span>
         <span className="text-gray-300">→</span>
-        <span className="font-medium">{merchant}</span>
+        <span className="font-medium">{toLabel}</span>
       </div>
 
       <div className="grid gap-x-3 gap-y-1" style={{ gridTemplateColumns: '4.5rem 1fr' }}>
