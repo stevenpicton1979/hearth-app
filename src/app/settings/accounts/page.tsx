@@ -39,7 +39,7 @@ export default async function AccountsPage() {
               Open Banking via Basiq requires an API key. In the meantime, use CSV import to add transactions.
             </p>
             <Link href="/import" className="text-sm text-emerald-700 font-medium hover:underline mt-2 inline-block">
-              Import CSV →
+              Import CSV &rarr;
             </Link>
           </div>
         </div>
@@ -48,11 +48,11 @@ export default async function AccountsPage() {
       {accounts && accounts.length > 0 ? (
         <div className="space-y-3">
           {accounts.map((account) => (
-            <div key={account.id} className="bg-white border border-gray-200 rounded-xl p-4 flex items-center justify-between">
-              <div>
+            <div key={account.id} className="bg-white border border-gray-200 rounded-xl p-4 flex items-center justify-between gap-4">
+              <div className="min-w-0 flex-1">
                 <p className="font-medium text-gray-900">{account.display_name}</p>
                 <p className="text-sm text-gray-500">
-                  {account.institution || 'Manual'} · {account.account_type || 'transaction'}
+                  {account.institution || 'Manual'} &middot; {account.account_type || 'transaction'}
                 </p>
                 {account.last_synced_at && (
                   <p className="text-xs text-gray-400 mt-1">
@@ -82,4 +82,14 @@ export default async function AccountsPage() {
           ))}
         </div>
       ) : (
-        <div className="bg-white border border-gray-200 rounded-xl p
+        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center">
+          <BanknotesIcon className="h-10 w-10 text-gray-300 mx-auto mb-3" />
+          <p className="text-gray-500 text-sm">No accounts yet.</p>
+          <Link href="/import" className="text-sm text-emerald-700 font-medium hover:underline mt-2 inline-block">
+            Import CSV &rarr;
+          </Link>
+        </div>
+      )}
+    </div>
+  )
+}

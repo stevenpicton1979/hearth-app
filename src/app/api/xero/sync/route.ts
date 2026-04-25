@@ -15,7 +15,6 @@ import { linkSalaryPairs } from '@/lib/salaryLinker'
 import { applyXeroTransferRules, extractDestinationSuffix } from '@/lib/xeroTransferRules'
 import type { XeroDestinationAccount } from '@/lib/xeroTransferRules'
 
-// Sentinel used when a Xero transaction has no BankAccount.AccountID
 const XERO_DEFAULT_ACCOUNT_ID = '__xero_default__'
 
 export async function POST(req: NextRequest) {
@@ -29,7 +28,6 @@ export async function POST(req: NextRequest) {
 
     const supabase = createServerClient()
 
-    // Read last_synced_at for incremental sync
     const { data: connRow } = await supabase
       .from('xero_connections')
       .select('last_synced_at')
@@ -37,7 +35,6 @@ export async function POST(req: NextRequest) {
       .maybeSingle()
     const sinceDate = isFull ? undefined : (connRow?.last_synced_at ?? undefined)
 
-    // Fetch all Xero bank transactions and the GL accounts map in parallel
     const [{ transactions }, accountsMap] = await Promise.all([
       getXeroBankTransactions(connection, sinceDate),
       getXeroAccounts(connection),
@@ -49,11 +46,8 @@ export async function POST(req: NextRequest) {
 
     // ----------------------------------------------------------------
     // Phase 1: Ensure a Hearth account exists for each Xero bank account.
-    // Keyed by BankAccount.AccountID (stable Xero UUID) stored in the
-    // xero_account_id column. Falls back to XERO_DEFAULT_ACCOUNT_ID for
-    // any transactions that lack a BankAccount (should not happen in practice).
     // ----------------------------------------------------------------
-    const xeroAccountNames = new Map<string, string>() // xeroAccId → display name
+    const xeroAccountNames = new Map<string, string>()
 
     for (const xTx of transactions) {
       const id = xTx.BankAccount?.AccountID ?? XERO_DEFAULT_ACCOUNT_ID
@@ -62,8 +56,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // For each unique Xero bank account, look up or create the Hearth account
-    const bankAccountMap = new Map<string, string>() // xeroAccId → Hearth account UUID
+    const bankAccountMap = new Map<string, string>()
     const errors: string[] = []
 
     for (const [xeroAccId, displayName] of Array.from(xeroAccountNames.entries())) {
@@ -104,7 +97,6 @@ export async function POST(req: NextRequest) {
 
     // ----------------------------------------------------------------
     // Phase 1b: Load all account suffixes for the rule engine.
-    // Used to resolve "Transfer to XX5426" → Hearth account during SPEND-TRANSFER.
     // ----------------------------------------------------------------
     const { data: accountRows } = await supabase
       .from('accounts')
@@ -113,7 +105,6 @@ export async function POST(req: NextRequest) {
       .eq('is_active', true)
       .not('account_suffix', 'is', null)
 
-    // Map suffix (uppercased) → { scope, owner }
     const suffixToAccount = new Map<string, XeroDestinationAccount>()
     for (const row of accountRows ?? []) {
       if (row.account_suffix) {
@@ -126,10 +117,6 @@ export async function POST(req: NextRequest) {
 
     // ----------------------------------------------------------------
     // Phase 2: Transform Xero transactions into RawTransaction rows.
-    // One raw row per Xero bank transaction, routed to the correct account.
-    // SPEND-TRANSFER rows are classified by the rule engine before being
-    // passed to processBatch, so transfer-pattern detection in categoryPipeline
-    // does not incorrectly flag wage/drawing descriptions as transfers.
     // ----------------------------------------------------------------
     const raws: RawTransaction[] = []
 
@@ -137,13 +124,11 @@ export async function POST(req: NextRequest) {
       try {
         const xeroAccId = xTx.BankAccount?.AccountID ?? XERO_DEFAULT_ACCOUNT_ID
         const hearthAccountId = bankAccountMap.get(xeroAccId)
-        if (!hearthAccountId) continue // account creation failed — already recorded in errors
+        if (!hearthAccountId) continue
 
         const txType = xTx.Type ?? ''
 
-        // RECEIVE-TRANSFER: do not store — the SPEND-TRANSFER on the other side
-        // (already captured) is the canonical record.  We still process it for
-        // link-confirmation purposes via the transferLinker below.
+        // RECEIVE-TRANSFER: skip — SPEND-TRANSFER on the other side is the canonical record.
         if (txType === 'RECEIVE-TRANSFER') continue
 
         let totalAmount = 0
@@ -192,9 +177,7 @@ export async function POST(req: NextRequest) {
           url: xTx.Url,
         })
 
-        // For SPEND-TRANSFER, apply the rule engine to determine is_transfer,
-        // category, and whether to flag for review.  For all other types
-        // (SPEND / RECEIVE) let categoryPipeline handle categorisation normally.
+        // For SPEND-TRANSFER, apply the rule engine.
         let forcedIsTransfer: boolean | undefined
         let ruleCategory: string | null = null
         let needsReview = false
@@ -209,4 +192,71 @@ export async function POST(req: NextRequest) {
           let suffixPresentButUnmatched = false
 
           if (suffix) {
-            const matched = suffixToAccount.get(suffix.toUpperCase()
+            const matched = suffixToAccount.get(suffix.toUpperCase())
+            if (matched) {
+              destinationAccount = matched
+            } else {
+              suffixPresentButUnmatched = true
+            }
+          }
+
+          const outcome = applyXeroTransferRules({
+            narration,
+            reference,
+            destinationAccount,
+            suffixPresentButUnmatched,
+          })
+
+          forcedIsTransfer = outcome.is_transfer
+          ruleCategory = outcome.category
+          needsReview = outcome.needs_review
+        }
+
+        raws.push({
+          account_id: hearthAccountId,
+          date,
+          amount,
+          description: merchant,
+          is_transfer: txType === 'SPEND-TRANSFER' || txType === 'RECEIVE-TRANSFER',
+          forced_is_transfer: forcedIsTransfer,
+          category_hint: ruleCategory ?? categoryHint,
+          raw_description: rawDescription,
+          needs_review: needsReview,
+        })
+      } catch (txErr) {
+        errors.push(`Transaction error: ${txErr instanceof Error ? txErr.message : String(txErr)}`)
+      }
+    }
+
+    // ----------------------------------------------------------------
+    // Phase 3: Categorise and upsert.
+    // ----------------------------------------------------------------
+    const { toUpsert, transfersSkipped } = await processBatch(raws)
+    const { inserted, backfilled } = await upsertTransactions(toUpsert)
+
+    // ----------------------------------------------------------------
+    // Phase 4: Link transfer pairs and salary pairs.
+    // ----------------------------------------------------------------
+    const batchDates = Array.from(new Set(raws.map(r => r.date)))
+    await Promise.all([
+      linkTransferPairs(batchDates),
+      linkSalaryPairs(batchDates),
+    ])
+
+    // Update last_synced_at
+    await supabase
+      .from('xero_connections')
+      .update({ last_synced_at: new Date().toISOString() })
+      .eq('household_id', DEFAULT_HOUSEHOLD_ID)
+
+    return NextResponse.json({
+      synced: inserted,
+      skipped: transfersSkipped,
+      backfilled,
+      errors,
+    })
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e)
+    return NextResponse.json({ error: msg }, { status: 500 })
+  }
+}

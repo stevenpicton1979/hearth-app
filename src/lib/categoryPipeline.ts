@@ -13,7 +13,6 @@ export interface RawTransaction {
   basiq_transaction_id?: string
   is_transfer?: boolean
   // When set by the Xero sync rule engine, overrides the transferPatterns detection.
-  // Use this to prevent "WAGE TRANSFER TO XX5426" from being auto-flagged as a transfer.
   forced_is_transfer?: boolean
   category_hint?: string | null
   raw_description?: string | null
@@ -57,7 +56,6 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
 
   const supabase = createServerClient()
 
-  // Load merchant mappings and account owners in parallel
   const uniqueAccountIds = Array.from(new Set(raws.map(r => r.account_id)))
   const [{ data: mappings }, { data: accountRows }] = await Promise.all([
     supabase
@@ -75,13 +73,11 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
     mappingMap.set(m.merchant, { category: m.category, classification: m.classification })
   }
 
-  // account owner → default classification when no explicit mapping exists
   const accountOwnerMap = new Map<string, string>()
   for (const a of (accountRows ?? [])) {
     if (a.owner) accountOwnerMap.set(a.id, a.owner)
   }
 
-  // Collect auto-assigned categories to persist as mappings
   const autoMappings = new Map<string, string>()
 
   for (const raw of raws) {
@@ -89,9 +85,8 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
 
     const merchant = cleanMerchant(raw.description)
 
-    // Director income: positive credit from business — NOT a transfer, even if pattern matches.
-    // classifyDirectorIncome returns the correct category: 'Salary' for wage credits,
-    // 'Director Income' for drawings (resolved by accountant at year-end).
+    // Director income: positive credit from business.
+    // classifyDirectorIncome returns 'Salary' (wage keyword present) or 'Director Income'.
     const directorResult = classifyDirectorIncome(raw.description, raw.amount)
     if (directorResult.match) {
       toUpsert.push({
@@ -112,15 +107,12 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
     }
 
     // Transfer detection. forced_is_transfer (set by the Xero rule engine) takes
-    // precedence over the description pattern check — this prevents merchant names
-    // like "WAGE TRANSFER TO XX5426" from being auto-flagged as transfers when the
-    // rule engine has already determined they are salary payments.
+    // precedence over description pattern check.
     const isTransferRow = raw.forced_is_transfer !== undefined
       ? raw.forced_is_transfer
       : (raw.is_transfer || isTransfer(raw.description))
 
     if (isTransferRow) {
-      // Store transfers with is_transfer=true so "Show excluded" can reveal them
       toUpsert.push({
         household_id: DEFAULT_HOUSEHOLD_ID,
         account_id: raw.account_id,
@@ -142,7 +134,6 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
     const isIncome = raw.amount > 0
 
     let category: string | null = null
-    // Fall back to the account's owner when no explicit mapping provides a classification
     const accountOwner = accountOwnerMap.get(raw.account_id) ?? null
     let classification: string | null = accountOwner
 
@@ -171,7 +162,6 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
     })
   }
 
-  // Persist auto-categorised merchants as mappings so the Mappings page shows them
   if (autoMappings.size > 0) {
     const rows = Array.from(autoMappings.entries()).map(([merchant, category]) => ({
       household_id: DEFAULT_HOUSEHOLD_ID,
@@ -191,8 +181,6 @@ export async function upsertTransactions(rows: ProcessedTransaction[]): Promise<
   if (rows.length === 0) return { inserted: 0, duplicates: 0, autoCategorised: 0, backfilled: 0 }
   const supabase = createServerClient()
 
-  // Phase 1: Upsert all rows (insert new, update existing)
-  // Omit ignoreDuplicates so conflicts trigger the ON CONFLICT clause
   const { data, error } = await supabase
     .from('transactions')
     .upsert(rows, { onConflict: 'account_id,date,amount,description' })
@@ -202,11 +190,24 @@ export async function upsertTransactions(rows: ProcessedTransaction[]): Promise<
   const inserted = data?.length ?? 0
   const autoCategorised = data?.filter(r => r.category !== null).length ?? 0
 
-  // Phase 2: Backfill raw_description on existing rows where it's NULL
-  // This ensures that even if upserted rows returned nothing (due to no actual changes),
-  // rows with a composed raw_description will get populated
+  // Phase 2: Backfill raw_description on existing rows where it is NULL.
   const rowsWithRawDesc = rows.filter(r => r.raw_description !== null)
   let backfilled = 0
 
   if (rowsWithRawDesc.length > 0) {
-    // Single bulk UPDATE via RPC instead of N individual
+    for (const r of rowsWithRawDesc) {
+      const { error: updateErr } = await supabase
+        .from('transactions')
+        .update({ raw_description: r.raw_description })
+        .eq('account_id', r.account_id)
+        .eq('date', r.date)
+        .eq('amount', r.amount)
+        .eq('description', r.description)
+        .is('raw_description', null)
+
+      if (!updateErr) backfilled++
+    }
+  }
+
+  return { inserted, duplicates: 0, autoCategorised, backfilled }
+}

@@ -33,4 +33,16 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 
   if (Object.keys(updates).length === 0) {
-    return NextResponse.
+    return NextResponse.json({ error: 'No valid fields provided' }, { status: 400 })
+  }
+
+  const supabase = createServerClient()
+  const { error } = await supabase
+    .from('accounts')
+    .update(updates)
+    .eq('id', params.id)
+    .eq('household_id', DEFAULT_HOUSEHOLD_ID)
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ ok: true })
+}
+js
