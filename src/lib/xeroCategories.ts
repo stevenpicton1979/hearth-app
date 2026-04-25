@@ -182,13 +182,20 @@ export function cleanXeroMerchant(
   if (lineDesc && !isNumeric(lineDesc) && !isXeroCode(lineDesc)) return lineDesc.slice(0, 100)
 
   const ref = reference?.trim()
-  if (ref) return ref.slice(0, 100)
+  if (ref) {
+    // BPAY to ATO: long numeric CRN followed by bank BPAY marker
+    if (/^\d{10,}\s+COMMBANK APP BPA/i.test(ref)) return 'ATO'
+    return ref.slice(0, 100)
+  }
 
   const contact = contactName?.trim()
   if (contact) return contact.slice(0, 100)
 
   const narr = narration?.trim()
-  if (narr) return narr.slice(0, 100)
+  if (narr) {
+    if (/^\d{10,}\s+COMMBANK APP BPA/i.test(narr)) return 'ATO'
+    return narr.slice(0, 100)
+  }
 
   return 'Xero'
 }

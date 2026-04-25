@@ -93,6 +93,35 @@ describe('cleanXeroMerchant — legitimate short values are kept', () => {
   })
 })
 
+describe('cleanXeroMerchant — BPAY normalisation', () => {
+  it('normalises ATO BPAY reference to "ATO"', () => {
+    expect(cleanXeroMerchant(
+      '003009534934729521 COMMBANK APP BPA',
+      null,
+      undefined,
+      undefined,
+    )).toBe('ATO')
+  })
+
+  it('normalises ATO BPAY from narration when reference absent', () => {
+    expect(cleanXeroMerchant(
+      undefined,
+      null,
+      undefined,
+      '003009534934729521 COMMBANK APP BPA',
+    )).toBe('ATO')
+  })
+
+  it('does not normalise short numeric references (not a BPAY CRN)', () => {
+    expect(cleanXeroMerchant(
+      '12345 COMMBANK APP BPA',
+      null,
+      undefined,
+      undefined,
+    )).toBe('12345 COMMBANK APP BPA')
+  })
+})
+
 describe('cleanXeroMerchant — priority order', () => {
   it('prefers line item description over reference when desc is meaningful', () => {
     expect(cleanXeroMerchant('ref-value', null, 'Better Description', undefined))
