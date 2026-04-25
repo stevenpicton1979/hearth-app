@@ -4,6 +4,7 @@ import { cleanMerchant } from './cleanMerchant'
 import { guessCategory } from './autoCategory'
 import { isTransfer } from './transferPatterns'
 import { classifyDirectorIncome } from './directorIncome'
+import { applyMerchantCategoryRules } from './merchantCategoryRules'
 
 export interface RawTransaction {
   account_id: string
@@ -139,11 +140,39 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
     const accountOwner = accountOwnerMap.get(raw.account_id) ?? null
     let classification: string | null = accountOwner
 
+    // Apply named merchant rules first — these are explicit, testable, and documented.
+    const ruleResult = applyMerchantCategoryRules(merchant, { amount: raw.amount, isIncome, accountOwner })
+    if (ruleResult?.isTransfer) {
+      // Rule says this is a transfer — push as transfer and skip categorisation
+      toUpsert.push({
+        household_id: DEFAULT_HOUSEHOLD_ID,
+        account_id: raw.account_id,
+        date: raw.date,
+        amount: raw.amount,
+        description: raw.description,
+        merchant,
+        category: null,
+        classification,
+        is_transfer: true,
+        basiq_transaction_id: raw.basiq_transaction_id ?? null,
+        raw_description: raw.raw_description ?? null,
+        needs_review: raw.needs_review ?? false,
+        gl_account: raw.gl_account ?? null,
+        gl_tax_type: raw.gl_tax_type ?? null,
+      })
+      transfersSkipped++
+      continue
+    }
+
     const mapping = mappingMap.get(merchant)
     if (mapping) {
       // User-confirmed merchant mapping — highest priority for both income and expense
       category = mapping.category
       if (mapping.classification != null) classification = mapping.classification
+    } else if (ruleResult) {
+      // Named merchant rule matched — use its category
+      category = ruleResult.category
+      if (!isIncome && category !== null) autoMappings.set(merchant, category)
     } else if (raw.category_hint) {
       // GL account from Xero — high confidence, applies to income and expense
       category = raw.category_hint
