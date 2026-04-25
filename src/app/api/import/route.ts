@@ -3,6 +3,7 @@ import { createServerClient } from '@/lib/supabase/server'
 import { DEFAULT_HOUSEHOLD_ID } from '@/lib/constants'
 import { parseCSV, extractBalance, extractNABAccountName, extractAmexAccountName } from '@/lib/csvParser'
 import { processBatch, upsertTransactions } from '@/lib/categoryPipeline'
+import { linkTransferPairs } from '@/lib/transferLinker'
 
 export async function POST(req: NextRequest) {
   try {
@@ -104,6 +105,10 @@ export async function POST(req: NextRequest) {
     )
 
     const { inserted, duplicates, autoCategorised } = await upsertTransactions(deduped)
+
+    // Link transfer pairs for all dates in this batch
+    const batchDates = Array.from(new Set(deduped.map(tx => tx.date)))
+    await linkTransferPairs(batchDates)
 
     // Update account current_balance from the raw CSV balance (most recent row)
     if (latestBalance !== undefined) {

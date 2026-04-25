@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
     if (!key || seen.has(key)) continue
     seen.add(key)
 
-    // Resolve account display name; keep account_id for transfer lookup below
+    // Resolve account display name; keep linked_transfer_id for the join below
     const row: Record<string, unknown> = { ...rawRow }
     const accountJoin = row.accounts as { display_name?: string } | null
     row.account = accountJoin?.display_name ?? row.account_id
@@ -39,40 +39,21 @@ export async function GET(req: NextRequest) {
     if (examples.length >= 5) break
   }
 
-  // For transfer rows, look up the counterpart account (ABS amount match, different account, same date)
-  const transferExamples = examples.filter(ex => ex.is_transfer === true)
+  // For transfer rows with a linked counterpart, resolve the destination account name
+  const transferExamples = examples.filter(
+    ex => ex.is_transfer === true && ex.linked_transfer_id != null
+  )
   if (transferExamples.length > 0) {
     await Promise.all(transferExamples.map(async (ex) => {
-      const amt    = ex.amount as number
-      const date   = ex.date as string
-      const srcId  = ex.account_id as string
-
-      // Match either sign so same-sign transfer pairs are also found
-      const { data: counterparts, error: cpErr } = await supabase
+      const { data: linked } = await supabase
         .from('transactions')
-        .select('account_id, accounts!account_id(display_name)')
-        .eq('household_id', DEFAULT_HOUSEHOLD_ID)
-        .eq('date', date)
-        .or(`amount.eq.${-amt},amount.eq.${amt}`)
-        .neq('account_id', srcId)
-        .order('is_transfer', { ascending: false }) // prefer is_transfer=true
-        .limit(5)
+        .select('accounts!account_id(display_name)')
+        .eq('id', ex.linked_transfer_id as string)
+        .single()
 
-      // Attach debug info so the network tab shows exactly what was searched
-      ex._debug = {
-        searched: { date, amounts: [-amt, amt], source_account_id: srcId },
-        counterparts_found: counterparts?.length ?? 0,
-        counterpart_error: cpErr?.message ?? null,
-        counterpart_rows: (counterparts ?? []).map((c: Record<string, unknown>) => ({
-          account_id: c.account_id,
-          display_name: (c.accounts as { display_name?: string } | null)?.display_name ?? null,
-        })),
-      }
-
-      if (counterparts && counterparts.length > 0) {
-        const cp    = counterparts[0] as Record<string, unknown>
-        const cpJoin = cp.accounts as { display_name?: string } | null
-        ex.transfer_destination = cpJoin?.display_name ?? cp.account_id
+      if (linked) {
+        const join = (linked as Record<string, unknown>).accounts as { display_name?: string } | null
+        ex.transfer_destination = join?.display_name ?? null
       }
     }))
   }
@@ -80,6 +61,7 @@ export async function GET(req: NextRequest) {
   // Strip internal columns
   for (const ex of examples) {
     delete ex.account_id
+    delete ex.linked_transfer_id
   }
 
   return NextResponse.json({ examples })

@@ -10,6 +10,7 @@ import {
 } from '@/lib/xeroCategories'
 import { processBatch, upsertTransactions } from '@/lib/categoryPipeline'
 import type { RawTransaction } from '@/lib/categoryPipeline'
+import { linkTransferPairs } from '@/lib/transferLinker'
 
 // Sentinel used when a Xero transaction has no BankAccount.AccountID
 const XERO_DEFAULT_ACCOUNT_ID = '__xero_default__'
@@ -193,6 +194,10 @@ export async function POST(req: NextRequest) {
     )
 
     const { inserted, duplicates, backfilled } = await upsertTransactions(deduped)
+
+    // Link transfer pairs for all dates in this batch
+    const batchDates = Array.from(new Set(deduped.map(tx => tx.date)))
+    await linkTransferPairs(batchDates)
 
     // ----------------------------------------------------------------
     // Phase 4: Update last_synced_at on all involved accounts and the connection.
