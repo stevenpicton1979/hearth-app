@@ -112,6 +112,8 @@ export function TransactionTable({ initialTransactions, accounts, initialCategor
   const [filterClassification, setFilterClassification] = useState('')
   const [filterFrom, setFilterFrom] = useState('')
   const [filterTo, setFilterTo] = useState('')
+  const [filterAmountMin, setFilterAmountMin] = useState('')
+  const [filterAmountMax, setFilterAmountMax] = useState('')
   const [filterSearch, setFilterSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [showTransfers, setShowTransfers] = useState(false)
@@ -163,6 +165,8 @@ export function TransactionTable({ initialTransactions, accounts, initialCategor
       if (filterTo) params.set('to', filterTo)
       if (debouncedSearch) params.set('search', debouncedSearch)
       if (showTransfers) params.set('show_transfers', 'true')
+      if (filterAmountMin) params.set('amount_min', filterAmountMin)
+      if (filterAmountMax) params.set('amount_max', filterAmountMax)
       params.set('sort_by', sortBy)
       params.set('sort_dir', sortDir)
       params.set('page', String(p))
@@ -173,12 +177,12 @@ export function TransactionTable({ initialTransactions, accounts, initialCategor
     } finally {
       setIsLoading(false)
     }
-  }, [filterAccount, filterCategory, filterClassification, filterFrom, filterTo, debouncedSearch, showTransfers, sortBy, sortDir])
+  }, [filterAccount, filterCategory, filterClassification, filterFrom, filterTo, debouncedSearch, showTransfers, sortBy, sortDir, filterAmountMin, filterAmountMax])
 
   useEffect(() => {
     setPage(0)
     setSelectedIds(new Set())
-  }, [filterAccount, filterCategory, filterClassification, filterFrom, filterTo, debouncedSearch, showTransfers, sortBy, sortDir])
+  }, [filterAccount, filterCategory, filterClassification, filterFrom, filterTo, debouncedSearch, showTransfers, sortBy, sortDir, filterAmountMin, filterAmountMax])
 
   useEffect(() => {
     fetchTransactions(page)
@@ -264,7 +268,7 @@ export function TransactionTable({ initialTransactions, accounts, initialCategor
     <div className="space-y-4">
       {/* Filters */}
       <div className="bg-white border border-gray-200 rounded-xl p-4">
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
           {/* Search */}
           <div className="relative col-span-2 md:col-span-1">
             <MagnifyingGlassIcon className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
@@ -321,6 +325,24 @@ export function TransactionTable({ initialTransactions, accounts, initialCategor
             type="date"
             value={filterTo}
             onChange={e => setFilterTo(e.target.value)}
+            className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          />
+
+          {/* Amount min */}
+          <input
+            type="number"
+            placeholder="Min amount"
+            value={filterAmountMin}
+            onChange={e => setFilterAmountMin(e.target.value)}
+            className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          />
+
+          {/* Amount max */}
+          <input
+            type="number"
+            placeholder="Max amount"
+            value={filterAmountMax}
+            onChange={e => setFilterAmountMax(e.target.value)}
             className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
           />
         </div>

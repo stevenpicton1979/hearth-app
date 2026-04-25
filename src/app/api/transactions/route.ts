@@ -44,6 +44,11 @@ export async function GET(req: NextRequest) {
   if (to) query = query.lte('date', to)
   if (search) query = query.ilike('merchant', `%${search}%`)
 
+  const amountMin = searchParams.get('amount_min')
+  const amountMax = searchParams.get('amount_max')
+  if (amountMin) query = query.gte('amount', parseFloat(amountMin))
+  if (amountMax) query = query.lte('amount', parseFloat(amountMax))
+
   const { data, count, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ transactions: data, count })
