@@ -19,6 +19,7 @@ export async function GET(req: NextRequest) {
     .limit(20)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  console.log('[me] raw linked_transfer_ids:', data?.map(r => r.linked_transfer_id))
 
   // De-dup by raw key, keep up to 5
   const seen = new Set<string>()
@@ -32,6 +33,7 @@ export async function GET(req: NextRequest) {
     examples.push({ ...rawRow })
     if (examples.length >= 5) break
   }
+  console.log('[me] examples linked_transfer_ids:', examples.map(e => e.linked_transfer_id))
 
   // Collect all account_ids we need to resolve:
   //   - source account_id from each example
@@ -56,6 +58,7 @@ export async function GET(req: NextRequest) {
       if (lt.account_id) linkedTxnToAccount.set(lt.id, lt.account_id)
     }
   }
+  console.log('[me] linkedTxnToAccount:', Object.fromEntries(linkedTxnToAccount))
 
   // Single accounts query for all needed ids (source + linked)
   const linkedAccountIds = Array.from(linkedTxnToAccount.values())
@@ -87,6 +90,7 @@ export async function GET(req: NextRequest) {
     delete ex.account_id
     delete ex.linked_transfer_id
   }
+  console.log('[me] final transfer_destinations:', examples.map(e => e.transfer_destination))
 
   return NextResponse.json({ examples })
 }
