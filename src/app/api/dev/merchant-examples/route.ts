@@ -49,8 +49,8 @@ export async function GET(req: NextRequest) {
         .eq('household_id', DEFAULT_HOUSEHOLD_ID)
         .eq('date', ex.date as string)
         .eq('amount', -(ex.amount as number))
-        .eq('is_transfer', true)
         .neq('account_id', ex.account_id as string)
+        .order('is_transfer', { ascending: false }) // prefer is_transfer=true matches
         .limit(1)
 
       if (counterparts && counterparts.length > 0) {
