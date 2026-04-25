@@ -112,16 +112,26 @@ export async function POST() {
     if (a.owner) accountOwnerMap.set(a.id, a.owner)
   }
 
-  // ── Fetch all NULL matched_rule transactions ─────────────────────────────
-  const { data: txns, error: fetchErr } = await supabase
-    .from('transactions')
-    .select('id, description, merchant, amount, is_transfer, source, category, account_id')
-    .eq('household_id', DEFAULT_HOUSEHOLD_ID)
-    .is('matched_rule', null)
+  // ── Fetch all NULL matched_rule transactions (paginated) ─────────────────
+  // Supabase default page size is 1000; loop until we get a partial page.
+  const PAGE = 1000
+  const rows: TxRow[] = []
+  let page = 0
+  while (true) {
+    const { data: txns, error: fetchErr } = await supabase
+      .from('transactions')
+      .select('id, description, merchant, amount, is_transfer, source, category, account_id')
+      .eq('household_id', DEFAULT_HOUSEHOLD_ID)
+      .is('matched_rule', null)
+      .range(page * PAGE, (page + 1) * PAGE - 1)
 
-  if (fetchErr) return NextResponse.json({ error: fetchErr.message }, { status: 500 })
+    if (fetchErr) return NextResponse.json({ error: fetchErr.message }, { status: 500 })
+    if (!txns || txns.length === 0) break
+    rows.push(...(txns as TxRow[]))
+    if (txns.length < PAGE) break
+    page++
+  }
 
-  const rows = (txns ?? []) as TxRow[]
   if (rows.length === 0) return NextResponse.json({ updated: 0, skipped: 0, total: 0 })
 
   // ── Infer matched_rule for each row ──────────────────────────────────────
