@@ -5,10 +5,8 @@
 const DIRECTOR_INCOME_PATTERNS = [
   /netbank\s+wage/i,
   /\bfin\s+wage\b/i,
-  /\btransfer\s+from\b/i,
   /commbank\s+app/i,
   /\bpayroll\b/i,
-  /\bsalary\b/i,
 ]
 
 const EXCLUDE_PATTERNS = [

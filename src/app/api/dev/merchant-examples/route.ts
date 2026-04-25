@@ -43,12 +43,13 @@ export async function GET(req: NextRequest) {
   const transferExamples = examples.filter(ex => ex.is_transfer === true)
   if (transferExamples.length > 0) {
     await Promise.all(transferExamples.map(async (ex) => {
+      const amt = ex.amount as number
       const { data: counterparts } = await supabase
         .from('transactions')
         .select('account_id, accounts!account_id(display_name)')
         .eq('household_id', DEFAULT_HOUSEHOLD_ID)
         .eq('date', ex.date as string)
-        .eq('amount', -(ex.amount as number))
+        .or(`amount.eq.${-amt},amount.eq.${amt}`) // match opposite or same sign (ABS match)
         .neq('account_id', ex.account_id as string)
         .order('is_transfer', { ascending: false }) // prefer is_transfer=true matches
         .limit(1)

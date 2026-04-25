@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { guessCategory } from '../autoCategory'
 import { isTransfer } from '../transferPatterns'
+import { isDirectorIncome } from '../directorIncome'
 
 describe('categorisationEdgeCases - Government & Tax', () => {
   it('ATO payment via BPAY is categorised as Government & Tax, not Transport', () => {
@@ -37,6 +38,28 @@ describe('categorisationEdgeCases - income passthrough', () => {
   it('guessCategory returns null for unknown merchants (income will have no category)', () => {
     expect(guessCategory('PAYROLL DEPOSIT')).toBeNull()
     expect(guessCategory('EMPLOYER SALARY CREDIT')).toBeNull()
+  })
+})
+
+describe('categorisationEdgeCases - director income detection', () => {
+  it('SALARY EDUCATION QLD is not director income', () => {
+    expect(isDirectorIncome('SALARY EDUCATION QLD', 3000)).toBe(false)
+  })
+
+  it('TRANSFER FROM XX5426 credit is not director income', () => {
+    expect(isDirectorIncome('TRANSFER FROM XX5426', 500)).toBe(false)
+  })
+
+  it('debits are never director income', () => {
+    expect(isDirectorIncome('NETBANK WAGE', -2000)).toBe(false)
+  })
+
+  it('netbank wage credit is director income', () => {
+    expect(isDirectorIncome('NETBANK WAGE BHT', 5000)).toBe(true)
+  })
+
+  it('payroll credit is director income', () => {
+    expect(isDirectorIncome('PAYROLL BRISBANE HEALTH TECH', 5000)).toBe(true)
   })
 })
 
