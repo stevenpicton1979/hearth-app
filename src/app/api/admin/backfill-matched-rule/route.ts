@@ -137,20 +137,35 @@ export async function POST() {
     }
   }
 
-  // ── Bulk update in batches ───────────────────────────────────────────────
+  // ── Bulk update — group by rule value, one UPDATE ... IN (...) per group ──
+  // This avoids upsert (which tries INSERT and fails on NOT NULL columns).
+  // With ~10-15 distinct rule values the entire backfill takes ~10-15 queries.
+  const byRule = new Map<string, string[]>()
+  for (const { id, matched_rule } of updates) {
+    const ids = byRule.get(matched_rule) ?? []
+    ids.push(id)
+    byRule.set(matched_rule, ids)
+  }
+
   let updated = 0
-  for (let i = 0; i < updates.length; i += BATCH_SIZE) {
-    const batch = updates.slice(i, i + BATCH_SIZE)
-    const { error: updateErr } = await supabase
-      .from('transactions')
-      .upsert(batch, { onConflict: 'id' })
-    if (updateErr) {
-      return NextResponse.json({
-        error: `Batch ${Math.floor(i / BATCH_SIZE) + 1} failed: ${updateErr.message}`,
-        updatedSoFar: updated,
-      }, { status: 500 })
+  let batchNum = 0
+  for (const [rule, ids] of byRule.entries()) {
+    batchNum++
+    // Supabase .in() has a practical limit; chunk large same-rule groups
+    for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+      const chunk = ids.slice(i, i + BATCH_SIZE)
+      const { error: updateErr } = await supabase
+        .from('transactions')
+        .update({ matched_rule: rule })
+        .in('id', chunk)
+      if (updateErr) {
+        return NextResponse.json({
+          error: `Batch ${batchNum} (rule ${rule}) failed: ${updateErr.message}`,
+          updatedSoFar: updated,
+        }, { status: 500 })
+      }
+      updated += chunk.length
     }
-    updated += batch.length
   }
 
   // Breakdown by rule for the response log
