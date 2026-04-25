@@ -51,6 +51,11 @@ const NAB_CATEGORY_MAP: Record<string, string> = {
   'Health & medical': 'Medical',
   'Entertainment': 'Entertainment',
   'Utilities': 'Utilities',
+  'Government': 'Government & Tax',
+  'Fees': 'Business',
+  'Insurance': 'Insurance',
+  'Medical': 'Medical',
+  'Education': 'Education',
 }
 
 function detectFormat(headers: string[]): CSVFormat {
