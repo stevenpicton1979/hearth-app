@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, Fragment } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { CATEGORIES } from '@/lib/constants'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -65,35 +65,6 @@ const aud = (n: number) =>
 
 const fmtDate = (s: string | null) => s ? new Date(s + 'T00:00:00').toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: '2-digit' }) : '—'
 
-const CURRENCY_KEY_RE = /amount|total|gross|net/i
-const DATE_KEY_RE = /^date$|_at$/i
-const EX_PRIORITY_KEYS = ['date', 'amount', 'raw_description']
-
-function formatExValue(key: string, val: unknown): { text: string; pre: boolean } {
-  if (typeof val === 'boolean') return { text: String(val), pre: false }
-  if (typeof val === 'number') {
-    if (CURRENCY_KEY_RE.test(key)) return { text: aud(val), pre: false }
-    return { text: String(val), pre: false }
-  }
-  if (typeof val === 'string') {
-    if (DATE_KEY_RE.test(key)) {
-      const d = new Date(val)
-      if (!isNaN(d.getTime())) {
-        return { text: d.toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: '2-digit' }), pre: false }
-      }
-    }
-    return { text: val, pre: key === 'raw_description' }
-  }
-  return { text: JSON.stringify(val, null, 2), pre: true }
-}
-
-function sortExKeys(keys: string[]): string[] {
-  return [
-    ...EX_PRIORITY_KEYS.filter(k => keys.includes(k)),
-    ...keys.filter(k => !EX_PRIORITY_KEYS.includes(k)).sort(),
-  ]
-}
-
 const FREQ_OPTIONS = ['weekly', 'fortnightly', 'monthly', 'quarterly', 'annual']
 
 const CLASSIFICATION_OPTIONS = ['Steven', 'Nicola', 'Joint', 'Business']
@@ -102,6 +73,75 @@ const STATUS_COLORS: Record<string, string> = {
   pending: 'bg-gray-100 text-gray-600',
   confirmed: 'bg-green-100 text-green-700',
   actioned: 'bg-blue-100 text-blue-700',
+}
+
+// ─── Example Card ────────────────────────────────────────────────────────────
+
+function ExampleCard({ ex }: { ex: Record<string, unknown> }) {
+  const account    = ex.account         as string | null
+  const merchant   = (ex.merchant       as string | null) || (ex.description as string | null) || '—'
+  const date       = ex.date            as string | null
+  const amount     = ex.amount          as number | null
+  const source     = ex.source          as string | null
+  const rawDesc    = ex.raw_description as string | null
+  const category   = ex.category        as string | null
+  const classif    = ex.classification  as string | null
+
+  const isCredit = amount !== null && amount >= 0
+
+  const formattedDate = date
+    ? new Date(date + 'T00:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })
+    : '—'
+
+  const formattedAmount = amount !== null
+    ? new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' }).format(Math.abs(amount))
+    : '—'
+
+  const sourceLabel = source === 'xero' ? 'Xero' : 'CSV'
+
+  return (
+    <div className="text-xs bg-gray-50 border border-gray-100 rounded p-2.5 space-y-1.5">
+      {/* FROM → TO */}
+      <div className="flex items-center gap-1.5 text-gray-700">
+        <span className="text-gray-400">{account || '—'}</span>
+        <span className="text-gray-300">→</span>
+        <span className="font-medium">{merchant}</span>
+      </div>
+
+      <div className="grid gap-x-3 gap-y-1" style={{ gridTemplateColumns: '4.5rem 1fr' }}>
+        <span className="text-gray-400 uppercase tracking-wide text-[10px] pt-px">When</span>
+        <span className="text-gray-700">{formattedDate}</span>
+
+        <span className="text-gray-400 uppercase tracking-wide text-[10px] pt-px">Amount</span>
+        <span className="flex items-center gap-1.5 text-gray-700">
+          {formattedAmount}
+          <span className={`font-medium rounded px-1 py-px ${isCredit ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+            {isCredit ? 'CREDIT' : 'DEBIT'}
+          </span>
+        </span>
+
+        <span className="text-gray-400 uppercase tracking-wide text-[10px] pt-px">Source</span>
+        <span className="text-gray-700">{sourceLabel}</span>
+
+        {category && (
+          <>
+            <span className="text-gray-400 uppercase tracking-wide text-[10px] pt-px">Category</span>
+            <span className="text-gray-700">
+              {category}
+              {classif && <span className="ml-1.5 text-gray-400">· {classif}</span>}
+            </span>
+          </>
+        )}
+
+        {rawDesc && (
+          <>
+            <span className="text-gray-400 uppercase tracking-wide text-[10px] self-start pt-px">Raw</span>
+            <span className="text-gray-600 whitespace-pre-wrap break-all">{rawDesc}</span>
+          </>
+        )}
+      </div>
+    </div>
+  )
 }
 
 // ─── Rule Impact Modal ────────────────────────────────────────────────────────
@@ -354,36 +394,10 @@ function LabelRow({
           {showExamples ? '▼ Hide details' : '▶ Show details'}
         </button>
         {showExamples && examples && examples.length > 0 && (
-            <div className="mt-2 space-y-2">
-              {examples.map((ex, i) => {
-                const visibleKeys = sortExKeys(
-                  Object.keys(ex).filter(k => {
-                    const v = ex[k]
-                    return v !== null && v !== undefined && v !== ''
-                  })
-                )
-                return (
-                  <div key={i} className="text-xs bg-gray-50 border border-gray-100 rounded p-2">
-                    <div className="grid gap-x-3 gap-y-0.5" style={{ gridTemplateColumns: 'auto 1fr' }}>
-                      {visibleKeys.map(k => {
-                        const { text, pre } = formatExValue(k, ex[k])
-                        return (
-                          <Fragment key={k}>
-                            <span className="text-gray-400 font-mono whitespace-nowrap self-start">{k}</span>
-                            {pre ? (
-                              <span className="text-gray-700 whitespace-pre-wrap break-all">{text}</span>
-                            ) : (
-                              <span className="text-gray-700 break-all">{text}</span>
-                            )}
-                          </Fragment>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
+          <div className="mt-2 space-y-2">
+            {examples.map((ex, i) => <ExampleCard key={i} ex={ex} />)}
+          </div>
+        )}
         </div>
 
       {ruleImpactKeyword && (
