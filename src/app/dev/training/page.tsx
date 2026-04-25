@@ -87,6 +87,7 @@ function ExampleCard({ ex }: { ex: Record<string, unknown> }) {
   const rawDesc      = ex.raw_description      as string | null
   const category     = ex.category             as string | null
   const classif      = ex.classification       as string | null
+  const collapsedCount = (ex.collapsed_count   as number | null) ?? 1
 
   const transferDest = ex.transfer_destination as string | null
 
@@ -124,6 +125,11 @@ function ExampleCard({ ex }: { ex: Record<string, unknown> }) {
           <span className={`font-medium rounded px-1 py-px ${isCredit ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
             {isCredit ? 'CREDIT' : 'DEBIT'}
           </span>
+          {collapsedCount > 1 && (
+            <span className="font-medium rounded px-1 py-px bg-blue-100 text-blue-600" title={`${collapsedCount} identical transactions collapsed`}>
+              ×{collapsedCount}
+            </span>
+          )}
         </span>
 
         <span className="text-gray-400 uppercase tracking-wide text-[10px] pt-px">Source</span>

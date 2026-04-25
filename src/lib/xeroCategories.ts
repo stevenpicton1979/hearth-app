@@ -160,9 +160,12 @@ export function cleanXeroMerchant(
   narration: string | undefined
 ): string {
   const isNumeric = (s: string) => /^\$?£?€?[\d,.\s]+$/.test(s)
+  // Skip Xero chart-of-accounts codes (e.g. "CSH", "GST") — short all-caps codes
+  // that carry no merchant meaning. Fall through to reference instead.
+  const isXeroCode = (s: string) => s.length <= 4 && /^[A-Z0-9]+$/.test(s)
 
   const lineDesc = lineItemDescription?.trim()
-  if (lineDesc && !isNumeric(lineDesc)) return lineDesc.slice(0, 100)
+  if (lineDesc && !isNumeric(lineDesc) && !isXeroCode(lineDesc)) return lineDesc.slice(0, 100)
 
   const ref = reference?.trim()
   if (ref) return ref.slice(0, 100)

@@ -35,9 +35,15 @@ export async function GET(req: NextRequest) {
     const raw = ((rawRow.raw_description as string) || '').trim()
     const cleaned = ((rawRow.description as string) || '').trim()
     const key = `${raw || cleaned}|${rawRow.amount}`
-    if (!key || seen.has(key)) continue
+    if (!key) continue
+    if (seen.has(key)) {
+      // Increment collapsed_count on the existing example
+      const existing = examples.find(e => `${((e.raw_description as string) || (e.description as string) || '').trim()}|${e.amount}` === key)
+      if (existing) existing.collapsed_count = ((existing.collapsed_count as number) || 1) + 1
+      continue
+    }
     seen.add(key)
-    examples.push({ ...rawRow })
+    examples.push({ ...rawRow, collapsed_count: 1 })
     if (examples.length >= 5) break
   }
 
