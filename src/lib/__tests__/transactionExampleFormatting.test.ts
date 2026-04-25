@@ -4,8 +4,8 @@ import { describe, it, expect } from 'vitest'
  * Tests for transaction example formatting in dev/training page.
  *
  * Bug fixes covered:
- * 1. FROM/TO reversed for credit transactions (Bug 1) — credits always swap FROM/TO
- * 2. Unlinked transfer rows excluded by de-dup (Bug 2) — de-dup key includes amount
+ * 1. FROM/TO reversed for credit transactions (Bug 1) - credits always swap FROM/TO
+ * 2. Unlinked transfer rows excluded by de-dup (Bug 2) - de-dup key includes amount
  */
 
 interface ExampleData {
@@ -15,14 +15,9 @@ interface ExampleData {
   transfer_destination?: string | null
 }
 
-/**
- * Replicates the fromLabel/toLabel logic from ExampleCard.
- * Credits: FROM = sender (transferDest ?? merchant), TO = receiving account
- * Debits:  FROM = spending account, TO = recipient (transferDest ?? merchant)
- */
 function getTransactionLabels(ex: ExampleData) {
-  const account = ex.account || '—'
-  const merchant = ex.merchant || '—'
+  const account = ex.account || '--'
+  const merchant = ex.merchant || '--'
   const amount = ex.amount
   const transferDest = ex.transfer_destination ?? null
 
@@ -33,11 +28,6 @@ function getTransactionLabels(ex: ExampleData) {
   return { fromLabel, toLabel, isCredit }
 }
 
-/**
- * Replicates the de-dup logic from merchant-examples/route.ts.
- * Key is (description|amount) so different-amount rows with the same description
- * are treated as distinct examples.
- */
 function deduplicateExamples(
   rows: Array<{ raw_description?: string; description?: string; amount?: number; is_transfer?: boolean; linked_transfer_id?: string | null }>
 ): typeof rows {
@@ -60,8 +50,6 @@ function deduplicateExamples(
   return result
 }
 
-// ─── Label formatting ─────────────────────────────────────────────────────────
-
 describe('getTransactionLabels', () => {
   describe('Credit transfers (money IN)', () => {
     it('credit with transferDest: FROM=sender account, TO=receiving account', () => {
@@ -71,24 +59,21 @@ describe('getTransactionLabels', () => {
         merchant: 'D E',
         transfer_destination: 'D E Personal',
       })
-
       expect(isCredit).toBe(true)
       expect(fromLabel).toBe('D E Personal')
       expect(toLabel).toBe('Brisbane Health Tech')
     })
 
     it('credit without transferDest: FROM=merchant name (sender), TO=account (receiver)', () => {
-      // Bug 1 regression: before fix, credits with no transferDest showed FROM=account, TO=merchant (inverted)
       const { fromLabel, toLabel, isCredit } = getTransactionLabels({
         account: 'Brisbane Health Tech',
         amount: 10000,
         merchant: 'D E',
         transfer_destination: null,
       })
-
       expect(isCredit).toBe(true)
-      expect(fromLabel).toBe('D E')             // merchant is the sender
-      expect(toLabel).toBe('Brisbane Health Tech') // account is the receiver
+      expect(fromLabel).toBe('D E')
+      expect(toLabel).toBe('Brisbane Health Tech')
     })
 
     it('credit without transferDest undefined: FROM=merchant, TO=account', () => {
@@ -98,7 +83,6 @@ describe('getTransactionLabels', () => {
         merchant: 'Unknown Sender',
         transfer_destination: undefined,
       })
-
       expect(fromLabel).toBe('Unknown Sender')
       expect(toLabel).toBe('My Account')
     })
@@ -112,7 +96,6 @@ describe('getTransactionLabels', () => {
         merchant: 'D E',
         transfer_destination: 'D E Personal',
       })
-
       expect(isCredit).toBe(false)
       expect(fromLabel).toBe('Brisbane Health Tech')
       expect(toLabel).toBe('D E Personal')
@@ -125,7 +108,6 @@ describe('getTransactionLabels', () => {
         merchant: 'NETFLIX',
         transfer_destination: undefined,
       })
-
       expect(isCredit).toBe(false)
       expect(fromLabel).toBe('My Account')
       expect(toLabel).toBe('NETFLIX')
@@ -140,7 +122,6 @@ describe('getTransactionLabels', () => {
         merchant: 'Test',
         transfer_destination: 'Other Account',
       })
-
       expect(isCredit).toBe(false)
       expect(fromLabel).toBe('My Account')
       expect(toLabel).toBe('Other Account')
@@ -153,40 +134,34 @@ describe('getTransactionLabels', () => {
         merchant: 'Test',
         transfer_destination: 'Other Account',
       })
-
       expect(isCredit).toBe(false)
       expect(fromLabel).toBe('My Account')
       expect(toLabel).toBe('Other Account')
     })
 
-    it('null account falls back to —', () => {
+    it('null account falls back to --', () => {
       const { fromLabel, toLabel } = getTransactionLabels({
         account: null,
         amount: 1000,
         merchant: 'Test',
         transfer_destination: undefined,
       })
-
-      // credit: FROM=merchant, TO=account(—)
       expect(fromLabel).toBe('Test')
-      expect(toLabel).toBe('—')
+      expect(toLabel).toBe('--')
     })
 
-    it('null merchant falls back to — for debits', () => {
+    it('null merchant falls back to -- for debits', () => {
       const { fromLabel, toLabel } = getTransactionLabels({
         account: 'My Account',
         amount: -500,
         merchant: null,
         transfer_destination: undefined,
       })
-
       expect(fromLabel).toBe('My Account')
-      expect(toLabel).toBe('—')
+      expect(toLabel).toBe('--')
     })
   })
 })
-
-// ─── De-dup logic ─────────────────────────────────────────────────────────────
 
 describe('deduplicateExamples', () => {
   it('keeps distinct descriptions', () => {
@@ -206,7 +181,6 @@ describe('deduplicateExamples', () => {
   })
 
   it('keeps rows with same description but different amount as distinct examples', () => {
-    // Bug 2 regression: before fix, the $10k transfer was collapsed with the $5k income row
     const rows = [
       { description: 'D E', amount: 5000 },
       { description: 'D E', amount: 10000 },
@@ -231,7 +205,6 @@ describe('deduplicateExamples', () => {
   })
 
   it('is_transfer=false, linked_transfer_id=null rows are de-duped normally', () => {
-    // These are regular (non-transfer) income/expense rows
     const rows = [
       { description: 'SALARY', amount: 5000, is_transfer: false, linked_transfer_id: null },
       { description: 'SALARY', amount: 5000, is_transfer: false, linked_transfer_id: null },

@@ -11,6 +11,9 @@ import {
 import { processBatch, upsertTransactions } from '@/lib/categoryPipeline'
 import type { RawTransaction } from '@/lib/categoryPipeline'
 import { linkTransferPairs } from '@/lib/transferLinker'
+import { linkSalaryPairs } from '@/lib/salaryLinker'
+import { applyXeroTransferRules, extractDestinationSuffix } from '@/lib/xeroTransferRules'
+import type { XeroDestinationAccount } from '@/lib/xeroTransferRules'
 
 // Sentinel used when a Xero transaction has no BankAccount.AccountID
 const XERO_DEFAULT_ACCOUNT_ID = '__xero_default__'
@@ -100,8 +103,33 @@ export async function POST(req: NextRequest) {
     }
 
     // ----------------------------------------------------------------
+    // Phase 1b: Load all account suffixes for the rule engine.
+    // Used to resolve "Transfer to XX5426" → Hearth account during SPEND-TRANSFER.
+    // ----------------------------------------------------------------
+    const { data: accountRows } = await supabase
+      .from('accounts')
+      .select('id, account_suffix, scope, owner')
+      .eq('household_id', DEFAULT_HOUSEHOLD_ID)
+      .eq('is_active', true)
+      .not('account_suffix', 'is', null)
+
+    // Map suffix (uppercased) → { scope, owner }
+    const suffixToAccount = new Map<string, XeroDestinationAccount>()
+    for (const row of accountRows ?? []) {
+      if (row.account_suffix) {
+        suffixToAccount.set(row.account_suffix.toUpperCase(), {
+          scope: row.scope ?? 'household',
+          owner: row.owner ?? null,
+        })
+      }
+    }
+
+    // ----------------------------------------------------------------
     // Phase 2: Transform Xero transactions into RawTransaction rows.
     // One raw row per Xero bank transaction, routed to the correct account.
+    // SPEND-TRANSFER rows are classified by the rule engine before being
+    // passed to processBatch, so transfer-pattern detection in categoryPipeline
+    // does not incorrectly flag wage/drawing descriptions as transfers.
     // ----------------------------------------------------------------
     const raws: RawTransaction[] = []
 
@@ -110,6 +138,13 @@ export async function POST(req: NextRequest) {
         const xeroAccId = xTx.BankAccount?.AccountID ?? XERO_DEFAULT_ACCOUNT_ID
         const hearthAccountId = bankAccountMap.get(xeroAccId)
         if (!hearthAccountId) continue // account creation failed — already recorded in errors
+
+        const txType = xTx.Type ?? ''
+
+        // RECEIVE-TRANSFER: do not store — the SPEND-TRANSFER on the other side
+        // (already captured) is the canonical record.  We still process it for
+        // link-confirmation purposes via the transferLinker below.
+        if (txType === 'RECEIVE-TRANSFER') continue
 
         let totalAmount = 0
         let categoryHint: string | null = null
@@ -129,13 +164,10 @@ export async function POST(req: NextRequest) {
 
         if (totalAmount === 0) continue
 
-        const isSpend = xTx.Type === 'SPEND'
+        const isSpend = txType === 'SPEND' || txType === 'SPEND-TRANSFER'
         const amount = isSpend ? -Math.abs(totalAmount) : Math.abs(totalAmount)
         const date = parseXeroDate(xTx.Date)
 
-        // Merchant: contact / reference / line item description / narration.
-        // BankAccount.Name is NOT appended here — the account_id already captures
-        // which bank account this transaction belongs to.
         const firstLineDesc = xTx.LineItems?.[0]?.Description
         const merchant = cleanXeroMerchant(
           xTx.Reference,
@@ -160,63 +192,21 @@ export async function POST(req: NextRequest) {
           url: xTx.Url,
         })
 
-        raws.push({
-          account_id: hearthAccountId,
-          date,
-          amount,
-          description: merchant,
-          is_transfer: false,
-          category_hint: categoryHint,
-          raw_description: rawDescription,
-        })
-      } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : 'Unknown error'
-        errors.push(`Failed to process transaction ${xTx.BankTransactionID}: ${msg}`)
-      }
-    }
+        // For SPEND-TRANSFER, apply the rule engine to determine is_transfer,
+        // category, and whether to flag for review.  For all other types
+        // (SPEND / RECEIVE) let categoryPipeline handle categorisation normally.
+        let forcedIsTransfer: boolean | undefined
+        let ruleCategory: string | null = null
+        let needsReview = false
 
-    // ----------------------------------------------------------------
-    // Phase 3: Categorise, deduplicate in-memory, upsert.
-    // ----------------------------------------------------------------
-    const { toUpsert } = await processBatch(raws)
+        if (txType === 'SPEND-TRANSFER') {
+          const narration = xTx.Narration ?? ''
+          const reference = xTx.Reference ?? ''
+          const searchText = `${narration} ${reference}`
+          const suffix = extractDestinationSuffix(searchText)
 
-    const xeroTransactions = toUpsert.map(tx => ({ ...tx, source: 'xero' as const }))
+          let destinationAccount: XeroDestinationAccount | null = null
+          let suffixPresentButUnmatched = false
 
-    // In-memory dedup by conflict key before hitting the DB (Xero can return
-    // the same transaction more than once during a full history fetch)
-    const deduped = Array.from(
-      xeroTransactions
-        .reduce((map, tx) => {
-          map.set(`${tx.account_id}|${tx.date}|${tx.amount}|${tx.description}`, tx)
-          return map
-        }, new Map<string, (typeof xeroTransactions)[0]>())
-        .values()
-    )
-
-    const { inserted, duplicates, backfilled } = await upsertTransactions(deduped)
-
-    // Link transfer pairs for all dates in this batch
-    const batchDates = Array.from(new Set(deduped.map(tx => tx.date)))
-    await linkTransferPairs(batchDates)
-
-    // ----------------------------------------------------------------
-    // Phase 4: Update last_synced_at on all involved accounts and the connection.
-    // ----------------------------------------------------------------
-    const nowIso = new Date().toISOString()
-
-    await Promise.all([
-      ...Array.from(bankAccountMap.values()).map(id =>
-        supabase.from('accounts').update({ last_synced_at: nowIso }).eq('id', id)
-      ),
-      supabase
-        .from('xero_connections')
-        .update({ last_synced_at: nowIso })
-        .eq('household_id', DEFAULT_HOUSEHOLD_ID),
-    ])
-
-    return NextResponse.json({ synced: inserted, skipped: duplicates, backfilled, errors })
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : 'Unknown error'
-    return NextResponse.json({ error: msg }, { status: 500 })
-  }
-}
+          if (suffix) {
+            const matched = suffixToAccount.get(suffix.toUpperCase()

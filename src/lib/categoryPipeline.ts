@@ -3,7 +3,7 @@ import { DEFAULT_HOUSEHOLD_ID } from './constants'
 import { cleanMerchant } from './cleanMerchant'
 import { guessCategory } from './autoCategory'
 import { isTransfer } from './transferPatterns'
-import { isDirectorIncome } from './directorIncome'
+import { classifyDirectorIncome } from './directorIncome'
 
 export interface RawTransaction {
   account_id: string
@@ -12,8 +12,13 @@ export interface RawTransaction {
   description: string
   basiq_transaction_id?: string
   is_transfer?: boolean
+  // When set by the Xero sync rule engine, overrides the transferPatterns detection.
+  // Use this to prevent "WAGE TRANSFER TO XX5426" from being auto-flagged as a transfer.
+  forced_is_transfer?: boolean
   category_hint?: string | null
   raw_description?: string | null
+  // When true, flags this transaction for the Needs Review tab (unmatched transfer suffix).
+  needs_review?: boolean
 }
 
 export interface ProcessedTransaction {
@@ -29,6 +34,7 @@ export interface ProcessedTransaction {
   basiq_transaction_id: string | null
   raw_description?: string | null
   source?: string
+  needs_review?: boolean
 }
 
 export async function applyMappings(merchant: string): Promise<{ category: string | null; classification: string | null }> {
@@ -83,8 +89,11 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
 
     const merchant = cleanMerchant(raw.description)
 
-    // Director income: positive credit from business — NOT a transfer, even if pattern matches
-    if (isDirectorIncome(raw.description, raw.amount)) {
+    // Director income: positive credit from business — NOT a transfer, even if pattern matches.
+    // classifyDirectorIncome returns the correct category: 'Salary' for wage credits,
+    // 'Director Income' for drawings (resolved by accountant at year-end).
+    const directorResult = classifyDirectorIncome(raw.description, raw.amount)
+    if (directorResult.match) {
       toUpsert.push({
         household_id: DEFAULT_HOUSEHOLD_ID,
         account_id: raw.account_id,
@@ -92,16 +101,23 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
         amount: raw.amount,
         description: raw.description,
         merchant,
-        category: 'Director Income',
+        category: directorResult.category,
         classification: null,
         is_transfer: false,
         basiq_transaction_id: raw.basiq_transaction_id ?? null,
         raw_description: raw.raw_description ?? null,
+        needs_review: raw.needs_review ?? false,
       })
       continue
     }
 
-    const isTransferRow = raw.is_transfer || isTransfer(raw.description)
+    // Transfer detection. forced_is_transfer (set by the Xero rule engine) takes
+    // precedence over the description pattern check — this prevents merchant names
+    // like "WAGE TRANSFER TO XX5426" from being auto-flagged as transfers when the
+    // rule engine has already determined they are salary payments.
+    const isTransferRow = raw.forced_is_transfer !== undefined
+      ? raw.forced_is_transfer
+      : (raw.is_transfer || isTransfer(raw.description))
 
     if (isTransferRow) {
       // Store transfers with is_transfer=true so "Show excluded" can reveal them
@@ -112,11 +128,12 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
         amount: raw.amount,
         description: raw.description,
         merchant,
-        category: null,
+        category: raw.category_hint ?? null,
         classification: null,
         is_transfer: true,
         basiq_transaction_id: raw.basiq_transaction_id ?? null,
         raw_description: raw.raw_description ?? null,
+        needs_review: raw.needs_review ?? false,
       })
       transfersSkipped++
       continue
@@ -150,6 +167,7 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
       is_transfer: false,
       basiq_transaction_id: raw.basiq_transaction_id ?? null,
       raw_description: raw.raw_description ?? null,
+      needs_review: raw.needs_review ?? false,
     })
   }
 
@@ -191,38 +209,4 @@ export async function upsertTransactions(rows: ProcessedTransaction[]): Promise<
   let backfilled = 0
 
   if (rowsWithRawDesc.length > 0) {
-    // Single bulk UPDATE via RPC instead of N individual queries
-    const { data: count, error: rpcError } = await supabase.rpc('bulk_backfill_raw_description', {
-      p_rows: rowsWithRawDesc.map(row => ({
-        account_id: row.account_id,
-        date: row.date,
-        amount: row.amount,
-        description: row.description,
-        raw_description: row.raw_description,
-      }))
-    })
-    if (!rpcError) {
-      backfilled = count ?? 0
-    } else {
-      // Fall back to parallel updates if RPC not yet available
-      const updateResults = await Promise.all(
-        rowsWithRawDesc.map(row =>
-          supabase
-            .from('transactions')
-            .update({ raw_description: row.raw_description })
-            .eq('account_id', row.account_id)
-            .eq('date', row.date)
-            .eq('amount', row.amount)
-            .eq('description', row.description)
-            .is('raw_description', null)
-            .select('id')
-        )
-      )
-      for (const result of updateResults) {
-        if (!result.error && result.data) backfilled += result.data.length
-      }
-    }
-  }
-
-  return { inserted, duplicates: rows.length - inserted, autoCategorised, backfilled }
-}
+    // Single bulk UPDATE via RPC instead of N individual

@@ -1,6 +1,7 @@
 import { createServerClient } from '@/lib/supabase/server'
 import { DEFAULT_HOUSEHOLD_ID } from '@/lib/constants'
 import { TransactionTable } from './TransactionTable'
+import NeedsReviewPanel from './NeedsReviewPanel'
 import Link from 'next/link'
 
 const SCOPE_PILLS = [
@@ -13,10 +14,11 @@ const SCOPE_PILLS = [
 export default async function TransactionsPage({
   searchParams,
 }: {
-  searchParams: { month?: string; category?: string; scope?: string }
+  searchParams: { month?: string; category?: string; scope?: string; tab?: string }
 }) {
   const supabase = createServerClient()
   const scope = searchParams.scope || 'all'
+  const tab = searchParams.tab || 'transactions'
 
   const { data: allAccounts } = await supabase
     .from('accounts')
@@ -25,6 +27,13 @@ export default async function TransactionsPage({
     .eq('is_active', true)
 
   const accounts = (allAccounts || []).map(a => ({ id: a.id, display_name: (a as { display_name: string }).display_name }))
+
+  // Count needs-review items for badge
+  const { count: reviewCount } = await supabase
+    .from('transactions')
+    .select('id', { count: 'exact', head: true })
+    .eq('household_id', DEFAULT_HOUSEHOLD_ID)
+    .eq('needs_review', true)
 
   const scopedIds = scope === 'all'
     ? (allAccounts || []).map(a => a.id)
@@ -46,6 +55,15 @@ export default async function TransactionsPage({
 
   const { data: transactions } = await txQuery
 
+  // Needs-review transactions (unmatched Xero transfers)
+  const { data: reviewTxns } = tab === 'review' ? await supabase
+    .from('transactions')
+    .select('*, accounts(display_name, institution)')
+    .eq('household_id', DEFAULT_HOUSEHOLD_ID)
+    .eq('needs_review', true)
+    .order('date', { ascending: false })
+    .limit(100) : { data: null }
+
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
@@ -55,28 +73,5 @@ export default async function TransactionsPage({
         </a>
       </div>
 
-      {/* Scope filter pills */}
-      <div className="flex gap-2 mb-4">
-        {SCOPE_PILLS.map(pill => (
-          <Link
-            key={pill.value}
-            href={pill.value === 'all' ? '/transactions' : `/transactions?scope=${pill.value}`}
-            className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
-              scope === pill.value
-                ? 'bg-emerald-700 text-white'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
-          >
-            {pill.label}
-          </Link>
-        ))}
-      </div>
-
-      <TransactionTable
-        initialTransactions={transactions || []}
-        accounts={accounts}
-        initialCategory={searchParams.category || ''}
-      />
-    </div>
-  )
-}
+      {/* Top-level tabs */}
+      <div className="f

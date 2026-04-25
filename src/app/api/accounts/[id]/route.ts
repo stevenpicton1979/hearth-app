@@ -23,16 +23,14 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     updates.owner = body.owner || null
   }
 
-  if (Object.keys(updates).length === 0) {
-    return NextResponse.json({ error: 'No valid fields provided' }, { status: 400 })
+  if ('account_suffix' in body) {
+    // Store uppercase, max 10 chars, or null to clear
+    const raw = body.account_suffix
+    if (raw !== null && raw !== '' && (typeof raw !== 'string' || raw.length > 10)) {
+      return NextResponse.json({ error: 'Invalid account_suffix' }, { status: 400 })
+    }
+    updates.account_suffix = raw ? (raw as string).toUpperCase() : null
   }
 
-  const supabase = createServerClient()
-  const { error } = await supabase
-    .from('accounts')
-    .update(updates)
-    .eq('id', params.id)
-    .eq('household_id', DEFAULT_HOUSEHOLD_ID)
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ ok: true })
-}
+  if (Object.keys(updates).length === 0) {
+    return NextResponse.

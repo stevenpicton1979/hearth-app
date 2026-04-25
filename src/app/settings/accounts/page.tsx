@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { BanknotesIcon, ArrowPathIcon, InformationCircleIcon } from '@heroicons/react/24/outline'
 import AccountScopeSelect from './AccountScopeSelect'
 import AccountOwnerSelect from './AccountOwnerSelect'
+import AccountSuffixInput from './AccountSuffixInput'
 
 export default async function AccountsPage() {
   const supabase = createServerClient()
@@ -58,10 +59,16 @@ export default async function AccountsPage() {
                     Last synced {new Date(account.last_synced_at).toLocaleDateString('en-AU')}
                   </p>
                 )}
+                {account.account_suffix && (
+                  <p className="text-xs text-gray-400 mt-1 font-mono">
+                    Suffix: {account.account_suffix}
+                  </p>
+                )}
               </div>
               <div className="flex items-center gap-3 flex-wrap justify-end">
                 <AccountOwnerSelect accountId={account.id} initialOwner={account.owner ?? null} />
                 <AccountScopeSelect accountId={account.id} initialScope={account.scope ?? 'household'} />
+                <AccountSuffixInput accountId={account.id} initialSuffix={account.account_suffix ?? null} />
                 {account.basiq_account_id && (
                   <form action="/api/sync" method="post">
                     <input type="hidden" name="account_id" value={account.id} />
@@ -75,14 +82,4 @@ export default async function AccountsPage() {
           ))}
         </div>
       ) : (
-        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center">
-          <BanknotesIcon className="h-10 w-10 text-gray-300 mx-auto mb-3" />
-          <p className="text-gray-500 text-sm">No accounts yet.</p>
-          <Link href="/import" className="text-sm text-emerald-700 font-medium hover:underline mt-2 inline-block">
-            Import your first CSV →
-          </Link>
-        </div>
-      )}
-    </div>
-  )
-}
+        <div className="bg-white border border-gray-200 rounded-xl p

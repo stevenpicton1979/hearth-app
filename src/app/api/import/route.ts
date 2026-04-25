@@ -4,6 +4,7 @@ import { DEFAULT_HOUSEHOLD_ID } from '@/lib/constants'
 import { parseCSV, extractBalance, extractNABAccountName, extractAmexAccountName } from '@/lib/csvParser'
 import { processBatch, upsertTransactions } from '@/lib/categoryPipeline'
 import { linkTransferPairs } from '@/lib/transferLinker'
+import { linkSalaryPairs } from '@/lib/salaryLinker'
 
 export async function POST(req: NextRequest) {
   try {
@@ -106,9 +107,12 @@ export async function POST(req: NextRequest) {
 
     const { inserted, duplicates, autoCategorised } = await upsertTransactions(deduped)
 
-    // Link transfer pairs for all dates in this batch
+    // Link transfer pairs and salary pairs for all dates in this batch
     const batchDates = Array.from(new Set(deduped.map(tx => tx.date)))
-    await linkTransferPairs(batchDates)
+    await Promise.all([
+      linkTransferPairs(batchDates),
+      linkSalaryPairs(batchDates),
+    ])
 
     // Update account current_balance from the raw CSV balance (most recent row)
     if (latestBalance !== undefined) {
@@ -126,7 +130,3 @@ export async function POST(req: NextRequest) {
       errors: [],
     })
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : 'Unknown error'
-    return NextResponse.json({ error: msg }, { status: 500 })
-  }
-}
