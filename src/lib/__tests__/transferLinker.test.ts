@@ -16,19 +16,18 @@ const db = vi.hoisted(() => ({
 
 vi.mock('../supabase/server', () => ({
   createServerClient: () => ({
-    from: (_table: string) => ({
-      // select chain: .select().eq().in().is() → { data: db.rows }
-      select: (_cols: string) => ({
-        eq: (_col: string, _val: unknown) => ({
-          in: (_col: string, _vals: unknown[]) => ({
-            is: (_col: string, _val: unknown) =>
-              Promise.resolve({ data: db.rows }),
+    from: () => ({
+      // select chain: .select().eq().in().is() -> { data: db.rows }
+      select: () => ({
+        eq: () => ({
+          in: () => ({
+            is: () => Promise.resolve({ data: db.rows }),
           }),
         }),
       }),
-      // update chain: .update(vals).eq(col, id) → records call, resolves {}
+      // update chain: .update(vals).eq(col, id) -> records call, resolves {}
       update: (vals: Record<string, unknown>) => ({
-        eq: (_col: string, id: string) => {
+        eq: (_: string, id: string) => {
           db.updates.push({
             id,
             linked_transfer_id: vals.linked_transfer_id as string,
@@ -46,7 +45,7 @@ beforeEach(() => {
 })
 
 describe('linkTransferPairs', () => {
-  // 1. Happy path — valid pair links
+  // 1. Happy path -- valid pair links
   it('links two rows: same date, opposite amounts, different accounts, both is_transfer=true', async () => {
     db.rows = [
       { id: 'tx-a', account_id: 'acc-1', date: '2025-06-01', amount: -500, is_transfer: true },
@@ -67,7 +66,7 @@ describe('linkTransferPairs', () => {
     expect(db.updates).toHaveLength(0)
   })
 
-  // 3. Same account — must not self-link
+  // 3. Same account -- must not self-link
   it('does NOT link rows on the same account', async () => {
     db.rows = [
       { id: 'tx-a', account_id: 'acc-1', date: '2025-06-01', amount: -500, is_transfer: true },
@@ -78,7 +77,7 @@ describe('linkTransferPairs', () => {
     expect(db.updates).toHaveLength(0)
   })
 
-  // 4. Amounts don't cancel — must not link
+  // 4. Amounts don't cancel -- must not link
   it('does NOT link when amounts do not sum to zero', async () => {
     db.rows = [
       { id: 'tx-a', account_id: 'acc-1', date: '2025-06-01', amount: -500, is_transfer: true },
@@ -89,7 +88,7 @@ describe('linkTransferPairs', () => {
     expect(db.updates).toHaveLength(0)
   })
 
-  // 5. Different dates — rows grouped by date so cross-date pairs are impossible
+  // 5. Different dates -- rows grouped by date so cross-date pairs are impossible
   it('does NOT link rows on different dates', async () => {
     db.rows = [
       { id: 'tx-a', account_id: 'acc-1', date: '2025-06-01', amount: -500, is_transfer: true },
@@ -100,7 +99,7 @@ describe('linkTransferPairs', () => {
     expect(db.updates).toHaveLength(0)
   })
 
-  // 6. Already-linked rows — DB excludes them via .is('linked_transfer_id', null);
+  // 6. Already-linked rows -- DB excludes them via .is('linked_transfer_id', null);
   //    also tests the in-run paired Set: once tx-a links to tx-b, it cannot
   //    link again to tx-c even though tx-c also matches.
   it('does NOT re-link a row already paired in the same run', async () => {
@@ -111,13 +110,13 @@ describe('linkTransferPairs', () => {
       { id: 'tx-c', account_id: 'acc-3', date: '2025-06-01', amount: 500,  is_transfer: true },
     ]
     const count = await linkTransferPairs(['2025-06-01'])
-    // Only one pair: tx-a ↔ tx-b. tx-c stays unlinked.
+    // Only one pair: tx-a <-> tx-b. tx-c stays unlinked.
     expect(count).toBe(1)
     expect(db.updates.find(u => u.id === 'tx-c')).toBeUndefined()
   })
 
-  // 7. Bidirectionality — both rows must point to each other
-  it('links bidirectionally: both rows receive each other\'s id', async () => {
+  // 7. Bidirectionality -- both rows must point to each other
+  it("links bidirectionally: both rows receive each other's id", async () => {
     db.rows = [
       { id: 'tx-a', account_id: 'acc-1', date: '2025-06-01', amount: -500, is_transfer: true },
       { id: 'tx-b', account_id: 'acc-2', date: '2025-06-01', amount: 500,  is_transfer: true },
@@ -130,7 +129,7 @@ describe('linkTransferPairs', () => {
     expect(updateB?.linked_transfer_id).toBe('tx-a')
   })
 
-  // 8. Return value — must equal the number of *pairs* (not individual rows)
+  // 8. Return value -- must equal the number of *pairs* (not individual rows)
   it('returns the correct count of pairs linked across multiple dates', async () => {
     db.rows = [
       { id: 'tx-a', account_id: 'acc-1', date: '2025-06-01', amount: -100, is_transfer: true },
