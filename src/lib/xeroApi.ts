@@ -116,6 +116,7 @@ interface XeroBankTransaction {
     Quantity?: number
     UnitAmount?: number
     AccountCode?: string
+    TaxType?: string
     Tracking?: Array<{ Name: string; Option: string }>
   }>
 }

@@ -133,6 +133,8 @@ export async function POST(req: NextRequest) {
 
         let totalAmount = 0
         let categoryHint: string | null = null
+        let glAccountName: string | null = null
+        let glTaxType: string | null = null
 
         for (const line of xTx.LineItems || []) {
           const unitAmount = line.UnitAmount || 0
@@ -143,7 +145,11 @@ export async function POST(req: NextRequest) {
             const glAccount = accountsMap.get(line.AccountCode)!
             if (!categoryHint) {
               categoryHint = mapXeroAccountToCategory(glAccount.Type, glAccount.Code, glAccount.Name)
+              glAccountName = glAccount.Name
             }
+          }
+          if (!glTaxType && line.TaxType) {
+            glTaxType = line.TaxType
           }
         }
 
@@ -222,6 +228,8 @@ export async function POST(req: NextRequest) {
           category_hint: ruleCategory ?? categoryHint,
           raw_description: rawDescription,
           needs_review: needsReview,
+          gl_account: glAccountName,
+          gl_tax_type: glTaxType,
         })
       } catch (txErr) {
         errors.push(`Transaction error: ${txErr instanceof Error ? txErr.message : String(txErr)}`)

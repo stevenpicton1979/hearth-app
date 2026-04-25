@@ -77,6 +77,12 @@ function DetailPanel({ t, accountName }: { t: Transaction; accountName: string }
           </span>
         </>}
 
+        {t.gl_account && <>
+          <span className="text-gray-400 uppercase tracking-wide text-[10px] pt-px">GL Account</span>
+          <span className="text-gray-700">{t.gl_account}{t.gl_tax_type && <span className="ml-1.5 text-gray-400">· {t.gl_tax_type}</span>}</span>
+        </>
+}
+
         {t.raw_description && <>
           <span className="text-gray-400 uppercase tracking-wide text-[10px] self-start pt-px">Raw</span>
           <span className="text-gray-600 font-mono whitespace-pre-wrap break-all">{t.raw_description}</span>

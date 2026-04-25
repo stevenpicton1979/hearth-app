@@ -16,6 +16,8 @@ export interface RawTransaction {
   category_hint?: string | null
   raw_description?: string | null
   needs_review?: boolean
+  gl_account?: string | null
+  gl_tax_type?: string | null
 }
 
 export interface ProcessedTransaction {
@@ -32,6 +34,8 @@ export interface ProcessedTransaction {
   raw_description?: string | null
   source?: string
   needs_review?: boolean
+  gl_account?: string | null
+  gl_tax_type?: string | null
 }
 
 export async function applyMappings(merchant: string): Promise<{ category: string | null; classification: string | null }> {
@@ -98,6 +102,8 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
         basiq_transaction_id: raw.basiq_transaction_id ?? null,
         raw_description: raw.raw_description ?? null,
         needs_review: raw.needs_review ?? false,
+        gl_account: raw.gl_account ?? null,
+        gl_tax_type: raw.gl_tax_type ?? null,
       })
       continue
     }
@@ -120,6 +126,8 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
         basiq_transaction_id: raw.basiq_transaction_id ?? null,
         raw_description: raw.raw_description ?? null,
         needs_review: raw.needs_review ?? false,
+        gl_account: raw.gl_account ?? null,
+        gl_tax_type: raw.gl_tax_type ?? null,
       })
       transfersSkipped++
       continue
@@ -153,6 +161,8 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
       basiq_transaction_id: raw.basiq_transaction_id ?? null,
       raw_description: raw.raw_description ?? null,
       needs_review: raw.needs_review ?? false,
+      gl_account: raw.gl_account ?? null,
+      gl_tax_type: raw.gl_tax_type ?? null,
     })
   }
 
