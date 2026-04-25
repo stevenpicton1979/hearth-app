@@ -92,6 +92,84 @@ describe('invoice_income', () => {
   })
 })
 
+// ─── xero_misc_code ───────────────────────────────────────────────────────────
+
+describe('xero_misc_code', () => {
+  it('matches "MIS" exactly → Business', () => {
+    expect(applyMerchantCategoryRules('MIS', expense)?.category).toBe('Business')
+    expect(applyMerchantCategoryRules('MIS', expense)?.ruleName).toBe('xero_misc_code')
+  })
+
+  it('does NOT match "MISMATCH" (exact only)', () => {
+    expect(applyMerchantCategoryRules('MISMATCH', expense)?.ruleName).not.toBe('xero_misc_code')
+  })
+})
+
+// ─── google_one ───────────────────────────────────────────────────────────────
+
+describe('google_one', () => {
+  it('matches "GOOGLE ONE BARANGA CARD XX6729" (post-fix contact name)', () => {
+    expect(applyMerchantCategoryRules('GOOGLE ONE BARANGA CARD XX6729', expense)?.category).toBe('Business')
+    expect(applyMerchantCategoryRules('GOOGLE ONE BARANGA CARD XX6729', expense)?.ruleName).toBe('google_one')
+  })
+
+  it('matches bare "GOOGLE ONE"', () => {
+    expect(applyMerchantCategoryRules('GOOGLE ONE', expense)?.category).toBe('Business')
+  })
+
+  it('does NOT match unrelated Google services', () => {
+    expect(applyMerchantCategoryRules('GOOGLE ADS', expense)?.ruleName).not.toBe('google_one')
+  })
+})
+
+// ─── steam_games ──────────────────────────────────────────────────────────────
+
+describe('steam_games', () => {
+  it('matches "STEAMGAMES.COM 4259522 BELLEVUE WA" (post-fix contact name)', () => {
+    expect(applyMerchantCategoryRules('STEAMGAMES.COM 4259522 BELLEVUE WA', expense)?.category).toBe('Business')
+    expect(applyMerchantCategoryRules('STEAMGAMES.COM 4259522 BELLEVUE WA', expense)?.ruleName).toBe('steam_games')
+  })
+
+  it('matches bare "STEAMGAMES.COM"', () => {
+    expect(applyMerchantCategoryRules('STEAMGAMES.COM', expense)?.category).toBe('Business')
+  })
+})
+
+// ─── xbox ─────────────────────────────────────────────────────────────────────
+
+describe('xbox', () => {
+  it('matches "MICROSOFT*XBOX MSBILL.INFO AUS" (post-fix contact name)', () => {
+    expect(applyMerchantCategoryRules('MICROSOFT*XBOX MSBILL.INFO AUS', expense)?.category).toBe('Business')
+    expect(applyMerchantCategoryRules('MICROSOFT*XBOX MSBILL.INFO AUS', expense)?.ruleName).toBe('xbox')
+  })
+
+  it('matches "MICROSOFT*XBOX SYDNEY AUS"', () => {
+    expect(applyMerchantCategoryRules('MICROSOFT*XBOX SYDNEY AUS', expense)?.category).toBe('Business')
+  })
+
+  it('matches bare "XBOX"', () => {
+    expect(applyMerchantCategoryRules('XBOX', expense)?.category).toBe('Business')
+  })
+})
+
+// ─── spotify ──────────────────────────────────────────────────────────────────
+
+describe('spotify', () => {
+  it('matches "SPOTIFY"', () => {
+    expect(applyMerchantCategoryRules('SPOTIFY', expense)?.category).toBe('Business')
+    expect(applyMerchantCategoryRules('SPOTIFY', expense)?.ruleName).toBe('spotify')
+  })
+
+  it('matches "SPOTIFY AUSTRALIA PTY LTD"', () => {
+    expect(applyMerchantCategoryRules('SPOTIFY AUSTRALIA PTY LTD', expense)?.category).toBe('Business')
+  })
+
+  it('does NOT match mid-string "SPOTIFY" (anchor required)', () => {
+    // Rule uses ^spotify — must start with it
+    expect(applyMerchantCategoryRules('GOOGLE SPOTIFY MUSIC PYRMONT AUS', expense)?.ruleName).not.toBe('spotify')
+  })
+})
+
 // ─── director_loan_repayment ──────────────────────────────────────────────────
 
 describe('director_loan_repayment', () => {

@@ -182,7 +182,7 @@ export function cleanXeroMerchant(
   if (lineDesc && !isNumeric(lineDesc) && !isXeroCode(lineDesc)) return lineDesc.slice(0, 100)
 
   const ref = reference?.trim()
-  if (ref) {
+  if (ref && !isXeroCode(ref)) {
     // BPAY to ATO: long numeric CRN followed by bank BPAY marker
     if (/^\d{10,}\s+commbank\s+app\s+bpa/i.test(ref)) return 'ATO'
     return ref.slice(0, 100)

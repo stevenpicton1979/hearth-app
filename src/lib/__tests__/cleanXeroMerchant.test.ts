@@ -146,4 +146,27 @@ describe('cleanXeroMerchant — priority order', () => {
     expect(cleanXeroMerchant(undefined, 'The Contact', undefined, 'The Narration'))
       .toBe('The Contact')
   })
+
+  it('skips short all-caps Xero code in reference and falls through to contact name', () => {
+    // "MIS" is a Xero Miscellaneous account code — not a real merchant name.
+    // The contact name should be used instead.
+    expect(cleanXeroMerchant('MIS', 'Google One Baranga Card xx6729', undefined, undefined))
+      .toBe('Google One Baranga Card xx6729')
+  })
+
+  it('skips "CSH" Xero code in reference and falls through to contact name', () => {
+    expect(cleanXeroMerchant('CSH', 'ANZ Bank', undefined, undefined))
+      .toBe('ANZ Bank')
+  })
+
+  it('does NOT skip a reference that is a real description (not a Xero code)', () => {
+    // "INV-001" contains a non-alpha char so isXeroCode returns false
+    expect(cleanXeroMerchant('INV-001', 'Acme Corp', undefined, undefined))
+      .toBe('INV-001')
+  })
+
+  it('does NOT skip a reference longer than 4 chars even if all-caps', () => {
+    expect(cleanXeroMerchant('SALES', 'Acme Corp', undefined, undefined))
+      .toBe('SALES')
+  })
 })

@@ -78,6 +78,46 @@ export const MERCHANT_CATEGORY_RULES: MerchantCategoryRule[] = [
     category: 'Business',
   },
 
+  // ─── Subscriptions & Digital Services (Business card) ───────────────────────
+
+  {
+    name: 'xero_misc_code',
+    description:
+      'Xero "MIS" reference code — Miscellaneous account. Catches pre-fix transactions ' +
+      'synced before cleanXeroMerchant learned to skip short Xero codes in the reference field. ' +
+      'New syncs produce real contact names which are caught by the specific rules below.',
+    match: (m) => m === 'MIS',
+    category: 'Business',
+  },
+
+  {
+    name: 'google_one',
+    description: 'Google One cloud storage subscription on business card → Business',
+    match: (m) => /google\s+one/i.test(m),
+    category: 'Business',
+  },
+
+  {
+    name: 'steam_games',
+    description: 'Steamgames / Steam game purchases on business card → Business',
+    match: (m) => /steamgames/i.test(m),
+    category: 'Business',
+  },
+
+  {
+    name: 'xbox',
+    description: 'Microsoft Xbox subscriptions and purchases on business card → Business',
+    match: (m) => /xbox/i.test(m),
+    category: 'Business',
+  },
+
+  {
+    name: 'spotify',
+    description: 'Spotify music subscription on business card → Business',
+    match: (m) => /^spotify/i.test(m),
+    category: 'Business',
+  },
+
   // ─── Transfers ───────────────────────────────────────────────────────────────
 
   {
