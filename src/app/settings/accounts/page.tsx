@@ -4,6 +4,7 @@ import { isBasiqConfigured } from '@/lib/basiq'
 import Link from 'next/link'
 import { BanknotesIcon, ArrowPathIcon, InformationCircleIcon } from '@heroicons/react/24/outline'
 import AccountScopeSelect from './AccountScopeSelect'
+import AccountOwnerSelect from './AccountOwnerSelect'
 
 export default async function AccountsPage() {
   const supabase = createServerClient()
@@ -58,7 +59,8 @@ export default async function AccountsPage() {
                   </p>
                 )}
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-wrap justify-end">
+                <AccountOwnerSelect accountId={account.id} initialOwner={account.owner ?? null} />
                 <AccountScopeSelect accountId={account.id} initialScope={account.scope ?? 'household'} />
                 {account.basiq_account_id && (
                   <form action="/api/sync" method="post">

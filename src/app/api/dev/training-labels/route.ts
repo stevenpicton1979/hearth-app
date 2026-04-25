@@ -15,7 +15,13 @@ export async function GET() {
 
   // Fetch transaction stats for each merchant
   const merchants = (data || []).map(r => r.merchant)
-  const statsByMerchant: Record<string, { count: number; totalSpend: number; minDate: string; maxDate: string; accountIds: Set<string> }> = {}
+  const statsByMerchant: Record<string, {
+    count: number
+    totalSpend: number
+    minDate: string
+    maxDate: string
+    accountIds: Set<string>   // starts as UUIDs, converted to names below
+  }> = {}
 
   if (merchants.length > 0) {
     const { data: txns } = await supabase
@@ -26,7 +32,9 @@ export async function GET() {
 
     for (const t of txns || []) {
       const m = t.merchant
-      if (!statsByMerchant[m]) statsByMerchant[m] = { count: 0, totalSpend: 0, minDate: t.date, maxDate: t.date, accountIds: new Set() }
+      if (!statsByMerchant[m]) {
+        statsByMerchant[m] = { count: 0, totalSpend: 0, minDate: t.date, maxDate: t.date, accountIds: new Set() }
+      }
       statsByMerchant[m].count++
       statsByMerchant[m].totalSpend += Math.abs(t.amount)
       if (t.date < statsByMerchant[m].minDate) statsByMerchant[m].minDate = t.date
@@ -34,34 +42,53 @@ export async function GET() {
       if (t.account_id) statsByMerchant[m].accountIds.add(t.account_id)
     }
 
-    // Look up account display names for the collected IDs
+    // Fetch display_name and owner for all referenced accounts in one query
     const allAccountIds = Array.from(new Set(
       Object.values(statsByMerchant).flatMap(s => Array.from(s.accountIds))
     ))
-    const accountNameMap = new Map<string, string>()
+    const accountNameMap = new Map<string, string>()   // id → display_name
+    const accountOwnerById = new Map<string, string>() // id → owner
+
     if (allAccountIds.length > 0) {
       const { data: accts } = await supabase
         .from('accounts')
-        .select('id, display_name')
+        .select('id, display_name, owner')
         .in('id', allAccountIds)
-      for (const a of (accts || [])) accountNameMap.set(a.id, a.display_name)
+      for (const a of (accts || [])) {
+        accountNameMap.set(a.id, a.display_name)
+        if (a.owner) accountOwnerById.set(a.id, a.owner)
+      }
     }
 
-    // Replace account IDs with names in each merchant stat
-    for (const s of Object.values(statsByMerchant)) {
-      const named = new Set(Array.from(s.accountIds).map(id => accountNameMap.get(id) ?? id))
-      s.accountIds = named
+    // Compute suggested_classification per merchant BEFORE converting IDs to names.
+    // If every account this merchant appears in shares one owner → suggest it.
+    // Ambiguous (multiple owners) → null.
+    for (const [, stats] of Object.entries(statsByMerchant)) {
+      const owners = new Set(
+        Array.from(stats.accountIds)
+          .map(id => accountOwnerById.get(id))
+          .filter((o): o is string => o != null)
+      )
+      ;(stats as typeof stats & { suggestedClassification: string | null }).suggestedClassification =
+        owners.size === 1 ? Array.from(owners)[0] : null
+
+      // Convert account UUIDs → display names
+      stats.accountIds = new Set(Array.from(stats.accountIds).map(id => accountNameMap.get(id) ?? id))
     }
   }
 
-  const labels = (data || []).map(r => ({
-    ...r,
-    transaction_count: statsByMerchant[r.merchant]?.count ?? 0,
-    total_spend: statsByMerchant[r.merchant]?.totalSpend ?? 0,
-    min_date: statsByMerchant[r.merchant]?.minDate ?? null,
-    max_date: statsByMerchant[r.merchant]?.maxDate ?? null,
-    accounts: Array.from(statsByMerchant[r.merchant]?.accountIds ?? []),
-  }))
+  const labels = (data || []).map(r => {
+    const stats = statsByMerchant[r.merchant] as (typeof statsByMerchant[string] & { suggestedClassification?: string | null }) | undefined
+    return {
+      ...r,
+      transaction_count: stats?.count ?? 0,
+      total_spend: stats?.totalSpend ?? 0,
+      min_date: stats?.minDate ?? null,
+      max_date: stats?.maxDate ?? null,
+      accounts: Array.from(stats?.accountIds ?? []),
+      suggested_classification: stats?.suggestedClassification ?? null,
+    }
+  })
 
   return NextResponse.json({ labels })
 }

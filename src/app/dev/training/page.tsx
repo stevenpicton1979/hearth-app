@@ -24,6 +24,7 @@ interface TrainingLabel {
   min_date: string | null
   max_date: string | null
   accounts: string[]
+  suggested_classification: string | null
 }
 
 interface EvalMetrics {
@@ -181,7 +182,8 @@ function LabelRow({
 }) {
   const [local, setLocal] = useState({
     correct_category: label.correct_category,
-    correct_classification: label.correct_classification,
+    correct_classification: label.correct_classification ??
+      (label.status === 'pending' ? label.suggested_classification : null),
     is_income: label.is_income,
     is_transfer: label.is_transfer,
     is_subscription: label.is_subscription,

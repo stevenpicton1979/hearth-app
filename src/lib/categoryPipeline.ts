@@ -49,16 +49,30 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
   const toUpsert: ProcessedTransaction[] = []
   let transfersSkipped = 0
 
-  // Load all merchant mappings once
   const supabase = createServerClient()
-  const { data: mappings } = await supabase
-    .from('merchant_mappings')
-    .select('merchant, category, classification')
-    .eq('household_id', DEFAULT_HOUSEHOLD_ID)
+
+  // Load merchant mappings and account owners in parallel
+  const uniqueAccountIds = Array.from(new Set(raws.map(r => r.account_id)))
+  const [{ data: mappings }, { data: accountRows }] = await Promise.all([
+    supabase
+      .from('merchant_mappings')
+      .select('merchant, category, classification')
+      .eq('household_id', DEFAULT_HOUSEHOLD_ID),
+    supabase
+      .from('accounts')
+      .select('id, owner')
+      .in('id', uniqueAccountIds),
+  ])
 
   const mappingMap = new Map<string, { category: string | null; classification: string | null }>()
   for (const m of (mappings ?? [])) {
     mappingMap.set(m.merchant, { category: m.category, classification: m.classification })
+  }
+
+  // account owner → default classification when no explicit mapping exists
+  const accountOwnerMap = new Map<string, string>()
+  for (const a of (accountRows ?? [])) {
+    if (a.owner) accountOwnerMap.set(a.id, a.owner)
   }
 
   // Collect auto-assigned categories to persist as mappings
@@ -111,12 +125,14 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
     const isIncome = raw.amount > 0
 
     let category: string | null = null
-    let classification: string | null = null
+    // Fall back to the account's owner when no explicit mapping provides a classification
+    const accountOwner = accountOwnerMap.get(raw.account_id) ?? null
+    let classification: string | null = accountOwner
 
     if (!isIncome) {
       const mapping = mappingMap.get(merchant)
       category = mapping?.category ?? raw.category_hint ?? guessCategory(merchant)
-      classification = mapping?.classification ?? null
+      if (mapping?.classification != null) classification = mapping.classification
       if (!mapping && category !== null) {
         autoMappings.set(merchant, category)
       }
