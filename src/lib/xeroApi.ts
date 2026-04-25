@@ -27,13 +27,11 @@ export async function getXeroConnection(): Promise<XeroConnection | null> {
 
   if (!connection) return null
 
-  // Check if token is expiring within 5 minutes
   const now = new Date()
   const expiresAt = new Date(connection.expires_at)
   const expiringIn = expiresAt.getTime() - now.getTime()
 
   if (expiringIn < 5 * 60 * 1000) {
-    // Refresh token
     return await refreshXeroToken(connection)
   }
 
@@ -81,7 +79,6 @@ async function refreshXeroToken(connection: XeroConnectionRow): Promise<XeroConn
     expires_in: number
   }
 
-  // Update database
   const supabase = createServerClient()
   const expiresAt = new Date(Date.now() + expires_in * 1000).toISOString()
 
@@ -139,9 +136,9 @@ export async function getXeroBankTransactions(
 ): Promise<{ transactions: XeroBankTransaction[] }> {
   const where = 'Status=="AUTHORISED"'
   const order = 'Date DESC'
-  const PAGE_SIZE = 100   // Xero default / max per page
+  const PAGE_SIZE = 100
   const MAX_PAGES = 20
-  const BATCH = 5         // pages to fetch in parallel (stays well under Xero rate limit)
+  const BATCH = 5
 
   const fetchPage = async (page: number): Promise<XeroBankTransaction[]> => {
     const params = new URLSearchParams({ where, order, page: page.toString() })
@@ -174,7 +171,6 @@ export async function getXeroBankTransactions(
     for (const txns of pages) {
       all.push(...txns)
     }
-    // If any page in this batch returned fewer than PAGE_SIZE results, we've hit the end
     if (pages.some(p => p.length < PAGE_SIZE)) break
   }
 
@@ -185,4 +181,27 @@ export async function getXeroBankTransactions(
  * Fetch accounts from Xero API to build lookup table.
  */
 export async function getXeroAccounts(connection: XeroConnection): Promise<Map<string, XeroAccount>> {
-  const url = `${XERO_API_BASE}/A
+  const url = `${XERO_API_BASE}/Accounts`
+
+  const res = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${connection.access_token}`,
+      'Xero-tenant-id': connection.tenant_id,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    },
+  })
+
+  if (!res.ok) {
+    const err = await res.text()
+    throw new Error(`Failed to fetch Xero accounts: ${err}`)
+  }
+
+  const data = await res.json() as { Accounts?: XeroAccount[] }
+  const map = new Map<string, XeroAccount>()
+  for (const account of data.Accounts || []) {
+    map.set(account.Code, account)
+  }
+  return map
+}
