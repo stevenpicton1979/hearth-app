@@ -12,8 +12,12 @@ interface SyncResult {
   synced?: number
   skipped?: number
   backfilled?: number
-  crossDuped?: number
   errors?: string[]
+  error?: string
+}
+
+interface DedupResult {
+  crossDuped?: number
   error?: string
 }
 
@@ -24,6 +28,8 @@ export default function XeroSettingsPage() {
   const [fullSyncing, setFullSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState<SyncResult | null>(null)
   const [showErrors, setShowErrors] = useState(false)
+  const [deduping, setDeduping] = useState(false)
+  const [dedupResult, setDedupResult] = useState<DedupResult | null>(null)
 
   // Load connection status
   useEffect(() => {
@@ -47,13 +53,30 @@ export default function XeroSettingsPage() {
     window.location.href = '/api/xero/auth'
   }
 
+  const runDedup = async () => {
+    setDeduping(true)
+    setDedupResult(null)
+    try {
+      const res = await fetch('/api/xero/dedup', { method: 'POST' })
+      const data = await res.json() as DedupResult
+      setDedupResult(data)
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Unknown error'
+      setDedupResult({ error: msg })
+    } finally {
+      setDeduping(false)
+    }
+  }
+
   const handleSync = async () => {
     setSyncing(true)
     setSyncResult(null)
+    setDedupResult(null)
     try {
       const res = await fetch('/api/xero/sync', { method: 'POST' })
       const data = await res.json() as SyncResult
       setSyncResult(data)
+      if (!data.error) runDedup()
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Unknown error'
       setSyncResult({ error: msg })
@@ -66,10 +89,12 @@ export default function XeroSettingsPage() {
     if (!confirm('This will re-import all Xero transactions from scratch. Continue?')) return
     setFullSyncing(true)
     setSyncResult(null)
+    setDedupResult(null)
     try {
       const res = await fetch('/api/xero/sync?full=true', { method: 'POST' })
       const data = await res.json() as SyncResult
       setSyncResult(data)
+      if (!data.error) runDedup()
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Unknown error'
       setSyncResult({ error: msg })
@@ -85,6 +110,7 @@ export default function XeroSettingsPage() {
       if (res.ok) {
         setConnection(null)
         setSyncResult(null)
+        setDedupResult(null)
       }
     } catch (e) {
       console.error('Failed to disconnect:', e)
@@ -193,9 +219,15 @@ export default function XeroSettingsPage() {
                           <span className="font-medium">{syncResult.backfilled}</span> raw description{(syncResult.backfilled || 0) !== 1 ? 's' : ''} backfilled
                         </p>
                       )}
-                      {(syncResult.crossDuped || 0) > 0 && (
-                        <p className="text-amber-700">
-                          <span className="font-medium">{syncResult.crossDuped}</span> cross-account duplicate{(syncResult.crossDuped || 0) !== 1 ? 's' : ''} flagged as transfers
+                      {deduping && (
+                        <p className="text-gray-500 flex items-center gap-1 mt-1">
+                          <ArrowPathIcon className="h-3 w-3 animate-spin" />
+                          Checking for cross-account duplicates...
+                        </p>
+                      )}
+                      {dedupResult && !dedupResult.error && (dedupResult.crossDuped || 0) > 0 && (
+                        <p className="text-amber-700 mt-1">
+                          <span className="font-medium">{dedupResult.crossDuped}</span> cross-account duplicate{(dedupResult.crossDuped || 0) !== 1 ? 's' : ''} flagged as transfers
                         </p>
                       )}
                       {syncResult.errors && syncResult.errors.length > 0 && (

@@ -175,26 +175,35 @@ export async function upsertTransactions(rows: ProcessedTransaction[]): Promise<
   let backfilled = 0
 
   if (rowsWithRawDesc.length > 0) {
-    // Execute all updates in parallel for efficiency
-    // Update raw_description only where it's currently NULL
-    // Uses the same conflict key to identify rows
-    const updatePromises = rowsWithRawDesc.map(row =>
-      supabase
-        .from('transactions')
-        .update({ raw_description: row.raw_description })
-        .eq('account_id', row.account_id)
-        .eq('date', row.date)
-        .eq('amount', row.amount)
-        .eq('description', row.description)
-        .is('raw_description', null)
-        .select('id')
-    )
-
-    const updateResults = await Promise.all(updatePromises)
-    // Count how many rows were actually updated
-    for (const result of updateResults) {
-      if (!result.error && result.data) {
-        backfilled += result.data.length
+    // Single bulk UPDATE via RPC instead of N individual queries
+    const { data: count, error: rpcError } = await supabase.rpc('bulk_backfill_raw_description', {
+      p_rows: rowsWithRawDesc.map(row => ({
+        account_id: row.account_id,
+        date: row.date,
+        amount: row.amount,
+        description: row.description,
+        raw_description: row.raw_description,
+      }))
+    })
+    if (!rpcError) {
+      backfilled = count ?? 0
+    } else {
+      // Fall back to parallel updates if RPC not yet available
+      const updateResults = await Promise.all(
+        rowsWithRawDesc.map(row =>
+          supabase
+            .from('transactions')
+            .update({ raw_description: row.raw_description })
+            .eq('account_id', row.account_id)
+            .eq('date', row.date)
+            .eq('amount', row.amount)
+            .eq('description', row.description)
+            .is('raw_description', null)
+            .select('id')
+        )
+      )
+      for (const result of updateResults) {
+        if (!result.error && result.data) backfilled += result.data.length
       }
     }
   }
