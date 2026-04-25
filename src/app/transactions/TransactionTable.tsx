@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { CATEGORIES, CLASSIFICATIONS } from '@/lib/constants'
 import { Transaction } from '@/lib/types'
 import { MagnifyingGlassIcon, EllipsisHorizontalIcon, XMarkIcon, ChevronLeftIcon, ChevronRightIcon, ChevronUpIcon, ChevronDownIcon } from '@heroicons/react/24/outline'
@@ -25,6 +25,79 @@ function formatAmount(n: number): string {
 function formatDate(s: string): string {
   const d = new Date(s + 'T00:00:00')
   return d.toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
+// ─── Detail Card (mirrors the ExampleCard on the training page) ───────────────
+
+function TransactionDetailCard({
+  t,
+  accountName,
+}: {
+  t: Transaction
+  accountName: string
+}) {
+  const isCredit = t.amount > 0
+  const fromLabel = isCredit ? t.merchant : accountName
+  const toLabel   = isCredit ? accountName : t.merchant
+  const sourceLabel = t.accounts?.institution === 'Xero' ? 'Xero' : 'CSV'
+
+  const formattedAmount = new Intl.NumberFormat('en-AU', {
+    style: 'currency',
+    currency: 'AUD',
+  }).format(Math.abs(t.amount))
+
+  return (
+    <div className="text-xs bg-gray-50 border border-gray-100 rounded p-3">
+      <div className="grid gap-x-4 gap-y-1.5" style={{ gridTemplateColumns: '5rem 1fr' }}>
+        <span className="text-gray-400 uppercase tracking-wide text-[10px] pt-px">From</span>
+        <span className="text-gray-700">{fromLabel}</span>
+
+        <span className="text-gray-400 uppercase tracking-wide text-[10px] pt-px">To</span>
+        <span className="text-gray-700 font-medium">{toLabel}</span>
+
+        <span className="text-gray-400 uppercase tracking-wide text-[10px] pt-px">When</span>
+        <span className="text-gray-700">{formatDate(t.date)}</span>
+
+        <span className="text-gray-400 uppercase tracking-wide text-[10px] pt-px">Amount</span>
+        <span className="flex items-center gap-1.5 text-gray-700">
+          {formattedAmount}
+          <span className={`font-medium rounded px-1 py-px ${isCredit ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+            {isCredit ? 'CREDIT' : 'DEBIT'}
+          </span>
+          {t.is_transfer && (
+            <span className="font-medium rounded px-1 py-px bg-gray-200 text-gray-500">TRANSFER</span>
+          )}
+        </span>
+
+        <span className="text-gray-400 uppercase tracking-wide text-[10px] pt-px">Source</span>
+        <span className="text-gray-700">{sourceLabel}</span>
+
+        {(t.category || t.classification) && (
+          <>
+            <span className="text-gray-400 uppercase tracking-wide text-[10px] pt-px">Category</span>
+            <span className="text-gray-700">
+              {t.category || <span className="italic text-amber-500">Uncategorised</span>}
+              {t.classification && <span className="ml-1.5 text-gray-400">· {t.classification}</span>}
+            </span>
+          </>
+        )}
+
+        {t.raw_description && (
+          <>
+            <span className="text-gray-400 uppercase tracking-wide text-[10px] self-start pt-px">Raw</span>
+            <span className="text-gray-600 font-mono whitespace-pre-wrap break-all">{t.raw_description}</span>
+          </>
+        )}
+
+        {t.notes && (
+          <>
+            <span className="text-gray-400 uppercase tracking-wide text-[10px] self-start pt-px">Notes</span>
+            <span className="text-gray-600">{t.notes}</span>
+          </>
+        )}
+      </div>
+    </div>
+  )
 }
 
 export function TransactionTable({ initialTransactions, accounts, initialCategory }: Props) {
@@ -55,6 +128,9 @@ export function TransactionTable({ initialTransactions, accounts, initialCategor
   // Action menu
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
+
+  // Expanded detail row
+  const [expandedId, setExpandedId] = useState<string | null>(null)
 
   // Sort
   const [sortBy, setSortBy] = useState<'date' | 'amount' | 'merchant' | 'category'>('date')
@@ -361,119 +437,138 @@ export function TransactionTable({ initialTransactions, accounts, initialCategor
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {transactions.map(t => (
-                  <tr key={t.id} className={`${rowBg(t)} hover:bg-opacity-80 transition-colors`}>
-                    <td className="px-4 py-3">
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.has(t.id)}
-                        onChange={() => toggleSelect(t.id)}
-                        className="rounded text-emerald-600"
-                      />
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-gray-600">{formatDate(t.date)}</td>
-                    <td className="px-4 py-3">
-                      <div className="font-medium text-gray-900 truncate max-w-[200px]">{t.merchant}</div>
-                      {t.raw_description && t.raw_description !== t.merchant && (
-                        <div className="text-xs text-gray-400 truncate max-w-[260px] mt-0.5 font-mono" title={t.raw_description}>{t.raw_description}</div>
-                      )}
-                      <div className="flex gap-1 flex-wrap mt-0.5">
-                        {t.is_transfer && <span className="text-xs bg-gray-200 text-gray-500 rounded px-1.5 py-0.5">Transfer</span>}
-                        {!t.is_transfer && t.amount > 0 && <span className="text-xs bg-emerald-100 text-emerald-700 rounded px-1.5 py-0.5">Income</span>}
-                      </div>
-                      {t.notes && <div className="text-xs text-gray-400 truncate max-w-[200px]">{t.notes}</div>}
-                    </td>
-                    <td className="px-4 py-3 text-gray-500 hidden md:table-cell">
-                      {accounts.find(a => a.id === t.account_id)?.display_name || '—'}
-                    </td>
-                    <td className="px-4 py-3 text-right font-medium tabular-nums text-gray-900">
-                      {formatAmount(t.amount)}
-                    </td>
+                {transactions.map(t => {
+                  const accountName = accounts.find(a => a.id === t.account_id)?.display_name || '—'
+                  const isExpanded = expandedId === t.id
+                  return (
+                    <React.Fragment key={t.id}>
+                      <tr
+                        className={`${rowBg(t)} hover:bg-opacity-80 transition-colors cursor-pointer`}
+                        onClick={() => setExpandedId(isExpanded ? null : t.id)}
+                      >
+                        <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(t.id)}
+                            onChange={() => toggleSelect(t.id)}
+                            className="rounded text-emerald-600"
+                          />
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-gray-600">{formatDate(t.date)}</td>
+                        <td className="px-4 py-3">
+                          <div className="font-medium text-gray-900 truncate max-w-[200px]">{t.merchant}</div>
+                          {t.raw_description && t.raw_description !== t.merchant && (
+                            <div className="text-xs text-gray-400 truncate max-w-[260px] mt-0.5 font-mono" title={t.raw_description}>{t.raw_description}</div>
+                          )}
+                          <div className="flex gap-1 flex-wrap mt-0.5">
+                            {t.is_transfer && <span className="text-xs bg-gray-200 text-gray-500 rounded px-1.5 py-0.5">Transfer</span>}
+                            {!t.is_transfer && t.amount > 0 && <span className="text-xs bg-emerald-100 text-emerald-700 rounded px-1.5 py-0.5">Income</span>}
+                          </div>
+                          {t.notes && <div className="text-xs text-gray-400 truncate max-w-[200px]">{t.notes}</div>}
+                        </td>
+                        <td className="px-4 py-3 text-gray-500 hidden md:table-cell">
+                          {accountName}
+                        </td>
+                        <td className="px-4 py-3 text-right font-medium tabular-nums text-gray-900">
+                          {formatAmount(t.amount)}
+                        </td>
 
-                    {/* Category cell - inline edit */}
-                    <td className="px-4 py-3">
-                      {editingId === t.id && editingField === 'category' ? (
-                        <select
-                          autoFocus
-                          defaultValue={t.category || ''}
-                          onBlur={e => handleCategoryChange(t.id, 'category', e.target.value)}
-                          onChange={e => handleCategoryChange(t.id, 'category', e.target.value)}
-                          className="text-sm border border-emerald-400 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-white"
-                        >
-                          <option value="">Uncategorised</option>
-                          {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                        </select>
-                      ) : (
-                        <button
-                          onClick={() => { setEditingId(t.id); setEditingField('category') }}
-                          className={`text-left text-sm rounded px-2 py-0.5 hover:bg-white hover:ring-1 hover:ring-emerald-400 hover:shadow-sm transition-all ${
-                            t.category ? 'text-gray-700' : 'text-amber-600 italic'
-                          }`}
-                          title="Click to edit"
-                        >
-                          {t.category || 'Set category'}
-                        </button>
-                      )}
-                    </td>
+                        {/* Category cell - inline edit */}
+                        <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                          {editingId === t.id && editingField === 'category' ? (
+                            <select
+                              autoFocus
+                              defaultValue={t.category || ''}
+                              onBlur={e => handleCategoryChange(t.id, 'category', e.target.value)}
+                              onChange={e => handleCategoryChange(t.id, 'category', e.target.value)}
+                              className="text-sm border border-emerald-400 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-white"
+                            >
+                              <option value="">Uncategorised</option>
+                              {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                          ) : (
+                            <button
+                              onClick={() => { setEditingId(t.id); setEditingField('category') }}
+                              className={`text-left text-sm rounded px-2 py-0.5 hover:bg-white hover:ring-1 hover:ring-emerald-400 hover:shadow-sm transition-all ${
+                                t.category ? 'text-gray-700' : 'text-amber-600 italic'
+                              }`}
+                              title="Click to edit"
+                            >
+                              {t.category || 'Set category'}
+                            </button>
+                          )}
+                        </td>
 
-                    {/* Classification cell - inline edit */}
-                    <td className="px-4 py-3 hidden lg:table-cell">
-                      {editingId === t.id && editingField === 'classification' ? (
-                        <select
-                          autoFocus
-                          defaultValue={t.classification || ''}
-                          onBlur={e => handleCategoryChange(t.id, 'classification', e.target.value)}
-                          onChange={e => handleCategoryChange(t.id, 'classification', e.target.value)}
-                          className="text-sm border border-emerald-400 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-white"
-                        >
-                          <option value="">None</option>
-                          {CLASSIFICATIONS.map(c => <option key={c} value={c}>{c}</option>)}
-                        </select>
-                      ) : (
-                        <button
-                          onClick={() => { setEditingId(t.id); setEditingField('classification') }}
-                          className={`text-left text-sm rounded px-2 py-0.5 hover:bg-white hover:ring-1 hover:ring-emerald-400 hover:shadow-sm transition-all ${
-                            t.classification ? 'text-gray-600' : 'text-gray-400 italic'
-                          }`}
-                          title="Click to edit"
-                        >
-                          {t.classification || 'Set classification'}
-                        </button>
-                      )}
-                    </td>
+                        {/* Classification cell - inline edit */}
+                        <td className="px-4 py-3 hidden lg:table-cell" onClick={e => e.stopPropagation()}>
+                          {editingId === t.id && editingField === 'classification' ? (
+                            <select
+                              autoFocus
+                              defaultValue={t.classification || ''}
+                              onBlur={e => handleCategoryChange(t.id, 'classification', e.target.value)}
+                              onChange={e => handleCategoryChange(t.id, 'classification', e.target.value)}
+                              className="text-sm border border-emerald-400 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-white"
+                            >
+                              <option value="">None</option>
+                              {CLASSIFICATIONS.map(c => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                          ) : (
+                            <button
+                              onClick={() => { setEditingId(t.id); setEditingField('classification') }}
+                              className={`text-left text-sm rounded px-2 py-0.5 hover:bg-white hover:ring-1 hover:ring-emerald-400 hover:shadow-sm transition-all ${
+                                t.classification ? 'text-gray-600' : 'text-gray-400 italic'
+                              }`}
+                              title="Click to edit"
+                            >
+                              {t.classification || 'Set classification'}
+                            </button>
+                          )}
+                        </td>
 
-                    {/* Action menu */}
-                    <td className="px-4 py-3 relative">
-                      <div ref={menuOpenId === t.id ? menuRef : null}>
-                        <button
-                          onClick={() => setMenuOpenId(menuOpenId === t.id ? null : t.id)}
-                          className="p-1 rounded hover:bg-gray-100 transition-colors"
-                        >
-                          <EllipsisHorizontalIcon className="h-4 w-4 text-gray-400" />
-                        </button>
-                        {menuOpenId === t.id && (
-                          <div className="absolute right-0 top-8 z-10 bg-white border border-gray-200 rounded-lg shadow-lg py-1 w-48">
-                            {t.is_transfer ? (
-                              <button
-                                onClick={() => handleUnexclude(t.id)}
-                                className="w-full text-left px-4 py-2 text-sm text-emerald-700 hover:bg-gray-50"
-                              >
-                                Un-exclude (include in reports)
-                              </button>
-                            ) : (
-                              <button
-                                onClick={() => handleExclude(t.id)}
-                                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                              >
-                                Exclude from reports
-                              </button>
+                        {/* Action menu */}
+                        <td className="px-4 py-3 relative" onClick={e => e.stopPropagation()}>
+                          <div ref={menuOpenId === t.id ? menuRef : null}>
+                            <button
+                              onClick={() => setMenuOpenId(menuOpenId === t.id ? null : t.id)}
+                              className="p-1 rounded hover:bg-gray-100 transition-colors"
+                            >
+                              <EllipsisHorizontalIcon className="h-4 w-4 text-gray-400" />
+                            </button>
+                            {menuOpenId === t.id && (
+                              <div className="absolute right-0 top-8 z-10 bg-white border border-gray-200 rounded-lg shadow-lg py-1 w-48">
+                                {t.is_transfer ? (
+                                  <button
+                                    onClick={() => handleUnexclude(t.id)}
+                                    className="w-full text-left px-4 py-2 text-sm text-emerald-700 hover:bg-gray-50"
+                                  >
+                                    Un-exclude (include in reports)
+                                  </button>
+                                ) : (
+                                  <button
+                                    onClick={() => handleExclude(t.id)}
+                                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                                  >
+                                    Exclude from reports
+                                  </button>
+                                )}
+                              </div>
                             )}
                           </div>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                        </td>
+                      </tr>
+
+                      {/* Expanded detail row */}
+                      {isExpanded && (
+                        <tr key={`${t.id}-detail`} className={rowBg(t)}>
+                          <td />
+                          <td colSpan={7} className="px-4 pb-4 pt-0">
+                            <TransactionDetailCard t={t} accountName={accountName} />
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  )
+                })}
               </tbody>
             </table>
           </div>
