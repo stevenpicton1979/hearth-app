@@ -138,9 +138,11 @@ export async function getXeroBankTransactions(
   const order = 'Date DESC'
   const PAGE_SIZE = 100
   const MAX_PAGES = 20
-  const BATCH = 5
+  const BATCH = 2
 
-  const fetchPage = async (page: number): Promise<XeroBankTransaction[]> => {
+  const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms))
+
+  const fetchPage = async (page: number, attempt = 0): Promise<XeroBankTransaction[]> => {
     const params = new URLSearchParams({ where, order, page: page.toString() })
     const url = `${XERO_API_BASE}/BankTransactions?${params.toString()}`
     const headers: Record<string, string> = {
@@ -153,6 +155,12 @@ export async function getXeroBankTransactions(
       headers['If-Modified-Since'] = new Date(sinceDate).toUTCString()
     }
     const res = await fetch(url, { method: 'GET', headers })
+    if (res.status === 429) {
+      if (attempt >= 3) throw new Error(`Failed to fetch Xero transactions (page ${page}): HTTP 429 Too Many Requests — rate limit exceeded after retries`)
+      const retryAfter = parseInt(res.headers.get('Retry-After') ?? '15', 10)
+      await sleep(retryAfter * 1000)
+      return fetchPage(page, attempt + 1)
+    }
     if (!res.ok) {
       const err = await res.text()
       throw new Error(`Failed to fetch Xero transactions (page ${page}): HTTP ${res.status} ${res.statusText} — ${err}`)
@@ -172,6 +180,8 @@ export async function getXeroBankTransactions(
       all.push(...txns)
     }
     if (pages.some(p => p.length < PAGE_SIZE)) break
+    // Brief pause between batches to stay well within Xero's rate limits
+    if (batchEnd < MAX_PAGES) await sleep(500)
   }
 
   return { transactions: all }
