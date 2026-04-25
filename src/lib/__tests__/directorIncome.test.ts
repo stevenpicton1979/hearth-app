@@ -19,7 +19,9 @@ describe('classifyDirectorIncome', () => {
     })
 
     it('returns match=false for unrelated income', () => {
-      expect(classifyDirectorIncome('INTEREST CREDIT', 50).match).toBe(false)
+      const result = classifyDirectorIncome('INTEREST CREDIT', 50)
+      expect(result.match).toBe(false)
+      expect(result.ruleName).toBeNull()
     })
   })
 
@@ -31,12 +33,14 @@ describe('classifyDirectorIncome', () => {
       const result = classifyDirectorIncome('NETBANK WAGE 12345', 4000)
       expect(result.match).toBe(true)
       expect(result.category).toBe('Salary')
+      expect(result.ruleName).toBe('director-income:netbank-wage')
     })
 
     it('classifies FIN WAGE as Salary', () => {
       const result = classifyDirectorIncome('FIN WAGE PAYMENT', 4000)
       expect(result.match).toBe(true)
       expect(result.category).toBe('Salary')
+      expect(result.ruleName).toBe('director-income:fin-wage')
     })
 
     it('is case-insensitive for wage keyword', () => {
@@ -69,6 +73,7 @@ describe('classifyDirectorIncome', () => {
       const result = classifyDirectorIncome('COMMBANK APP TRANSFER', 10000)
       expect(result.match).toBe(true)
       expect(result.category).toBe('Director Income')
+      expect(result.ruleName).toBe('director-income:commbank-app')
     })
 
     it('classifies PAYROLL (no wage keyword) as Director Income', () => {
@@ -76,6 +81,7 @@ describe('classifyDirectorIncome', () => {
       const result = classifyDirectorIncome('PAYROLL CLEARING', 4000)
       expect(result.match).toBe(true)
       expect(result.category).toBe('Director Income')
+      expect(result.ruleName).toBe('director-income:payroll')
     })
   })
 })

@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
   // Query 1: explicit column list — no PostgREST join syntax
   const { data, error } = await supabase
     .from('transactions')
-    .select('id, date, amount, description, raw_description, merchant, category, classification, is_transfer, source, account_id, linked_transfer_id')
+    .select('id, date, amount, description, raw_description, merchant, category, classification, is_transfer, source, account_id, linked_transfer_id, matched_rule')
     .eq('household_id', DEFAULT_HOUSEHOLD_ID)
     .eq('merchant', merchant)
     .order('source', { ascending: true, nullsFirst: true })

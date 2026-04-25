@@ -91,6 +91,7 @@ function ExampleCard({ ex }: { ex: Record<string, unknown> }) {
   const collapsedCount = (ex.collapsed_count   as number | null) ?? 1
 
   const transferDest = ex.transfer_destination as string | null
+  const matchedRule    = ex.matched_rule         as string | null
 
   // Credits (money IN): sender is FROM, receiver is TO — use transferDest if known, else merchant name
   // Debits (money OUT): sender is account (FROM), recipient is transferDest or merchant (TO)
@@ -153,6 +154,16 @@ function ExampleCard({ ex }: { ex: Record<string, unknown> }) {
           </>
         )}
 
+        {matchedRule && (
+          <>
+            <span className="text-gray-400 uppercase tracking-wide text-[10px] pt-px">Rule</span>
+            <span>
+              <span className="inline-block text-[10px] font-mono bg-violet-100 text-violet-700 rounded px-1.5 py-0.5">
+                {matchedRule}
+              </span>
+            </span>
+          </>
+        )}
 
       </div>
     </div>

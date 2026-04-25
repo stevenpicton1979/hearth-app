@@ -224,6 +224,87 @@ describe('processBatch', () => {
 })
 
 // ---------------------------------------------------------------------------
+// processBatch — matched_rule attribution
+// ---------------------------------------------------------------------------
+
+describe('processBatch matched_rule', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('sets matched_rule to director-income:netbank-wage for NETBANK WAGE credit', async () => {
+    setupMocks()
+    const { toUpsert } = await processBatch([raw({ description: 'NETBANK WAGE CREDIT', amount: 4000 })])
+    expect(toUpsert[0].matched_rule).toBe('director-income:netbank-wage')
+  })
+
+  it('sets matched_rule to director-income:commbank-app for COMMBANK APP credit', async () => {
+    setupMocks()
+    const { toUpsert } = await processBatch([raw({ description: 'COMMBANK APP TRANSFER', amount: 2000 })])
+    expect(toUpsert[0].matched_rule).toBe('director-income:commbank-app')
+  })
+
+  it('sets matched_rule to transfer-pattern for a pattern-matched transfer', async () => {
+    setupMocks()
+    const { toUpsert } = await processBatch([raw({ description: 'TRANSFER TO XX5426', amount: -1000 })])
+    expect(toUpsert[0].is_transfer).toBe(true)
+    expect(toUpsert[0].matched_rule).toBe('transfer-pattern')
+  })
+
+  it('propagates raw.matched_rule for forced_is_transfer rows (Xero rules)', async () => {
+    setupMocks()
+    const { toUpsert } = await processBatch([
+      raw({ description: 'WAGE TRANSFER', amount: -5000, forced_is_transfer: true, matched_rule: 'xero:personal-wage' }),
+    ])
+    expect(toUpsert[0].is_transfer).toBe(true)
+    expect(toUpsert[0].matched_rule).toBe('xero:personal-wage')
+  })
+
+  it('sets matched_rule to null for raw.is_transfer=true without forced_is_transfer (external flag)', async () => {
+    setupMocks()
+    const { toUpsert } = await processBatch([
+      raw({ description: 'INTERNAL MEMO', amount: -1000, is_transfer: true }),
+    ])
+    expect(toUpsert[0].is_transfer).toBe(true)
+    expect(toUpsert[0].matched_rule).toBeNull()
+  })
+
+  it('sets matched_rule to merchant:ato_payments for ATO debit', async () => {
+    setupMocks()
+    const { toUpsert } = await processBatch([raw({ description: 'ATO PAYMENT REF12345', amount: -2000 })])
+    expect(toUpsert[0].category).toBe('Government & Tax')
+    expect(toUpsert[0].matched_rule).toBe('merchant:ato_payments')
+  })
+
+  it('sets matched_rule to null when merchant_mappings table overrides the rule', async () => {
+    setupMocks({
+      mappings: [{ merchant: 'ATO PAYMENT REF12345', category: 'Business', classification: null }],
+    })
+    const { toUpsert } = await processBatch([raw({ description: 'ATO PAYMENT REF12345', amount: -2000 })])
+    expect(toUpsert[0].category).toBe('Business')
+    expect(toUpsert[0].matched_rule).toBeNull()
+  })
+
+  it('sets matched_rule to null for keyword guesses (guessCategory)', async () => {
+    setupMocks()
+    const { toUpsert } = await processBatch([raw({ description: 'WOOLWORTHS 1234', amount: -50 })])
+    expect(toUpsert[0].category).toBe('Food & Groceries')
+    expect(toUpsert[0].matched_rule).toBeNull()
+  })
+
+  it('sets matched_rule to null for income with no rule match', async () => {
+    setupMocks({ accounts: [{ id: ACCOUNT_ID, owner: 'Steven' }] })
+    const { toUpsert } = await processBatch([raw({ description: 'INTEREST PAYMENT', amount: 12.5 })])
+    expect(toUpsert[0].matched_rule).toBeNull()
+  })
+
+  it('sets matched_rule to merchant:director_loan_repayment for personal name income', async () => {
+    setupMocks()
+    const { toUpsert } = await processBatch([raw({ description: 'STEVEN PICTON', amount: 5000 })])
+    expect(toUpsert[0].is_transfer).toBe(true)
+    expect(toUpsert[0].matched_rule).toBe('merchant:director_loan_repayment')
+  })
+})
+
+// ---------------------------------------------------------------------------
 // upsertTransactions
 // ---------------------------------------------------------------------------
 
@@ -239,6 +320,7 @@ function makeProcessed(overrides: Partial<ProcessedTransaction> = {}): Processed
     classification: 'Steven',
     is_transfer: false,
     external_id: null,
+    matched_rule: null,
     ...overrides,
   }
 }

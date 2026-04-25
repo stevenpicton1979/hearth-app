@@ -190,6 +190,7 @@ export async function POST(req: NextRequest) {
         let forcedIsTransfer: boolean | undefined
         let ruleCategory: string | null = null
         let needsReview = false
+        let xeroMatchedRule: string | null = null
 
         if (txType === 'SPEND-TRANSFER') {
           const narration = xTx.Narration ?? ''
@@ -219,6 +220,7 @@ export async function POST(req: NextRequest) {
           forcedIsTransfer = outcome.is_transfer
           ruleCategory = outcome.category
           needsReview = outcome.needs_review
+          xeroMatchedRule = 'xero:' + outcome.ruleName
         }
 
         raws.push({
@@ -234,6 +236,7 @@ export async function POST(req: NextRequest) {
           needs_review: needsReview,
           gl_account: glAccountName,
           gl_tax_type: glTaxType,
+          matched_rule: xeroMatchedRule,
         })
       } catch (txErr) {
         errors.push(`Transaction error: ${txErr instanceof Error ? txErr.message : String(txErr)}`)

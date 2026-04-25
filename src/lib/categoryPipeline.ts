@@ -20,6 +20,12 @@ export interface RawTransaction {
   needs_review?: boolean
   gl_account?: string | null
   gl_tax_type?: string | null
+  /**
+   * Pre-assigned rule ID from upstream processing (e.g. Xero transfer rules).
+   * When set, this is carried into ProcessedTransaction.matched_rule as-is,
+   * unless a higher-priority in-pipeline rule overrides it.
+   */
+  matched_rule?: string | null
 }
 
 export interface ProcessedTransaction {
@@ -39,6 +45,16 @@ export interface ProcessedTransaction {
   needs_review?: boolean
   gl_account?: string | null
   gl_tax_type?: string | null
+  /**
+   * Identifies which codified rule set the category/transfer flag.
+   * Null means a manual merchant mapping, a keyword guess, or a GL category hint.
+   * Format: "<engine>:<rule-name>", e.g.:
+   *   "director-income:netbank-wage"
+   *   "transfer-pattern"
+   *   "merchant:ato_payments"
+   *   "xero:personal-wage"
+   */
+  matched_rule: string | null
 }
 
 export async function applyMappings(merchant: string): Promise<{ category: string | null; classification: string | null }> {
@@ -90,6 +106,7 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
 
     const merchant = cleanMerchant(raw.description)
 
+    // ── 1. Director income (highest priority — fires before transfer check) ──
     const directorResult = classifyDirectorIncome(raw.description, raw.amount)
     if (directorResult.match) {
       toUpsert.push({
@@ -107,15 +124,34 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
         needs_review: raw.needs_review ?? false,
         gl_account: raw.gl_account ?? null,
         gl_tax_type: raw.gl_tax_type ?? null,
+        matched_rule: directorResult.ruleName,
       })
       continue
     }
 
+    // ── 2. Transfer detection ──────────────────────────────────────────────
+    // Evaluate the transfer-pattern check once so we can use it in both the
+    // boolean and the rule attribution without calling isTransfer() twice.
+    const isPatternTransfer =
+      raw.forced_is_transfer === undefined && isTransfer(raw.description)
+
     const isTransferRow = raw.forced_is_transfer !== undefined
       ? raw.forced_is_transfer
-      : (raw.is_transfer || isTransfer(raw.description))
+      : (raw.is_transfer || isPatternTransfer)
 
     if (isTransferRow) {
+      // Attribute the transfer:
+      //  • forced_is_transfer defined → Xero rule engine fired; rule name was
+      //    passed in via raw.matched_rule (e.g. "xero:business-card-payoff")
+      //  • pattern match              → local TRANSFER_PATTERNS matched
+      //  • raw.is_transfer flag       → externally flagged (CSV import, etc.)
+      const transferMatchedRule: string | null =
+        raw.forced_is_transfer !== undefined
+          ? (raw.matched_rule ?? null)   // from Xero rule engine
+          : isPatternTransfer
+            ? 'transfer-pattern'
+            : null                       // bare is_transfer flag, no named rule
+
       toUpsert.push({
         household_id: DEFAULT_HOUSEHOLD_ID,
         account_id: raw.account_id,
@@ -131,18 +167,24 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
         needs_review: raw.needs_review ?? false,
         gl_account: raw.gl_account ?? null,
         gl_tax_type: raw.gl_tax_type ?? null,
+        matched_rule: transferMatchedRule,
       })
       transfersSkipped++
       continue
     }
 
+    // ── 3. Non-transfer categorisation ────────────────────────────────────
     const isIncome = raw.amount > 0
 
     let category: string | null = null
     const accountOwner = accountOwnerMap.get(raw.account_id) ?? null
     let classification: string | null = accountOwner
+    // Start with any upstream rule (e.g. a Xero non-transfer rule that resolved
+    // to a category via category_hint); may be overridden below.
+    let matchedRule: string | null = raw.matched_rule ?? null
 
     const ruleResult = applyMerchantCategoryRules(merchant, { amount: raw.amount, isIncome, accountOwner })
+
     if (ruleResult?.isTransfer) {
       toUpsert.push({
         household_id: DEFAULT_HOUSEHOLD_ID,
@@ -159,6 +201,7 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
         needs_review: raw.needs_review ?? false,
         gl_account: raw.gl_account ?? null,
         gl_tax_type: raw.gl_tax_type ?? null,
+        matched_rule: `merchant:${ruleResult.ruleName}`,
       })
       transfersSkipped++
       continue
@@ -166,15 +209,22 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
 
     const mapping = mappingMap.get(merchant)
     if (mapping) {
+      // Manual merchant mapping — highest confidence, clears any upstream rule
       category = mapping.category
       if (mapping.classification != null) classification = mapping.classification
+      matchedRule = null
     } else if (ruleResult) {
+      // Named merchant category rule
       category = ruleResult.category
+      matchedRule = `merchant:${ruleResult.ruleName}`
       if (!isIncome && category !== null) autoMappings.set(merchant, category)
     } else if (raw.category_hint) {
+      // GL account hint or Xero non-transfer rule category (passed via category_hint)
       category = raw.category_hint
+      // Keep matchedRule = raw.matched_rule (e.g. "xero:personal-wage") if set
       if (!isIncome) autoMappings.set(merchant, category)
     } else if (!isIncome) {
+      // Keyword fallback — not a named rule
       category = guessCategory(merchant)
       if (category === null && /^\d{10,}\s+COMMBANK APP BPA/i.test(raw.description)) {
         category = 'Business'
@@ -182,6 +232,7 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
       if (category === null && raw.gl_tax_type === 'GST') {
         category = 'Business'
       }
+      matchedRule = null
       if (category !== null) autoMappings.set(merchant, category)
     }
 
@@ -200,6 +251,7 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
       needs_review: raw.needs_review ?? false,
       gl_account: raw.gl_account ?? null,
       gl_tax_type: raw.gl_tax_type ?? null,
+      matched_rule: matchedRule,
     })
   }
 
