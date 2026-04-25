@@ -7,9 +7,18 @@ export async function GET(req: NextRequest) {
   if (!merchant) return NextResponse.json({ error: 'merchant required' }, { status: 400 })
 
   const supabase = createServerClient()
+
+  // Single query: join source account and, for transfers, the linked transaction's
+  // account — so FROM and TO are resolved without a second round-trip.
   const { data, error } = await supabase
     .from('transactions')
-    .select('*, accounts!account_id(display_name)')
+    .select(`
+      *,
+      accounts!account_id(display_name),
+      linked:transactions!linked_transfer_id(
+        accounts!account_id(display_name)
+      )
+    `)
     .eq('household_id', DEFAULT_HOUSEHOLD_ID)
     .eq('merchant', merchant)
     .order('source', { ascending: true, nullsFirst: true })
@@ -28,43 +37,24 @@ export async function GET(req: NextRequest) {
     if (!key || seen.has(key)) continue
     seen.add(key)
 
-    // Resolve account display name; keep linked_transfer_id for the join below
     const row: Record<string, unknown> = { ...rawRow }
-    const accountJoin = row.accounts as { display_name?: string } | null
-    row.account = accountJoin?.display_name ?? row.account_id
+
+    // FROM: source account display name
+    const srcJoin = row.accounts as { display_name?: string } | null
+    row.account = srcJoin?.display_name ?? row.account_id
+
+    // TO: linked transfer's account display name (null when not a linked transfer)
+    const linked = row.linked as { accounts?: { display_name?: string } | null } | null
+    row.transfer_destination = linked?.accounts?.display_name ?? null
+
     delete row.accounts
+    delete row.linked
     delete row.household_id
+    delete row.account_id
+    delete row.linked_transfer_id
 
     examples.push(row)
     if (examples.length >= 5) break
-  }
-
-  // For transfer rows with a linked counterpart, resolve the destination account name
-  const transferExamples = examples.filter(
-    ex => ex.is_transfer === true && ex.linked_transfer_id != null
-  )
-  if (transferExamples.length > 0) {
-    await Promise.all(transferExamples.map(async (ex) => {
-      // Select account_id so PostgREST anchors the row; without a main-table
-      // column the embedded join can return null even when the row exists.
-      const { data: linked } = await supabase
-        .from('transactions')
-        .select('account_id, accounts!account_id(display_name)')
-        .eq('id', ex.linked_transfer_id as string)
-        .single()
-
-      if (linked) {
-        const row = linked as Record<string, unknown>
-        const join = row.accounts as { display_name?: string } | null
-        ex.transfer_destination = join?.display_name ?? null
-      }
-    }))
-  }
-
-  // Strip internal columns
-  for (const ex of examples) {
-    delete ex.account_id
-    delete ex.linked_transfer_id
   }
 
   return NextResponse.json({ examples })
