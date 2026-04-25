@@ -90,7 +90,20 @@ export async function POST(req: NextRequest) {
     }))
 
     const { toUpsert, transfersSkipped } = await processBatch(raws)
-    const { inserted, duplicates, autoCategorised } = await upsertTransactions(toUpsert)
+
+    // Deduplicate by conflict key before upsert — CSV files can contain
+    // duplicate rows that would trigger "ON CONFLICT DO UPDATE command
+    // cannot affect row a second time". Keep last occurrence (latest in file).
+    const deduped = Array.from(
+      toUpsert
+        .reduce((map, tx) => {
+          map.set(`${tx.account_id}|${tx.date}|${tx.amount}|${tx.description}`, tx)
+          return map
+        }, new Map<string, (typeof toUpsert)[0]>())
+        .values()
+    )
+
+    const { inserted, duplicates, autoCategorised } = await upsertTransactions(deduped)
 
     // Update account current_balance from the raw CSV balance (most recent row)
     if (latestBalance !== undefined) {
