@@ -139,8 +139,18 @@ export async function POST(req: NextRequest) {
       source: 'xero' as const,
     }))
 
+    // Deduplicate by conflict key — Xero can return the same transaction twice in a full history fetch
+    const deduped = Array.from(
+      xeroTransactions
+        .reduce((map, tx) => {
+          map.set(`${tx.account_id}|${tx.date}|${tx.amount}|${tx.description}`, tx)
+          return map
+        }, new Map<string, (typeof xeroTransactions)[0]>())
+        .values()
+    )
+
     // Upsert into database
-    const { inserted, duplicates, backfilled } = await upsertTransactions(xeroTransactions)
+    const { inserted, duplicates, backfilled } = await upsertTransactions(deduped)
 
     const nowIso = new Date().toISOString()
 
