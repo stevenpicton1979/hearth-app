@@ -104,23 +104,4 @@ export async function GET(req: NextRequest) {
   // If linked_transfer_id is null, transfer_destination will be null but should still be present.
   for (const ex of examples) {
     const srcId = ex.account_id as string | null
-    ex.account = srcId ? (accountNameMap.get(srcId) ?? srcId) : '—'
-
-    const lid = ex.linked_transfer_id as string | null
-    if (lid) {
-      const linkedAcctId = linkedTxnToAccount.get(lid)
-      ex.transfer_destination = linkedAcctId ? (accountNameMap.get(linkedAcctId) ?? null) : null
-    } else {
-      // No linked_id — try to resolve destination from "TRANSFER TO XXnnnn" description pattern
-      const desc = ((ex.description as string) || '').toUpperCase()
-      const suffixMatch = desc.match(/\bXX(\d{4})\b/)
-      const suffix = suffixMatch ? `XX${suffixMatch[1]}` : null
-      ex.transfer_destination = suffix ? (suffixToName.get(suffix) ?? null) : null
-    }
-
-    delete ex.account_id
-    delete ex.linked_transfer_id
-  }
-
-  return NextResponse.json({ examples })
-}
+    ex.accou

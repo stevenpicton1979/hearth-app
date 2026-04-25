@@ -1,8 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// ---------------------------------------------------------------------------
-// Mock Supabase — hoisted so the import of categoryPipeline sees the mock
-// ---------------------------------------------------------------------------
 const mockFrom = vi.fn()
 
 vi.mock('../supabase/server', () => ({
@@ -10,10 +7,6 @@ vi.mock('../supabase/server', () => ({
 }))
 
 import { processBatch, upsertTransactions, type RawTransaction, type ProcessedTransaction } from '../categoryPipeline'
-
-// ---------------------------------------------------------------------------
-// Mock helpers
-// ---------------------------------------------------------------------------
 
 let capturedUpsertRows: unknown[] = []
 
@@ -57,22 +50,14 @@ function raw(overrides: Partial<RawTransaction> = {}): RawTransaction {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
 describe('processBatch', () => {
   beforeEach(() => vi.clearAllMocks())
-
-  // ── Zero amount ────────────────────────────────────────────────────────────
 
   it('skips zero-amount rows entirely', async () => {
     setupMocks()
     const { toUpsert } = await processBatch([raw({ amount: 0 })])
     expect(toUpsert).toHaveLength(0)
   })
-
-  // ── Regular debit categorisation ───────────────────────────────────────────
 
   it('auto-categorises a debit using guessCategory when no mapping exists', async () => {
     setupMocks()
@@ -84,8 +69,6 @@ describe('processBatch', () => {
 
   it('uses an existing merchant mapping over auto-category', async () => {
     setupMocks({
-      // cleanMerchant('WOOLWORTHS 1234') → 'WOOLWORTHS 1234', so the mapping key
-      // must match the post-clean merchant name exactly.
       mappings: [{ merchant: 'WOOLWORTHS 1234', category: 'Household', classification: 'Joint' }],
       accounts: [{ id: ACCOUNT_ID, owner: 'Steven' }],
     })
@@ -107,8 +90,6 @@ describe('processBatch', () => {
     await processBatch([raw({ description: 'WOOLWORTHS METRO', amount: -30 })])
     expect(capturedUpsertRows.length).toBeGreaterThan(0)
   })
-
-  // ── Transfer detection ─────────────────────────────────────────────────────
 
   it('marks transfer pattern descriptions with is_transfer=true', async () => {
     setupMocks()
@@ -144,8 +125,6 @@ describe('processBatch', () => {
     expect(toUpsert[0].is_transfer).toBe(true)
   })
 
-  // ── Director income ────────────────────────────────────────────────────────
-
   it('classifies NETBANK WAGE credit as Salary, is_transfer=false', async () => {
     setupMocks()
     const { toUpsert } = await processBatch([
@@ -164,8 +143,6 @@ describe('processBatch', () => {
     expect(toUpsert[0].is_transfer).toBe(false)
   })
 
-  // ── Regular income (not director income) ──────────────────────────────────
-
   it('income credit that is not director income gets category=null', async () => {
     setupMocks({ accounts: [{ id: ACCOUNT_ID, owner: 'Steven' }] })
     const { toUpsert } = await processBatch([
@@ -173,11 +150,8 @@ describe('processBatch', () => {
     ])
     expect(toUpsert[0].category).toBeNull()
     expect(toUpsert[0].is_transfer).toBe(false)
-    // classification comes from account owner
     expect(toUpsert[0].classification).toBe('Steven')
   })
-
-  // ── Classification from account owner ─────────────────────────────────────
 
   it('sets classification from account owner when no merchant mapping overrides it', async () => {
     setupMocks({ accounts: [{ id: ACCOUNT_ID, owner: 'Nicola' }] })
@@ -191,8 +165,6 @@ describe('processBatch', () => {
     expect(toUpsert[0].classification).toBeNull()
   })
 
-  // ── Metadata passthrough ──────────────────────────────────────────────────
-
   it('passes needs_review=true through to the output row', async () => {
     setupMocks()
     const { toUpsert } = await processBatch([raw({ needs_review: true })])
@@ -205,8 +177,6 @@ describe('processBatch', () => {
     const { toUpsert } = await processBatch([raw({ raw_description: rawDesc })])
     expect(toUpsert[0].raw_description).toBe(rawDesc)
   })
-
-  // ── Batch processing ──────────────────────────────────────────────────────
 
   it('processes multiple rows, skipping zero-amount ones', async () => {
     setupMocks()
@@ -228,8 +198,6 @@ describe('processBatch', () => {
     expect(toUpsert).toHaveLength(3)
     expect(transfersSkipped).toBe(2)
   })
-
-  // ── external_id passthrough ───────────────────────────────────────────────
 
   it('passes external_id through to the output row when provided', async () => {
     setupMocks()
@@ -256,7 +224,7 @@ describe('processBatch', () => {
 })
 
 // ---------------------------------------------------------------------------
-// upsertTransactions — external_id split + backfill logic
+// upsertTransactions
 // ---------------------------------------------------------------------------
 
 function makeProcessed(overrides: Partial<ProcessedTransaction> = {}): ProcessedTransaction {
@@ -337,8 +305,8 @@ describe('upsertTransactions', () => {
     expect(capturedConflicts).toContain('account_id,date,amount,description')
   })
 
-  it('backfill: stamps an existing null-external_id row before upserting', async () => {
-    const updatedIds: string[] = []
+  it('backfill: stamps an existing null-external_id row via bulk upsert before main upsert', async () => {
+    const upsertCalls: { rows: unknown; onConflict: string }[] = []
 
     mockFrom.mockImplementation((table: string) => {
       if (table === 'transactions') {
@@ -350,14 +318,9 @@ describe('upsertTransactions', () => {
             data: [{ id: 'existing-row-id', date: '2025-01-15', amount: -100, external_id: null }],
             error: null,
           }),
-          update: vi.fn().mockImplementation(() => ({
-            eq: vi.fn().mockImplementation((_col: string, id: string) => {
-              updatedIds.push(id)
-              return Promise.resolve({ error: null })
-            }),
-          })),
-          upsert: vi.fn().mockReturnValue({
-            select: vi.fn().mockResolvedValue({ data: [{ id: 'existing-row-id', category: 'Business' }], error: null }),
+          upsert: vi.fn().mockImplementation((rows: unknown, opts: { onConflict?: string }) => {
+            upsertCalls.push({ rows, onConflict: opts?.onConflict ?? '' })
+            return { select: vi.fn().mockResolvedValue({ data: [{ id: 'existing-row-id', category: 'Business' }], error: null }) }
           }),
         }
       }
@@ -367,7 +330,13 @@ describe('upsertTransactions', () => {
     const rows = [makeProcessed({ external_id: 'xero-brand-new-uuid', date: '2025-01-15', amount: -100 })]
     const result = await upsertTransactions(rows)
 
-    expect(updatedIds).toContain('existing-row-id')
+    const backfillCall = upsertCalls.find(c => c.onConflict === 'id')
+    expect(backfillCall).toBeDefined()
+    expect(backfillCall!.rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'existing-row-id', external_id: 'xero-brand-new-uuid' }),
+      ])
+    )
     expect(result.backfilled).toBe(1)
   })
 

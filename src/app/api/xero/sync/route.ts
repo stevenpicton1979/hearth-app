@@ -17,6 +17,9 @@ import type { XeroDestinationAccount } from '@/lib/xeroTransferRules'
 
 const XERO_DEFAULT_ACCOUNT_ID = '__xero_default__'
 
+// Vercel Pro: allow up to 5 minutes for a full sync
+export const maxDuration = 300
+
 export async function POST(req: NextRequest) {
   try {
     const connection = await getXeroConnection()
@@ -272,16 +275,4 @@ export async function POST(req: NextRequest) {
     await supabase
       .from('xero_connections')
       .update({ last_synced_at: new Date().toISOString() })
-      .eq('household_id', DEFAULT_HOUSEHOLD_ID)
-
-    return NextResponse.json({
-      synced: inserted,
-      skipped: transfersSkipped,
-      backfilled,
-      errors,
-    })
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : String(e)
-    return NextResponse.json({ error: msg }, { status: 500 })
-  }
-}
+      .eq(

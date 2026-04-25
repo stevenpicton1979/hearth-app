@@ -142,10 +142,8 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
     const accountOwner = accountOwnerMap.get(raw.account_id) ?? null
     let classification: string | null = accountOwner
 
-    // Apply named merchant rules first — these are explicit, testable, and documented.
     const ruleResult = applyMerchantCategoryRules(merchant, { amount: raw.amount, isIncome, accountOwner })
     if (ruleResult?.isTransfer) {
-      // Rule says this is a transfer — push as transfer and skip categorisation
       toUpsert.push({
         household_id: DEFAULT_HOUSEHOLD_ID,
         account_id: raw.account_id,
@@ -168,25 +166,19 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
 
     const mapping = mappingMap.get(merchant)
     if (mapping) {
-      // User-confirmed merchant mapping — highest priority for both income and expense
       category = mapping.category
       if (mapping.classification != null) classification = mapping.classification
     } else if (ruleResult) {
-      // Named merchant rule matched — use its category
       category = ruleResult.category
       if (!isIncome && category !== null) autoMappings.set(merchant, category)
     } else if (raw.category_hint) {
-      // GL account from Xero — high confidence, applies to income and expense
       category = raw.category_hint
       if (!isIncome) autoMappings.set(merchant, category)
     } else if (!isIncome) {
-      // Keyword guessing — expense only (income patterns are unreliable)
       category = guessCategory(merchant)
-      // BPAY fallback: long-number BPAY references with no GL → Business
       if (category === null && /^\d{10,}\s+COMMBANK APP BPA/i.test(raw.description)) {
         category = 'Business'
       }
-      // gl_tax_type tiebreaker: GST-coded transactions are business expenses
       if (category === null && raw.gl_tax_type === 'GST') {
         category = 'Business'
       }
@@ -235,10 +227,10 @@ export async function upsertTransactions(rows: ProcessedTransaction[]): Promise<
   let backfilled = 0
 
   // ── Backfill step ─────────────────────────────────────────────────────────
-  // Rows arriving with an external_id (e.g. Xero BankTransactionID) may already
-  // exist in the DB from a previous sync that lacked an external_id. Find those
-  // existing rows by (account_id, date, amount) and stamp them with the external_id
-  // so the upsert below updates the right row rather than creating a duplicate.
+  // Rows arriving with an external_id may already exist from a previous sync
+  // that lacked one. Match by (account_id, date, amount) and stamp external_id
+  // so the upsert below hits the right row instead of creating a duplicate.
+  // All account queries run in parallel; matched pairs are written in one bulk upsert.
   if (rowsWithExtId.length > 0) {
     const byAccount = new Map<string, ProcessedTransaction[]>()
     for (const r of rowsWithExtId) {
@@ -247,7 +239,9 @@ export async function upsertTransactions(rows: ProcessedTransaction[]): Promise<
       byAccount.set(r.account_id, list)
     }
 
-    for (const [accountId, accountRows] of Array.from(byAccount.entries())) {
+    const backfillPairs: { id: string; external_id: string }[] = []
+
+    await Promise.all(Array.from(byAccount.entries()).map(async ([accountId, accountRows]) => {
       const dates = Array.from(new Set(accountRows.map(r => r.date)))
       const { data: existing } = await supabase
         .from('transactions')
@@ -256,11 +250,9 @@ export async function upsertTransactions(rows: ProcessedTransaction[]): Promise<
         .in('date', dates)
         .is('external_id', null)
 
-      if (!existing?.length) continue
+      if (!existing?.length) return
 
-      // Track matched rows to avoid double-assigning the same existing row
       const usedIds = new Set<string>()
-
       for (const newRow of accountRows) {
         const candidates = existing.filter(
           e => !usedIds.has(e.id) &&
@@ -268,16 +260,16 @@ export async function upsertTransactions(rows: ProcessedTransaction[]): Promise<
                Math.abs(e.amount - newRow.amount) < 0.001
         )
         if (candidates.length === 1) {
-          // Exactly one unambiguous match — safe to stamp with external_id
-          await supabase
-            .from('transactions')
-            .update({ external_id: newRow.external_id })
-            .eq('id', candidates[0].id)
+          backfillPairs.push({ id: candidates[0].id, external_id: newRow.external_id! })
           usedIds.add(candidates[0].id)
-          backfilled++
         }
-        // 0 or 2+ matches: leave alone — either a genuine new row or ambiguous
       }
+    }))
+
+    // Single bulk upsert — one DB round-trip regardless of match count
+    if (backfillPairs.length > 0) {
+      await supabase.from('transactions').upsert(backfillPairs, { onConflict: 'id' })
+      backfilled = backfillPairs.length
     }
   }
 
@@ -285,8 +277,6 @@ export async function upsertTransactions(rows: ProcessedTransaction[]): Promise<
   let autoCategorised = 0
 
   // ── Upsert rows that have an external_id ──────────────────────────────────
-  // After the backfill above, any matching existing rows now have external_id set,
-  // so this upsert will find and update them rather than inserting duplicates.
   if (rowsWithExtId.length > 0) {
     const { data, error } = await supabase
       .from('transactions')

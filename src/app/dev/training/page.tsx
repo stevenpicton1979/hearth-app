@@ -1066,18 +1066,4 @@ export default function TrainingPage() {
                       </div>
                     )}
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Evaluate tab */}
-        {tab === 'evaluate' && <EvaluateTab />}
-
-        {/* Subscription audit tab */}
-        {tab === 'subscriptions' && <SubscriptionAuditSection labels={labels} />}
-      </div>
-    </div>
-  )
-}
+ 

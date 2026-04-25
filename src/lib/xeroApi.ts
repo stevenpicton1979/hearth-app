@@ -130,7 +130,7 @@ interface XeroAccount {
 
 /**
  * Fetch bank transactions from Xero API with optional incremental sync.
- * Paginates through all pages (up to 20) and returns combined results.
+ * Pages are fetched in parallel batches of 5 to minimise wall-clock time.
  * If sinceDate is provided, uses If-Modified-Since to fetch only new/changed transactions.
  */
 export async function getXeroBankTransactions(
@@ -139,13 +139,13 @@ export async function getXeroBankTransactions(
 ): Promise<{ transactions: XeroBankTransaction[] }> {
   const where = 'Status=="AUTHORISED"'
   const order = 'Date DESC'
+  const PAGE_SIZE = 100   // Xero default / max per page
   const MAX_PAGES = 20
-  const all: XeroBankTransaction[] = []
+  const BATCH = 5         // pages to fetch in parallel (stays well under Xero rate limit)
 
-  for (let page = 1; page <= MAX_PAGES; page++) {
+  const fetchPage = async (page: number): Promise<XeroBankTransaction[]> => {
     const params = new URLSearchParams({ where, order, page: page.toString() })
     const url = `${XERO_API_BASE}/BankTransactions?${params.toString()}`
-
     const headers: Record<string, string> = {
       'Authorization': `Bearer ${connection.access_token}`,
       'Xero-tenant-id': connection.tenant_id,
@@ -155,19 +155,27 @@ export async function getXeroBankTransactions(
     if (sinceDate) {
       headers['If-Modified-Since'] = new Date(sinceDate).toUTCString()
     }
-
     const res = await fetch(url, { method: 'GET', headers })
-
     if (!res.ok) {
       const err = await res.text()
-      throw new Error(`Failed to fetch Xero transactions: ${err}`)
+      throw new Error(`Failed to fetch Xero transactions (page ${page}): ${err}`)
     }
-
     const data = await res.json() as { BankTransactions?: XeroBankTransaction[] }
-    const page_txns = data.BankTransactions || []
-    all.push(...page_txns)
+    return data.BankTransactions || []
+  }
 
-    if (page_txns.length === 0) break
+  const all: XeroBankTransaction[] = []
+
+  for (let batchStart = 1; batchStart <= MAX_PAGES; batchStart += BATCH) {
+    const batchEnd = Math.min(batchStart + BATCH - 1, MAX_PAGES)
+    const pages = await Promise.all(
+      Array.from({ length: batchEnd - batchStart + 1 }, (_, i) => fetchPage(batchStart + i))
+    )
+    for (const txns of pages) {
+      all.push(...txns)
+    }
+    // If any page in this batch returned fewer than PAGE_SIZE results, we've hit the end
+    if (pages.some(p => p.length < PAGE_SIZE)) break
   }
 
   return { transactions: all }
@@ -177,27 +185,4 @@ export async function getXeroBankTransactions(
  * Fetch accounts from Xero API to build lookup table.
  */
 export async function getXeroAccounts(connection: XeroConnection): Promise<Map<string, XeroAccount>> {
-  const url = `${XERO_API_BASE}/Accounts`
-
-  const res = await fetch(url, {
-    method: 'GET',
-    headers: {
-      'Authorization': `Bearer ${connection.access_token}`,
-      'Xero-tenant-id': connection.tenant_id,
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-    },
-  })
-
-  if (!res.ok) {
-    const err = await res.text()
-    throw new Error(`Failed to fetch Xero accounts: ${err}`)
-  }
-
-  const data = await res.json() as { Accounts?: XeroAccount[] }
-  const map = new Map<string, XeroAccount>()
-  for (const account of data.Accounts || []) {
-    map.set(account.Code, account)
-  }
-  return map
-}
+  const url = `${XERO_API_BASE}/A
