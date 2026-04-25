@@ -38,7 +38,7 @@ export async function linkTransferPairs(dates: string[]): Promise<number> {
         const b = dayRows[j]
         if (paired.has(b.id)) continue
         if (a.account_id === b.account_id) continue
-        if (!a.is_transfer && !b.is_transfer) continue
+        if (!a.is_transfer || !b.is_transfer) continue
         // Integer-cent comparison avoids floating point issues
         if (Math.round(a.amount * 100) + Math.round(b.amount * 100) !== 0) continue
 
