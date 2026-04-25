@@ -86,7 +86,7 @@ function ExampleCard({ ex }: { ex: Record<string, unknown> }) {
   const rawDesc      = ex.raw_description      as string | null
   const category     = ex.category             as string | null
   const classif      = ex.classification       as string | null
-  const isTransfer   = ex.is_transfer          as boolean | null
+
   const transferDest = ex.transfer_destination as string | null
 
   const toLabel  = transferDest || merchant
