@@ -76,7 +76,7 @@ export async function GET() {
     // Compute suggested_classification per merchant BEFORE converting IDs to names.
     // If every account this merchant appears in shares one owner → suggest it.
     // Ambiguous (multiple owners) → null.
-    for (const stats of statsByMerchantUpper.values()) {
+    for (const stats of Array.from(statsByMerchantUpper.values())) {
       const owners = new Set(
         Array.from(stats.accountIds)
           .map(id => accountOwnerById.get(id))
