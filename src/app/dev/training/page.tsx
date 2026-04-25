@@ -795,6 +795,7 @@ export default function TrainingPage() {
 
   // Auto-category map (computed once)
   const [autoCatMap, setAutoCatMap] = useState<Record<string, string | null>>({})
+  const [bulkConfirming, setBulkConfirming] = useState(false)
 
   const loadLabels = useCallback(async () => {
     setLoading(true)
@@ -878,6 +879,33 @@ export default function TrainingPage() {
       await loadLabels()
     } finally {
       setSeeding(false)
+    }
+  }
+
+  async function bulkConfirmAll() {
+    // Confirm all pending labels where auto-cat is set and user hasn't overridden
+    const toConfirm = nonHoldout.filter(l =>
+      l.status === 'pending' && autoCatMap[l.merchant] != null
+    ).map(l => ({
+      merchant: l.merchant,
+      correct_category: autoCatMap[l.merchant]!,
+      correct_classification: l.correct_classification ?? l.suggested_classification ?? null,
+    }))
+    if (toConfirm.length === 0) return
+    setBulkConfirming(true)
+    try {
+      await fetch('/api/dev/training-labels', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirms: toConfirm }),
+      })
+      setLabels(prev => prev.map(l => {
+        const match = toConfirm.find(c => c.merchant === l.merchant)
+        if (!match) return l
+        return { ...l, status: 'confirmed', correct_category: match.correct_category }
+      }))
+    } finally {
+      setBulkConfirming(false)
     }
   }
 
@@ -992,6 +1020,18 @@ export default function TrainingPage() {
               {skippedMerchants.size > 0 && (
                 <span className="text-xs text-gray-400">{skippedMerchants.size} skipped this session</span>
               )}
+              {(() => {
+                const confirmable = nonHoldout.filter(l => l.status === 'pending' && autoCatMap[l.merchant] != null).length
+                return confirmable > 0 ? (
+                  <button
+                    onClick={bulkConfirmAll}
+                    disabled={bulkConfirming}
+                    className="ml-auto text-xs bg-emerald-700 text-white rounded-lg px-3 py-1.5 hover:bg-emerald-800 disabled:opacity-50 whitespace-nowrap"
+                  >
+                    {bulkConfirming ? 'Confirming...' : `Confirm all auto-matched (${confirmable})`}
+                  </button>
+                ) : null
+              })()}
             </div>
             </div>{/* end filter bar */}
 

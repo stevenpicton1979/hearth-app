@@ -133,3 +133,33 @@ export async function PUT(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ label: data })
 }
+
+export async function PATCH(req: NextRequest) {
+  const body = await req.json()
+  const { confirms } = body as {
+    confirms: { merchant: string; correct_category: string; correct_classification: string | null }[]
+  }
+  if (!Array.isArray(confirms) || confirms.length === 0) {
+    return NextResponse.json({ error: 'confirms array required' }, { status: 400 })
+  }
+
+  const supabase = createServerClient()
+  const now = new Date().toISOString()
+
+  const { error } = await supabase
+    .from('training_labels')
+    .upsert(
+      confirms.map(c => ({
+        household_id: DEFAULT_HOUSEHOLD_ID,
+        merchant: c.merchant,
+        correct_category: c.correct_category,
+        correct_classification: c.correct_classification,
+        status: 'confirmed',
+        labelled_at: now,
+      })),
+      { onConflict: 'household_id,merchant' }
+    )
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ confirmed: confirms.length })
+}

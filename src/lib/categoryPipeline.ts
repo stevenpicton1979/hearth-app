@@ -139,13 +139,27 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
     const accountOwner = accountOwnerMap.get(raw.account_id) ?? null
     let classification: string | null = accountOwner
 
-    if (!isIncome) {
-      const mapping = mappingMap.get(merchant)
-      category = mapping?.category ?? raw.category_hint ?? guessCategory(merchant)
-      if (mapping?.classification != null) classification = mapping.classification
-      if (!mapping && category !== null) {
-        autoMappings.set(merchant, category)
+    const mapping = mappingMap.get(merchant)
+    if (mapping) {
+      // User-confirmed merchant mapping — highest priority for both income and expense
+      category = mapping.category
+      if (mapping.classification != null) classification = mapping.classification
+    } else if (raw.category_hint) {
+      // GL account from Xero — high confidence, applies to income and expense
+      category = raw.category_hint
+      if (!isIncome) autoMappings.set(merchant, category)
+    } else if (!isIncome) {
+      // Keyword guessing — expense only (income patterns are unreliable)
+      category = guessCategory(merchant)
+      // BPAY fallback: long-number BPAY references with no GL → Business
+      if (category === null && /^\d{10,}\s+COMMBANK APP BPA/i.test(raw.description)) {
+        category = 'Business'
       }
+      // gl_tax_type tiebreaker: GST-coded transactions are business expenses
+      if (category === null && raw.gl_tax_type === 'GST') {
+        category = 'Business'
+      }
+      if (category !== null) autoMappings.set(merchant, category)
     }
 
     toUpsert.push({
