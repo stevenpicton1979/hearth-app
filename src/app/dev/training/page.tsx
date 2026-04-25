@@ -141,6 +141,12 @@ function ExampleCard({ ex }: { ex: Record<string, unknown> }) {
             <span className="text-gray-600 whitespace-pre-wrap break-all">{rawDesc}</span>
           </>
         )}
+
+        {/* Temporary debug row — remove after diagnosis */}
+        <span className="text-gray-400 uppercase tracking-wide text-[10px] self-start pt-px col-span-1">DBG</span>
+        <span className="text-[10px] text-orange-500 break-all col-span-1">
+          lid={(ex._debug_linked_id as string | null) ?? 'null'} dest={(ex._debug_dest as string | null) ?? 'null'}
+        </span>
       </div>
     </div>
   )

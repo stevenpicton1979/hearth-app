@@ -94,6 +94,10 @@ export async function GET(req: NextRequest) {
       ex.transfer_destination = linkedAcctId ? (accountNameMap.get(linkedAcctId) ?? null) : null
     }
 
+    // Temporary debug — remove after diagnosis
+    ex._debug_linked_id = ex.linked_transfer_id ?? null
+    ex._debug_dest = ex.transfer_destination ?? null
+
     delete ex.account_id
     delete ex.linked_transfer_id
   }
