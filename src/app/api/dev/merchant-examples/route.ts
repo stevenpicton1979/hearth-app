@@ -39,23 +39,38 @@ export async function GET(req: NextRequest) {
     if (examples.length >= 5) break
   }
 
-  // For transfer rows, look up the counterpart account (opposite amount, same date)
+  // For transfer rows, look up the counterpart account (ABS amount match, different account, same date)
   const transferExamples = examples.filter(ex => ex.is_transfer === true)
   if (transferExamples.length > 0) {
     await Promise.all(transferExamples.map(async (ex) => {
-      const amt = ex.amount as number
-      const { data: counterparts } = await supabase
+      const amt    = ex.amount as number
+      const date   = ex.date as string
+      const srcId  = ex.account_id as string
+
+      // Match either sign so same-sign transfer pairs are also found
+      const { data: counterparts, error: cpErr } = await supabase
         .from('transactions')
         .select('account_id, accounts!account_id(display_name)')
         .eq('household_id', DEFAULT_HOUSEHOLD_ID)
-        .eq('date', ex.date as string)
-        .or(`amount.eq.${-amt},amount.eq.${amt}`) // match opposite or same sign (ABS match)
-        .neq('account_id', ex.account_id as string)
-        .order('is_transfer', { ascending: false }) // prefer is_transfer=true matches
-        .limit(1)
+        .eq('date', date)
+        .or(`amount.eq.${-amt},amount.eq.${amt}`)
+        .neq('account_id', srcId)
+        .order('is_transfer', { ascending: false }) // prefer is_transfer=true
+        .limit(5)
+
+      // Attach debug info so the network tab shows exactly what was searched
+      ex._debug = {
+        searched: { date, amounts: [-amt, amt], source_account_id: srcId },
+        counterparts_found: counterparts?.length ?? 0,
+        counterpart_error: cpErr?.message ?? null,
+        counterpart_rows: (counterparts ?? []).map((c: Record<string, unknown>) => ({
+          account_id: c.account_id,
+          display_name: (c.accounts as { display_name?: string } | null)?.display_name ?? null,
+        })),
+      }
 
       if (counterparts && counterparts.length > 0) {
-        const cp = counterparts[0] as Record<string, unknown>
+        const cp    = counterparts[0] as Record<string, unknown>
         const cpJoin = cp.accounts as { display_name?: string } | null
         ex.transfer_destination = cpJoin?.display_name ?? cp.account_id
       }

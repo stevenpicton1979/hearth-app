@@ -103,15 +103,14 @@ function ExampleCard({ ex }: { ex: Record<string, unknown> }) {
   const sourceLabel = source === 'xero' ? 'Xero' : 'CSV'
 
   return (
-    <div className="text-xs bg-gray-50 border border-gray-100 rounded p-2.5 space-y-1.5">
-      {/* FROM → TO */}
-      <div className="flex items-center gap-1.5 text-gray-700">
-        <span className="text-gray-400">{account || '—'}</span>
-        <span className="text-gray-300">→</span>
-        <span className="font-medium">{toLabel}</span>
-      </div>
+    <div className="text-xs bg-gray-50 border border-gray-100 rounded p-2.5">
+      <div className="grid gap-x-3 gap-y-1" style={{ gridTemplateColumns: '5rem 1fr' }}>
+        <span className="text-gray-400 uppercase tracking-wide text-[10px] pt-px">From</span>
+        <span className="text-gray-700">{account || '—'}</span>
 
-      <div className="grid gap-x-3 gap-y-1" style={{ gridTemplateColumns: '4.5rem 1fr' }}>
+        <span className="text-gray-400 uppercase tracking-wide text-[10px] pt-px">To</span>
+        <span className="text-gray-700 font-medium">{toLabel}</span>
+
         <span className="text-gray-400 uppercase tracking-wide text-[10px] pt-px">When</span>
         <span className="text-gray-700">{formattedDate}</span>
 
