@@ -48,35 +48,35 @@ export default async function AccountsPage() {
       {accounts && accounts.length > 0 ? (
         <div className="space-y-3">
           {accounts.map((account) => (
-            <div key={account.id} className="bg-white border border-gray-200 rounded-xl p-4 flex items-center justify-between gap-4">
-              <div className="min-w-0 flex-1">
-                <p className="font-medium text-gray-900">{account.display_name}</p>
-                <p className="text-sm text-gray-500">
-                  {account.institution || 'Manual'} &middot; {account.account_type || 'transaction'}
-                </p>
-                {account.last_synced_at && (
-                  <p className="text-xs text-gray-400 mt-1">
-                    Last synced {new Date(account.last_synced_at).toLocaleDateString('en-AU')}
+            <div key={account.id} className="bg-white border border-gray-200 rounded-xl p-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium text-gray-900">{account.display_name}</p>
+                  <p className="text-sm text-gray-500">
+                    {account.institution || 'Manual'} &middot; {account.account_type || 'transaction'}
                   </p>
-                )}
-                {account.account_suffix && (
-                  <p className="text-xs text-gray-400 mt-1 font-mono">
-                    Suffix: {account.account_suffix}
-                  </p>
-                )}
+                  {account.last_synced_at && (
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      Last synced {new Date(account.last_synced_at).toLocaleDateString('en-AU')}
+                    </p>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <AccountOwnerSelect accountId={account.id} initialOwner={account.owner ?? null} />
+                  <AccountScopeSelect accountId={account.id} initialScope={account.scope ?? 'household'} />
+                  {account.basiq_account_id && (
+                    <form action="/api/sync" method="post">
+                      <input type="hidden" name="account_id" value={account.id} />
+                      <button type="submit" className="p-2 text-gray-400 hover:text-emerald-700 transition-colors">
+                        <ArrowPathIcon className="h-5 w-5" />
+                      </button>
+                    </form>
+                  )}
+                </div>
               </div>
-              <div className="flex items-center gap-3 flex-wrap justify-end">
-                <AccountOwnerSelect accountId={account.id} initialOwner={account.owner ?? null} />
-                <AccountScopeSelect accountId={account.id} initialScope={account.scope ?? 'household'} />
+              <div className="mt-3 flex items-center gap-2">
+                <span className="text-xs text-gray-500 w-28 flex-shrink-0">Xero suffix:</span>
                 <AccountSuffixInput accountId={account.id} initialSuffix={account.account_suffix ?? null} />
-                {account.basiq_account_id && (
-                  <form action="/api/sync" method="post">
-                    <input type="hidden" name="account_id" value={account.id} />
-                    <button type="submit" className="p-2 text-gray-400 hover:text-emerald-700 transition-colors">
-                      <ArrowPathIcon className="h-5 w-5" />
-                    </button>
-                  </form>
-                )}
               </div>
             </div>
           ))}
