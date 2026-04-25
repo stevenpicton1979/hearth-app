@@ -12,11 +12,9 @@ export interface RawTransaction {
   description: string
   basiq_transaction_id?: string
   is_transfer?: boolean
-  // When set by the Xero sync rule engine, overrides the transferPatterns detection.
   forced_is_transfer?: boolean
   category_hint?: string | null
   raw_description?: string | null
-  // When true, flags this transaction for the Needs Review tab (unmatched transfer suffix).
   needs_review?: boolean
 }
 
@@ -85,8 +83,6 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
 
     const merchant = cleanMerchant(raw.description)
 
-    // Director income: positive credit from business.
-    // classifyDirectorIncome returns 'Salary' (wage keyword present) or 'Director Income'.
     const directorResult = classifyDirectorIncome(raw.description, raw.amount)
     if (directorResult.match) {
       toUpsert.push({
@@ -106,8 +102,6 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
       continue
     }
 
-    // Transfer detection. forced_is_transfer (set by the Xero rule engine) takes
-    // precedence over description pattern check.
     const isTransferRow = raw.forced_is_transfer !== undefined
       ? raw.forced_is_transfer
       : (raw.is_transfer || isTransfer(raw.description))
@@ -181,6 +175,8 @@ export async function upsertTransactions(rows: ProcessedTransaction[]): Promise<
   if (rows.length === 0) return { inserted: 0, duplicates: 0, autoCategorised: 0, backfilled: 0 }
   const supabase = createServerClient()
 
+  // Single upsert — ON CONFLICT DO UPDATE sets all columns including raw_description
+  // and needs_review, so no per-row backfill loop is needed.
   const { data, error } = await supabase
     .from('transactions')
     .upsert(rows, { onConflict: 'account_id,date,amount,description' })
@@ -190,24 +186,5 @@ export async function upsertTransactions(rows: ProcessedTransaction[]): Promise<
   const inserted = data?.length ?? 0
   const autoCategorised = data?.filter(r => r.category !== null).length ?? 0
 
-  // Phase 2: Backfill raw_description on existing rows where it is NULL.
-  const rowsWithRawDesc = rows.filter(r => r.raw_description !== null)
-  let backfilled = 0
-
-  if (rowsWithRawDesc.length > 0) {
-    for (const r of rowsWithRawDesc) {
-      const { error: updateErr } = await supabase
-        .from('transactions')
-        .update({ raw_description: r.raw_description })
-        .eq('account_id', r.account_id)
-        .eq('date', r.date)
-        .eq('amount', r.amount)
-        .eq('description', r.description)
-        .is('raw_description', null)
-
-      if (!updateErr) backfilled++
-    }
-  }
-
-  return { inserted, duplicates: 0, autoCategorised, backfilled }
+  return { inserted, duplicates: 0, autoCategorised, backfilled: 0 }
 }
