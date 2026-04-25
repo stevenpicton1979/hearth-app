@@ -760,6 +760,7 @@ export default function TrainingPage() {
   const [seedResult, setSeedResult] = useState<string | null>(null)
   const [recentlyConfirmed, setRecentlyConfirmed] = useState<Set<string>>(new Set())
   const [skippedMerchants, setSkippedMerchants] = useState<Set<string>>(new Set())
+  const [accountFilter, setAccountFilter] = useState<string>('')
 
   // Auto-category map (computed once)
   const [autoCatMap, setAutoCatMap] = useState<Record<string, string | null>>({})
@@ -841,8 +842,13 @@ export default function TrainingPage() {
   const confirmed = nonHoldout.filter(l => l.status === 'confirmed').length
   const progressPct = nonHoldout.length > 0 ? Math.round((confirmed / nonHoldout.length) * 100) : 0
 
+  const distinctAccounts = Array.from(
+    new Set(nonHoldout.flatMap(l => l.accounts ?? []))
+  ).sort()
+
   const filtered = nonHoldout.filter(l => {
     if (skippedMerchants.has(l.merchant) && !recentlyConfirmed.has(l.merchant)) return false
+    if (accountFilter && !(l.accounts ?? []).includes(accountFilter)) return false
     if (filter === 'pending') return l.status === 'pending' || recentlyConfirmed.has(l.merchant)
     if (filter === 'confirmed') return l.status === 'confirmed'
     if (filter === 'actioned') return l.status === 'actioned'
@@ -912,6 +918,22 @@ export default function TrainingPage() {
             )}
 
             {/* Filter bar */}
+            <div className="flex flex-col gap-2">
+            {distinctAccounts.length > 0 && (
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-gray-500 whitespace-nowrap">Account</label>
+                <select
+                  value={accountFilter}
+                  onChange={e => setAccountFilter(e.target.value)}
+                  className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-white"
+                >
+                  <option value="">All accounts</option>
+                  {distinctAccounts.map(a => (
+                    <option key={a} value={a}>{a}</option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div className="flex items-center gap-2 flex-wrap">
               <div className="flex gap-1 flex-wrap">
                 {(['all', 'pending', 'confirmed', 'actioned', 'mismatches'] as const).map(f => (
@@ -928,6 +950,7 @@ export default function TrainingPage() {
                 <span className="text-xs text-gray-400">{skippedMerchants.size} skipped this session</span>
               )}
             </div>
+            </div>{/* end filter bar */}
 
             {loading ? (
               <div className="bg-white border border-gray-200 rounded-xl p-8 text-center text-sm text-gray-400">Loading...</div>
