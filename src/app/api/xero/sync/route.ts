@@ -275,4 +275,16 @@ export async function POST(req: NextRequest) {
     await supabase
       .from('xero_connections')
       .update({ last_synced_at: new Date().toISOString() })
-      .eq(
+      .eq('household_id', DEFAULT_HOUSEHOLD_ID)
+
+    return NextResponse.json({
+      synced: inserted,
+      skipped: transfersSkipped,
+      backfilled,
+      errors,
+    })
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e)
+    return NextResponse.json({ error: msg }, { status: 500 })
+  }
+}
