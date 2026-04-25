@@ -3,11 +3,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 // ---------------------------------------------------------------------------
 // Mock Supabase — must be hoisted so the import of salaryLinker sees the mock
 // ---------------------------------------------------------------------------
-const mockUpdate = vi.fn().mockResolvedValue({ error: null })
-const mockEq = vi.fn().mockReturnThis()
-const mockIn = vi.fn().mockReturnThis()
-const mockIs = vi.fn().mockReturnThis()
-const mockSelect = vi.fn()
 const mockFrom = vi.fn()
 
 vi.mock('../supabase/server', () => ({
@@ -23,15 +18,6 @@ function makeSelectBuilder(rows: unknown[]) {
   b.eq = vi.fn().mockReturnValue(b)
   b.in = vi.fn().mockReturnValue(b)
   b.is = vi.fn().mockResolvedValue({ data: rows, error: null })
-  return b
-}
-
-// Fluent builder returned for the UPDATE query
-function makeUpdateBuilder() {
-  const b: Record<string, unknown> = {}
-  b.update = vi.fn().mockReturnValue(b)
-  b.eq = vi.fn().mockReturnValue(b)
-  b.then = vi.fn().mockResolvedValue({ error: null })
   return b
 }
 
@@ -61,7 +47,6 @@ describe('linkSalaryPairs', () => {
 
     mockFrom.mockImplementation((table: string) => {
       if (table === 'transactions') {
-        // First call → select query, second/third calls → update queries
         let callCount = 0
         return {
           select: vi.fn().mockReturnThis(),
