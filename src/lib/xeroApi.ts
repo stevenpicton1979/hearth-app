@@ -70,7 +70,7 @@ async function refreshXeroToken(connection: XeroConnectionRow): Promise<XeroConn
 
   if (!res.ok) {
     const err = await res.text()
-    throw new Error(`Token refresh failed: ${err}`)
+    throw new Error(`Token refresh failed: HTTP ${res.status} ${res.statusText} — ${err}`)
   }
 
   const { access_token, refresh_token, expires_in } = await res.json() as {
@@ -155,7 +155,7 @@ export async function getXeroBankTransactions(
     const res = await fetch(url, { method: 'GET', headers })
     if (!res.ok) {
       const err = await res.text()
-      throw new Error(`Failed to fetch Xero transactions (page ${page}): ${err}`)
+      throw new Error(`Failed to fetch Xero transactions (page ${page}): HTTP ${res.status} ${res.statusText} — ${err}`)
     }
     const data = await res.json() as { BankTransactions?: XeroBankTransaction[] }
     return data.BankTransactions || []
@@ -195,7 +195,7 @@ export async function getXeroAccounts(connection: XeroConnection): Promise<Map<s
 
   if (!res.ok) {
     const err = await res.text()
-    throw new Error(`Failed to fetch Xero accounts: ${err}`)
+    throw new Error(`Failed to fetch Xero accounts: HTTP ${res.status} ${res.statusText} — ${err}`)
   }
 
   const data = await res.json() as { Accounts?: XeroAccount[] }
