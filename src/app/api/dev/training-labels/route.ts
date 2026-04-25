@@ -14,17 +14,10 @@ export async function GET() {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // Fetch transaction stats — keyed by UPPERCASE merchant so the join is
-  // case-insensitive. This prevents drift between training_labels.merchant
-  // and transactions.merchant caused by Xero re-syncs, cleanMerchant changes,
-  // or labels created before certain pipeline normalisations were in place.
-  //
-  // transactions.merchant is ALWAYS uppercase (cleanMerchant guarantees it), so
-  // uppercasing the label merchant names before the IN clause is enough to bridge
-  // any casing discrepancy without fetching all transactions.
-  type MerchantStats = {
-    count: number
-    totalSpend: number
+  // transaction_count and total_spend are stored columns — written by seed-training.
+  // No JOIN needed for those. We still JOIN for rich metadata (accounts, categories,
+  // GL account) which drives the auto-category display and suggested classification.
+  type RichStats = {
     minDate: string
     maxDate: string
     accountIds: Set<string>
@@ -32,31 +25,29 @@ export async function GET() {
     glAccountCounts: Record<string, number>
     suggestedClassification?: string | null
   }
-  const statsByMerchantUpper = new Map<string, MerchantStats>()
+  const richByMerchant = new Map<string, RichStats>()
 
-  const merchants = (data || []).map(r => r.merchant)
-  // Deduplicate + uppercase so the IN clause matches the always-uppercase transactions.merchant
+  const merchants = (data || []).map((r: { merchant: string }) => r.merchant)
+  // Uppercase so the IN clause matches the always-uppercase transactions.merchant column
   const uppercaseMerchants = Array.from(new Set(merchants.map((m: string) => (m ?? '').toUpperCase()))).filter(Boolean)
 
   if (uppercaseMerchants.length > 0) {
     const { data: txns } = await supabase
       .from('transactions')
-      .select('merchant, amount, date, account_id, category, gl_account')
+      .select('merchant, date, account_id, category, gl_account')
       .eq('household_id', DEFAULT_HOUSEHOLD_ID)
       .in('merchant', uppercaseMerchants)
 
     for (const t of txns || []) {
       const key = (t.merchant ?? '').toUpperCase()
       if (!key) continue
-      if (!statsByMerchantUpper.has(key)) {
-        statsByMerchantUpper.set(key, {
-          count: 0, totalSpend: 0, minDate: t.date, maxDate: t.date,
+      if (!richByMerchant.has(key)) {
+        richByMerchant.set(key, {
+          minDate: t.date, maxDate: t.date,
           accountIds: new Set(), categoryCounts: {}, glAccountCounts: {},
         })
       }
-      const s = statsByMerchantUpper.get(key)!
-      s.count++
-      s.totalSpend += Math.abs(t.amount)
+      const s = richByMerchant.get(key)!
       if (t.date < s.minDate) s.minDate = t.date
       if (t.date > s.maxDate) s.maxDate = t.date
       if (t.account_id) s.accountIds.add(t.account_id)
@@ -64,12 +55,12 @@ export async function GET() {
       if (t.gl_account) s.glAccountCounts[t.gl_account] = (s.glAccountCounts[t.gl_account] ?? 0) + 1
     }
 
-    // Fetch display_name and owner for all referenced accounts in one query
+    // Resolve account UUIDs → display names + owners
     const allAccountIds = Array.from(new Set(
-      Array.from(statsByMerchantUpper.values()).flatMap(s => Array.from(s.accountIds))
+      Array.from(richByMerchant.values()).flatMap(s => Array.from(s.accountIds))
     ))
-    const accountNameMap = new Map<string, string>()   // id → display_name
-    const accountOwnerById = new Map<string, string>() // id → owner
+    const accountNameMap = new Map<string, string>()
+    const accountOwnerById = new Map<string, string>()
 
     if (allAccountIds.length > 0) {
       const { data: accts } = await supabase
@@ -82,41 +73,37 @@ export async function GET() {
       }
     }
 
-    // Compute suggested_classification per merchant BEFORE converting IDs to names.
-    // If every account this merchant appears in shares one owner → suggest it.
-    // Ambiguous (multiple owners) → null.
-    for (const stats of Array.from(statsByMerchantUpper.values())) {
+    for (const stats of Array.from(richByMerchant.values())) {
       const owners = new Set(
         Array.from(stats.accountIds)
           .map(id => accountOwnerById.get(id))
           .filter((o): o is string => o != null)
       )
       stats.suggestedClassification = owners.size === 1 ? Array.from(owners)[0] : null
-
-      // Convert account UUIDs → display names
       stats.accountIds = new Set(Array.from(stats.accountIds).map(id => accountNameMap.get(id) ?? id))
     }
   }
 
   const labels = (data || []).map(r => {
-    // Look up by uppercase key — tolerates case drift between training_labels and transactions
-    const stats = statsByMerchantUpper.get((r.merchant ?? '').toUpperCase())
+    const rich = richByMerchant.get((r.merchant ?? '').toUpperCase())
     return {
       ...r,
-      transaction_count: stats?.count ?? 0,
-      total_spend: stats?.totalSpend ?? 0,
-      min_date: stats?.minDate ?? null,
-      max_date: stats?.maxDate ?? null,
-      accounts: Array.from(stats?.accountIds ?? []),
-      suggested_classification: stats?.suggestedClassification ?? null,
+      // Count + spend come from stored columns — reliable, no JOIN drift
+      transaction_count: r.transaction_count ?? 0,
+      total_spend: r.total_spend ?? 0,
+      // Rich metadata from JOIN — best-effort, drives auto-category display
+      min_date: rich?.minDate ?? null,
+      max_date: rich?.maxDate ?? null,
+      accounts: Array.from(rich?.accountIds ?? []),
+      suggested_classification: rich?.suggestedClassification ?? null,
       dominant_category: (() => {
-        const cats = stats?.categoryCounts ?? {}
+        const cats = rich?.categoryCounts ?? {}
         const entries = Object.entries(cats)
         if (entries.length === 0) return null
         return entries.sort((a, b) => b[1] - a[1])[0][0]
       })(),
       gl_category: (() => {
-        const gls = stats?.glAccountCounts ?? {}
+        const gls = rich?.glAccountCounts ?? {}
         const entries = Object.entries(gls)
         if (entries.length === 0) return null
         const dominantGl = entries.sort((a, b) => b[1] - a[1])[0][0]

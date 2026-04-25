@@ -78,7 +78,34 @@ export async function POST() {
     status: 'pending',
     holdout: fnv32a(m.merchant) % 5 === 0,
     labelled_by: 'steve',
+    transaction_count: m.count,
+    total_spend: Math.round(m.totalSpend * 100) / 100,
   }))
+
+  // Refresh transaction_count + total_spend on ALL existing labels — these are
+  // stored columns now, so we never need to re-derive them from a fragile string JOIN.
+  // Use upsert so only the two stat columns are touched; all confirmed data is preserved.
+  const statsRefresh = Array.from(existingSet)
+    .map(merchant => {
+      const upperKey = (merchant ?? '').toUpperCase()
+      // byMerchant is keyed by the exact merchant string from transactions;
+      // try exact match first, then case-insensitive fallback.
+      const stats = byMerchant.get(merchant) ?? byMerchant.get(upperKey)
+      if (!stats) return null
+      return {
+        household_id: DEFAULT_HOUSEHOLD_ID,
+        merchant,
+        transaction_count: stats.count,
+        total_spend: Math.round(stats.totalSpend * 100) / 100,
+      }
+    })
+    .filter((r): r is NonNullable<typeof r> => r !== null)
+
+  if (statsRefresh.length > 0) {
+    await supabase
+      .from('training_labels')
+      .upsert(statsRefresh, { onConflict: 'household_id,merchant' })
+  }
 
   // Delete orphaned labels — merchant no longer exists in transactions
   const activeMerchants = new Set(merchants.map(m => m.merchant))
@@ -93,7 +120,7 @@ export async function POST() {
     if (!pruneErr) pruned = orphans.length
   }
 
-  if (rows.length === 0) return NextResponse.json({ inserted: 0, skipped: existingSet.size, pruned })
+  if (rows.length === 0) return NextResponse.json({ inserted: 0, skipped: existingSet.size, statsRefreshed: statsRefresh.length, pruned })
 
   const { error: insertErr } = await supabase.from('training_labels').insert(rows)
   if (insertErr) return NextResponse.json({ error: insertErr.message }, { status: 500 })
@@ -102,6 +129,7 @@ export async function POST() {
     inserted: rows.length,
     holdout: rows.filter(r => r.holdout).length,
     skipped: existingSet.size,
+    statsRefreshed: statsRefresh.length,
     pruned,
   })
 }
