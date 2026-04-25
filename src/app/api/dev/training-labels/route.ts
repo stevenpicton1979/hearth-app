@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
 import { DEFAULT_HOUSEHOLD_ID } from '@/lib/constants'
+import { mapGlAccountNameToCategory } from '@/lib/xeroCategories'
 
 export async function GET() {
   const supabase = createServerClient()
@@ -26,14 +27,14 @@ export async function GET() {
   if (merchants.length > 0) {
     const { data: txns } = await supabase
       .from('transactions')
-      .select('merchant, amount, date, account_id, category')
+      .select('merchant, amount, date, account_id, category, gl_account')
       .eq('household_id', DEFAULT_HOUSEHOLD_ID)
       .in('merchant', merchants)
 
     for (const t of txns || []) {
       const m = t.merchant
       if (!statsByMerchant[m]) {
-        statsByMerchant[m] = { count: 0, totalSpend: 0, minDate: t.date, maxDate: t.date, accountIds: new Set(), categoryCounts: {} } as typeof statsByMerchant[string] & { categoryCounts: Record<string,number> }
+        statsByMerchant[m] = { count: 0, totalSpend: 0, minDate: t.date, maxDate: t.date, accountIds: new Set(), categoryCounts: {}, glAccountCounts: {} } as typeof statsByMerchant[string] & { categoryCounts: Record<string,number>; glAccountCounts: Record<string,number> }
       }
       statsByMerchant[m].count++
       statsByMerchant[m].totalSpend += Math.abs(t.amount)
@@ -43,6 +44,11 @@ export async function GET() {
       if (t.category) {
         const cats = (statsByMerchant[m] as typeof statsByMerchant[string] & { categoryCounts: Record<string,number> }).categoryCounts
         cats[t.category] = (cats[t.category] ?? 0) + 1
+      }
+      if (t.gl_account) {
+        const gls = (statsByMerchant[m] as typeof statsByMerchant[string] & { glAccountCounts: Record<string,number> }).glAccountCounts as Record<string,number> | undefined ?? {}
+        ;(statsByMerchant[m] as typeof statsByMerchant[string] & { glAccountCounts: Record<string,number> }).glAccountCounts = gls
+        gls[t.gl_account] = (gls[t.gl_account] ?? 0) + 1
       }
     }
 
@@ -96,6 +102,13 @@ export async function GET() {
         const entries = Object.entries(cats)
         if (entries.length === 0) return null
         return entries.sort((a, b) => b[1] - a[1])[0][0]
+      })(),
+      gl_category: (() => {
+        const gls = (stats as (typeof stats & { glAccountCounts?: Record<string,number> }) | undefined)?.glAccountCounts ?? {}
+        const entries = Object.entries(gls)
+        if (entries.length === 0) return null
+        const dominantGl = entries.sort((a, b) => b[1] - a[1])[0][0]
+        return mapGlAccountNameToCategory(dominantGl)
       })(),
     }
   })

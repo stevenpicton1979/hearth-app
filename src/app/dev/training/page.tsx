@@ -26,6 +26,7 @@ interface TrainingLabel {
   accounts: string[]
   suggested_classification: string | null
   dominant_category: string | null
+  gl_category: string | null
 }
 
 interface EvalMetrics {
@@ -824,13 +825,19 @@ export default function TrainingPage() {
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (!data?.allResults) return
-        // Start with dominant existing category as fallback, then overlay evaluate results
+        // Priority: GL account category (Xero source of truth) > dominant existing > keyword eval
         const map: Record<string, string | null> = {}
+        // 1. Seed with dominant existing category
         for (const lbl of labels) {
           if (lbl.dominant_category) map[lbl.merchant] = lbl.dominant_category
         }
+        // 2. Overlay with keyword-based evaluate results
         for (const r of data.allResults) {
           if (r.detectedCategory) map[r.merchant] = r.detectedCategory
+        }
+        // 3. Override with GL account category where available — highest confidence
+        for (const lbl of labels) {
+          if (lbl.gl_category) map[lbl.merchant] = lbl.gl_category
         }
         setAutoCatMap(map)
       })
