@@ -877,7 +877,10 @@ export default function TrainingPage() {
       const res = await fetch('/api/dev/seed-training', { method: 'POST' })
       const data = await res.json()
       if (data.error) setSeedResult(`Error: ${data.error}`)
-      else setSeedResult(`Seeded ${data.inserted} labels (${data.holdout} holdout). ${data.skipped ?? 0} already existed.`)
+      else setSeedResult(
+        `Seeded ${data.inserted} labels (${data.holdout} holdout). ${data.skipped ?? 0} already existed.` +
+        (data.pruned > 0 ? ` Pruned ${data.pruned} orphaned label${data.pruned !== 1 ? 's' : ''}.` : '')
+      )
       await loadLabels()
     } finally {
       setSeeding(false)

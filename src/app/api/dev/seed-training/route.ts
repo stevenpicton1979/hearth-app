@@ -80,7 +80,20 @@ export async function POST() {
     labelled_by: 'steve',
   }))
 
-  if (rows.length === 0) return NextResponse.json({ inserted: 0, skipped: existingSet.size })
+  // Delete orphaned labels — merchant no longer exists in transactions
+  const activeMerchants = new Set(merchants.map(m => m.merchant))
+  const orphans = Array.from(existingSet).filter(m => !activeMerchants.has(m))
+  let pruned = 0
+  if (orphans.length > 0) {
+    const { error: pruneErr } = await supabase
+      .from('training_labels')
+      .delete()
+      .eq('household_id', DEFAULT_HOUSEHOLD_ID)
+      .in('merchant', orphans)
+    if (!pruneErr) pruned = orphans.length
+  }
+
+  if (rows.length === 0) return NextResponse.json({ inserted: 0, skipped: existingSet.size, pruned })
 
   const { error: insertErr } = await supabase.from('training_labels').insert(rows)
   if (insertErr) return NextResponse.json({ error: insertErr.message }, { status: 500 })
@@ -89,5 +102,6 @@ export async function POST() {
     inserted: rows.length,
     holdout: rows.filter(r => r.holdout).length,
     skipped: existingSet.size,
+    pruned,
   })
 }
