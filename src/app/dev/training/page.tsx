@@ -89,10 +89,11 @@ function ExampleCard({ ex }: { ex: Record<string, unknown> }) {
 
   const transferDest = ex.transfer_destination as string | null
 
-  // For credits (money IN), the linked account is the sender, current account is receiver — swap labels
-  const isCredit = amount !== null && amount >= 0
-  const fromLabel = transferDest ? (isCredit ? transferDest : (account || '—')) : (account || '—')
-  const toLabel   = transferDest ? (isCredit ? (account || '—') : transferDest) : merchant
+  // Credits (money IN): sender is FROM, receiver is TO — use transferDest if known, else merchant name
+  // Debits (money OUT): sender is account (FROM), recipient is transferDest or merchant (TO)
+  const isCredit = amount !== null && amount > 0
+  const fromLabel = isCredit ? (transferDest ?? merchant) : (account || '—')
+  const toLabel   = isCredit ? (account || '—') : (transferDest ?? merchant)
 
   const formattedDate = date
     ? new Date(date + 'T00:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -144,11 +145,7 @@ function ExampleCard({ ex }: { ex: Record<string, unknown> }) {
           </>
         )}
 
-        {/* Debug — remove after confirmed working */}
-        <span className="text-gray-400 uppercase tracking-wide text-[10px] self-start pt-px col-span-1">DBG</span>
-        <span className="text-[10px] text-orange-500 break-all col-span-1">
-          lid={(ex._debug_linked_id as string | null) ?? 'null'} dest={(ex._debug_dest as string | null) ?? 'null'}
-        </span>
+
       </div>
     </div>
   )

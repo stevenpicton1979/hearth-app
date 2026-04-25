@@ -19,14 +19,14 @@ export async function GET(req: NextRequest) {
     .limit(20)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  console.log('[me] raw linked_transfer_ids:', data?.map(r => r.linked_transfer_id))
 
-  // De-dup by raw key, keep up to 5
-  // Transfers are always kept individually (each has a distinct destination account)
+  // De-dup by (description, amount) key, keep up to 5 distinct examples.
+  // Transfer rows always bypass de-dup (each has distinct source/destination).
+  // Including amount in the key ensures a $10k transfer isn't collapsed with a $5k income
+  // row that happens to share the same description.
   const seen = new Set<string>()
   const examples: Record<string, unknown>[] = []
   for (const rawRow of (data || []) as Record<string, unknown>[]) {
-    // Always include transfer rows — de-duping would lose linked_transfer_id pairs
     if (rawRow.is_transfer || rawRow.linked_transfer_id) {
       examples.push({ ...rawRow })
       if (examples.length >= 5) break
@@ -34,13 +34,12 @@ export async function GET(req: NextRequest) {
     }
     const raw = ((rawRow.raw_description as string) || '').trim()
     const cleaned = ((rawRow.description as string) || '').trim()
-    const key = raw || cleaned
+    const key = `${raw || cleaned}|${rawRow.amount}`
     if (!key || seen.has(key)) continue
     seen.add(key)
     examples.push({ ...rawRow })
     if (examples.length >= 5) break
   }
-  console.log('[me] examples linked_transfer_ids:', examples.map(e => e.linked_transfer_id))
 
   // Collect all account_ids we need to resolve:
   //   - source account_id from each example
@@ -65,7 +64,6 @@ export async function GET(req: NextRequest) {
       if (lt.account_id) linkedTxnToAccount.set(lt.id, lt.account_id)
     }
   }
-  console.log('[me] linkedTxnToAccount:', Object.fromEntries(linkedTxnToAccount))
 
   // Single accounts query for all needed ids (source + linked)
   const linkedAccountIds = Array.from(linkedTxnToAccount.values())
@@ -84,6 +82,8 @@ export async function GET(req: NextRequest) {
   }
 
   // Annotate each example with from_account and transfer_destination
+  // INVARIANT: transfer_destination must be set for ALL transfer transactions, even if linked_transfer_id is null.
+  // If linked_transfer_id is null, transfer_destination will be null but should still be present.
   for (const ex of examples) {
     const srcId = ex.account_id as string | null
     ex.account = srcId ? (accountNameMap.get(srcId) ?? srcId) : '—'
@@ -92,16 +92,14 @@ export async function GET(req: NextRequest) {
     if (lid) {
       const linkedAcctId = linkedTxnToAccount.get(lid)
       ex.transfer_destination = linkedAcctId ? (accountNameMap.get(linkedAcctId) ?? null) : null
+    } else {
+      // Transfer with no linked_id: transfer_destination is null but still defined
+      ex.transfer_destination = null
     }
-
-    // Debug — remove after confirmed working
-    ex._debug_linked_id = ex.linked_transfer_id ?? null
-    ex._debug_dest = ex.transfer_destination ?? null
 
     delete ex.account_id
     delete ex.linked_transfer_id
   }
-  console.log('[me] final transfer_destinations:', examples.map(e => e.transfer_destination))
 
   return NextResponse.json({ examples })
 }
