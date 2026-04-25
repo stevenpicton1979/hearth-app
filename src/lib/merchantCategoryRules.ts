@@ -113,8 +113,8 @@ export const MERCHANT_CATEGORY_RULES: MerchantCategoryRule[] = [
 
   {
     name: 'spotify',
-    description: 'Spotify music subscription on business card → Business',
-    match: (m) => /^spotify/i.test(m),
+    description: 'Spotify music subscription on business card → Business (matches anywhere in merchant name)',
+    match: (m) => /spotify/i.test(m),
     category: 'Business',
   },
 

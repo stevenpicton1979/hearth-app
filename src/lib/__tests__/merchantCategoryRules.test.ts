@@ -164,9 +164,9 @@ describe('spotify', () => {
     expect(applyMerchantCategoryRules('SPOTIFY AUSTRALIA PTY LTD', expense)?.category).toBe('Business')
   })
 
-  it('does NOT match mid-string "SPOTIFY" (anchor required)', () => {
-    // Rule uses ^spotify — must start with it
-    expect(applyMerchantCategoryRules('GOOGLE SPOTIFY MUSIC PYRMONT AUS', expense)?.ruleName).not.toBe('spotify')
+  it('matches "GOOGLE SPOTIFY MUSIC PYRMONT AUS" (mid-string — same merchant, same intent)', () => {
+    expect(applyMerchantCategoryRules('GOOGLE SPOTIFY MUSIC PYRMONT AUS', expense)?.category).toBe('Business')
+    expect(applyMerchantCategoryRules('GOOGLE SPOTIFY MUSIC PYRMONT AUS', expense)?.ruleName).toBe('spotify')
   })
 })
 
