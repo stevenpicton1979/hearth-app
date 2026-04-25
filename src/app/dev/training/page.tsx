@@ -856,6 +856,7 @@ export default function TrainingPage() {
         setAutoCatMap(map)
       })
       .catch(() => {})
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [labels.length])
 
   async function handleSave(merchant: string, updates: Partial<TrainingLabel>) {

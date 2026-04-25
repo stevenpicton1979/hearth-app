@@ -149,7 +149,7 @@ export async function POST() {
 
   let updated = 0
   let batchNum = 0
-  for (const [rule, ids] of byRule.entries()) {
+  for (const [rule, ids] of Array.from(byRule.entries())) {
     batchNum++
     // Supabase .in() has a practical limit; chunk large same-rule groups
     for (let i = 0; i < ids.length; i += BATCH_SIZE) {
