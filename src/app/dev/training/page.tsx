@@ -95,7 +95,7 @@ function sortExKeys(keys: string[]): string[] {
 
 const FREQ_OPTIONS = ['weekly', 'fortnightly', 'monthly', 'quarterly', 'annual']
 
-const CLASSIFICATION_OPTIONS = ['Personal', 'Business', 'Joint']
+const CLASSIFICATION_OPTIONS = ['Steven', 'Nicola', 'Joint', 'Business']
 
 const STATUS_COLORS: Record<string, string> = {
   pending: 'bg-gray-100 text-gray-600',
