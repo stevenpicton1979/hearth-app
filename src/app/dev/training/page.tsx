@@ -89,7 +89,7 @@ function ExampleCard({ ex }: { ex: Record<string, unknown> }) {
   const isTransfer   = ex.is_transfer          as boolean | null
   const transferDest = ex.transfer_destination as string | null
 
-  const toLabel  = isTransfer && transferDest ? transferDest : merchant
+  const toLabel  = transferDest || merchant
   const isCredit = amount !== null && amount >= 0
 
   const formattedDate = date
@@ -142,7 +142,7 @@ function ExampleCard({ ex }: { ex: Record<string, unknown> }) {
           </>
         )}
 
-        {/* Temporary debug row — remove after diagnosis */}
+        {/* Debug — remove after confirmed working */}
         <span className="text-gray-400 uppercase tracking-wide text-[10px] self-start pt-px col-span-1">DBG</span>
         <span className="text-[10px] text-orange-500 break-all col-span-1">
           lid={(ex._debug_linked_id as string | null) ?? 'null'} dest={(ex._debug_dest as string | null) ?? 'null'}
