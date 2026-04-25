@@ -232,7 +232,19 @@ export async function POST(req: NextRequest) {
     // Phase 3: Categorise and upsert.
     // ----------------------------------------------------------------
     const { toUpsert, transfersSkipped } = await processBatch(raws)
-    const { inserted, backfilled } = await upsertTransactions(toUpsert)
+
+    // Deduplicate by conflict key before upsert — Xero can return the same
+    // transaction twice in a full sync (e.g. amended transactions).
+    const deduped = Array.from(
+      toUpsert
+        .reduce((map, tx) => {
+          map.set(`${tx.account_id}|${tx.date}|${tx.amount}|${tx.description}`, tx)
+          return map
+        }, new Map<string, (typeof toUpsert)[0]>())
+        .values()
+    )
+
+    const { inserted, backfilled } = await upsertTransactions(deduped)
 
     // ----------------------------------------------------------------
     // Phase 4: Link transfer pairs and salary pairs.
