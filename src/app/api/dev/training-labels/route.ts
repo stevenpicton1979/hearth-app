@@ -26,20 +26,24 @@ export async function GET() {
   if (merchants.length > 0) {
     const { data: txns } = await supabase
       .from('transactions')
-      .select('merchant, amount, date, account_id')
+      .select('merchant, amount, date, account_id, category')
       .eq('household_id', DEFAULT_HOUSEHOLD_ID)
       .in('merchant', merchants)
 
     for (const t of txns || []) {
       const m = t.merchant
       if (!statsByMerchant[m]) {
-        statsByMerchant[m] = { count: 0, totalSpend: 0, minDate: t.date, maxDate: t.date, accountIds: new Set() }
+        statsByMerchant[m] = { count: 0, totalSpend: 0, minDate: t.date, maxDate: t.date, accountIds: new Set(), categoryCounts: {} } as typeof statsByMerchant[string] & { categoryCounts: Record<string,number> }
       }
       statsByMerchant[m].count++
       statsByMerchant[m].totalSpend += Math.abs(t.amount)
       if (t.date < statsByMerchant[m].minDate) statsByMerchant[m].minDate = t.date
       if (t.date > statsByMerchant[m].maxDate) statsByMerchant[m].maxDate = t.date
       if (t.account_id) statsByMerchant[m].accountIds.add(t.account_id)
+      if (t.category) {
+        const cats = (statsByMerchant[m] as typeof statsByMerchant[string] & { categoryCounts: Record<string,number> }).categoryCounts
+        cats[t.category] = (cats[t.category] ?? 0) + 1
+      }
     }
 
     // Fetch display_name and owner for all referenced accounts in one query
@@ -87,6 +91,12 @@ export async function GET() {
       max_date: stats?.maxDate ?? null,
       accounts: Array.from(stats?.accountIds ?? []),
       suggested_classification: stats?.suggestedClassification ?? null,
+      dominant_category: (() => {
+        const cats = (stats as (typeof stats & { categoryCounts?: Record<string,number> }) | undefined)?.categoryCounts ?? {}
+        const entries = Object.entries(cats)
+        if (entries.length === 0) return null
+        return entries.sort((a, b) => b[1] - a[1])[0][0]
+      })(),
     }
   })
 

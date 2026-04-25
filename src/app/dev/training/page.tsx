@@ -25,6 +25,7 @@ interface TrainingLabel {
   max_date: string | null
   accounts: string[]
   suggested_classification: string | null
+  dominant_category: string | null
 }
 
 interface EvalMetrics {
@@ -817,8 +818,14 @@ export default function TrainingPage() {
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (!data?.allResults) return
+        // Start with dominant existing category as fallback, then overlay evaluate results
         const map: Record<string, string | null> = {}
-        for (const r of data.allResults) map[r.merchant] = r.detectedCategory
+        for (const lbl of labels) {
+          if (lbl.dominant_category) map[lbl.merchant] = lbl.dominant_category
+        }
+        for (const r of data.allResults) {
+          if (r.detectedCategory) map[r.merchant] = r.detectedCategory
+        }
         setAutoCatMap(map)
       })
       .catch(() => {})
