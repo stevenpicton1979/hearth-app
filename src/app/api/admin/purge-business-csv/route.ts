@@ -5,20 +5,34 @@ import { DEFAULT_HOUSEHOLD_ID } from '@/lib/constants'
 // ---------------------------------------------------------------------------
 // POST /api/admin/purge-business-csv[?confirm=true]
 //
-// Removes CSV-sourced transactions from business accounts so that Xero
-// can be the single source of truth.
+// Surgical dedup: only removes CSV records that have a confirmed Xero
+// counterpart on the same account, matched by date + |amount|.
 //
 // Business accounts = institution = 'Xero' OR scope = 'business'
 //
-// Default (dry-run):
-//   Returns { dry_run: true, accounts: [{ name, csv_count }], total_to_delete }
-//   without deleting anything.
+// Dry-run (default):
+//   Returns { dry_run: true, accounts: [{ name, csv_total, confirmed_duplicates }],
+//             total_to_delete } — nothing is deleted.
 //
-// With ?confirm=true:
-//   Deletes all CSV rows from those accounts and returns { deleted, accounts }.
-//   linked_transfer_id references to deleted rows are automatically nulled
-//   by the ON DELETE SET NULL constraint.
+// ?confirm=true:
+//   Deletes only the confirmed duplicate CSV rows and returns final counts.
+//   ON DELETE SET NULL handles any linked_transfer_id back-references.
+//
+// Match key: date + '|' + Math.abs(amount).toFixed(2)
+// A CSV record is a confirmed duplicate when its key exists in the Xero
+// record set for the same account.  Pure-CSV records (no Xero counterpart)
+// are left untouched.
 // ---------------------------------------------------------------------------
+
+type TxRow = {
+  id: string
+  date: string
+  amount: number
+}
+
+function matchKey(date: string, amount: number): string {
+  return `${date}|${Math.abs(amount).toFixed(2)}`
+}
 
 export async function POST(req: NextRequest) {
   const isDryRun = req.nextUrl.searchParams.get('confirm') !== 'true'
@@ -36,47 +50,83 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ dry_run: isDryRun, accounts: [], total_to_delete: 0 })
   }
 
-  // Count CSV transactions per account
-  type AccountSummary = { name: string; id: string; csv_count: number }
+  type AccountSummary = { name: string; id: string; csv_total: number; confirmed_duplicates: number }
   const accountSummary: AccountSummary[] = []
-  let total = 0
+  const duplicateIds: string[] = []
 
   for (const acct of accounts) {
-    const { count, error } = await supabase
+    // Load Xero records (have external_id)
+    const { data: xeroRows, error: xeroErr } = await supabase
       .from('transactions')
-      .select('id', { count: 'exact', head: true })
+      .select('id, date, amount')
+      .eq('household_id', DEFAULT_HOUSEHOLD_ID)
+      .eq('account_id', acct.id)
+      .eq('source', 'xero')
+      .not('external_id', 'is', null)
+
+    if (xeroErr) return NextResponse.json({ error: xeroErr.message }, { status: 500 })
+
+    const xeroKeys = new Set<string>(
+      (xeroRows ?? []).map((r: TxRow) => matchKey(r.date, r.amount))
+    )
+
+    // Load CSV records (no external_id)
+    const { data: csvRows, error: csvErr } = await supabase
+      .from('transactions')
+      .select('id, date, amount')
       .eq('household_id', DEFAULT_HOUSEHOLD_ID)
       .eq('account_id', acct.id)
       .eq('source', 'csv')
+      .is('external_id', null)
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    const n = count ?? 0
-    accountSummary.push({ name: acct.display_name, id: acct.id, csv_count: n })
-    total += n
+    if (csvErr) return NextResponse.json({ error: csvErr.message }, { status: 500 })
+
+    const csvTotal = (csvRows ?? []).length
+    const confirmed = (csvRows ?? []).filter(
+      (r: TxRow) => xeroKeys.has(matchKey(r.date, r.amount))
+    )
+
+    accountSummary.push({
+      name: acct.display_name,
+      id: acct.id,
+      csv_total: csvTotal,
+      confirmed_duplicates: confirmed.length,
+    })
+
+    for (const r of confirmed) duplicateIds.push(r.id)
   }
+
+  const total = duplicateIds.length
 
   if (isDryRun) {
     return NextResponse.json({
       dry_run: true,
-      accounts: accountSummary.filter(a => a.csv_count > 0),
+      accounts: accountSummary.filter(a => a.csv_total > 0),
       total_to_delete: total,
     })
   }
 
-  // Delete all CSV rows from business accounts
-  const accountIds = accounts.map(a => a.id)
-  const { error: delErr, count: deleted } = await supabase
-    .from('transactions')
-    .delete({ count: 'exact' })
-    .eq('household_id', DEFAULT_HOUSEHOLD_ID)
-    .in('account_id', accountIds)
-    .eq('source', 'csv')
+  if (total === 0) {
+    return NextResponse.json({ dry_run: false, deleted: 0, accounts: accountSummary })
+  }
 
-  if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 })
+  // Delete in chunks of 500 to stay within PostgREST .in() limits
+  let deleted = 0
+  const CHUNK = 500
+  for (let i = 0; i < duplicateIds.length; i += CHUNK) {
+    const chunk = duplicateIds.slice(i, i + CHUNK)
+    const { error: delErr, count } = await supabase
+      .from('transactions')
+      .delete({ count: 'exact' })
+      .in('id', chunk)
+
+    if (delErr) return NextResponse.json({ error: delErr.message, deletedSoFar: deleted }, { status: 500 })
+    deleted += count ?? chunk.length
+  }
 
   return NextResponse.json({
     dry_run: false,
-    deleted: deleted ?? total,
-    accounts: accountSummary.filter(a => a.csv_count > 0),
+    deleted,
+    accounts: accountSummary.filter(a => a.confirmed_duplicates > 0),
   })
 }
