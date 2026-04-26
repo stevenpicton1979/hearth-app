@@ -25,6 +25,7 @@ type MisTxRow = {
   id: string
   amount: number
   raw_description: string | null
+  gl_account: string | null
 }
 
 export async function POST() {
@@ -36,7 +37,7 @@ export async function POST() {
   while (true) {
     const { data, error } = await supabase
       .from('transactions')
-      .select('id, amount, raw_description')
+      .select('id, amount, raw_description, gl_account')
       .eq('household_id', DEFAULT_HOUSEHOLD_ID)
       .eq('matched_rule', 'merchant:xero_misc_code')
       .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1)
@@ -65,7 +66,11 @@ export async function POST() {
     }
 
     const isIncome = tx.amount > 0
-    const result = applyMerchantCategoryRules(extracted, { amount: tx.amount, isIncome })
+    const result = applyMerchantCategoryRules(extracted, {
+      amount: tx.amount,
+      isIncome,
+      glAccount: tx.gl_account,
+    })
 
     if (!result) {
       skipped++

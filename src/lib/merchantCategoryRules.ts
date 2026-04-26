@@ -19,6 +19,8 @@ export interface RuleContext {
   isIncome: boolean
   accountScope?: string | null   // 'business' | 'household' | null
   accountOwner?: string | null   // 'Steven' | 'Nicola' | 'Joint' | null
+  /** Xero chart-of-accounts GL account name, e.g. "2025 Directors Loan" */
+  glAccount?: string | null
 }
 
 export interface MerchantCategoryRule {
@@ -140,6 +142,18 @@ export const MERCHANT_CATEGORY_RULES: MerchantCategoryRule[] = [
   },
 
   // ─── Transfers ───────────────────────────────────────────────────────────────
+
+  {
+    name: 'bht_directors_loan_transfer',
+    description:
+      'Debits from Brisbane Health Tech booked to the Directors Loan GL account in Xero. ' +
+      'These are inter-account movements (loan drawdowns, balance transfers to xx5426) — ' +
+      'not business expenses and not wages. The GL account "2025 Directors Loan" is the ' +
+      'definitive discriminator; description patterns alone are too broad.',
+    match: (m, ctx) => /directors loan/i.test(ctx.glAccount ?? ''),
+    category: null,
+    isTransfer: true,
+  },
 
   {
     name: 'director_loan_repayment',
