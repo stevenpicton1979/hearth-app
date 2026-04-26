@@ -358,7 +358,7 @@ describe('upsertTransactions', () => {
       // Make .in() return a thenable so it can be awaited directly,
       // while still exposing .is() for the backfill path if needed.
       in: vi.fn().mockImplementation(() => {
-        const p = Promise.resolve({ data: [], error: null }) as any
+        const p = Promise.resolve({ data: [], error: null }) as Promise<{ data: unknown[]; error: null }> & { is: ReturnType<typeof vi.fn> }
         p.is = vi.fn().mockResolvedValue({ data: [], error: null })
         return p
       }),
@@ -382,7 +382,7 @@ describe('upsertTransactions', () => {
       eq: vi.fn().mockReturnThis(),
       // .in() returns a thenable (for CSV dedup path) that also has .is() (for backfill path)
       in: vi.fn().mockImplementation(() => {
-        const p = Promise.resolve({ data: [], error: null }) as any
+        const p = Promise.resolve({ data: [], error: null }) as Promise<{ data: unknown[]; error: null }> & { is: ReturnType<typeof vi.fn> }
         p.is = vi.fn().mockResolvedValue({ data: [], error: null })
         return p
       }),
@@ -460,7 +460,7 @@ describe('upsertTransactions', () => {
       eq: vi.fn().mockReturnThis(),
       in: vi.fn().mockImplementation(() => {
         // Simulate a Xero row already existing with the same key (no .is() filter)
-        const p = Promise.resolve({ data: [xeroRow], error: null }) as any
+        const p = Promise.resolve({ data: [xeroRow], error: null }) as Promise<{ data: unknown[]; error: null }> & { is: ReturnType<typeof vi.fn> }
         p.is = vi.fn().mockResolvedValue({ data: [], error: null })
         return p
       }),
