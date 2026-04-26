@@ -38,10 +38,43 @@ export async function POST(req: NextRequest) {
       .maybeSingle()
     const sinceDate = isFull ? undefined : (connRow?.last_synced_at ?? undefined)
 
-    const [{ transactions }, accountsMap] = await Promise.all([
-      getXeroBankTransactions(connection, sinceDate),
-      getXeroAccounts(connection),
-    ])
+    // Kick off accounts map fetch immediately (needed for GL account categorisation).
+    const accountsMapPromise = getXeroAccounts(connection)
+
+    // Fetch bank transactions — per-account for full syncs, global for incremental.
+    type TxList = Awaited<ReturnType<typeof getXeroBankTransactions>>['transactions']
+    let transactions: TxList
+
+    if (isFull) {
+      const { data: knownXeroAccts } = await supabase
+        .from('accounts')
+        .select('xero_account_id')
+        .eq('household_id', DEFAULT_HOUSEHOLD_ID)
+        .eq('institution', 'Xero')
+        .not('xero_account_id', 'is', null)
+
+      const knownIds = (knownXeroAccts ?? [])
+        .map(a => a.xero_account_id as string)
+        .filter(id => !!id && id !== XERO_DEFAULT_ACCOUNT_ID)
+
+      if (knownIds.length > 0) {
+        const txnById = new Map<string, TxList[0]>()
+        for (const accId of knownIds) {
+          const { transactions: batch } = await getXeroBankTransactions(connection, undefined, accId)
+          for (const tx of batch) {
+            txnById.set(tx.BankTransactionID, tx)
+          }
+        }
+        transactions = Array.from(txnById.values())
+      } else {
+        // No known Xero accounts yet — first sync, use global fetch
+        ;({ transactions } = await getXeroBankTransactions(connection))
+      }
+    } else {
+      ;({ transactions } = await getXeroBankTransactions(connection, sinceDate))
+    }
+
+    const accountsMap = await accountsMapPromise
 
     if (transactions.length === 0) {
       return NextResponse.json({ synced: 0, skipped: 0, backfilled: 0, errors: [] })

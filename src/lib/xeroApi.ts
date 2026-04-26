@@ -127,17 +127,24 @@ interface XeroAccount {
 
 /**
  * Fetch bank transactions from Xero API with optional incremental sync.
- * Pages are fetched in parallel batches of 5 to minimise wall-clock time.
+ * Pages are fetched in parallel batches of 2 to minimise wall-clock time.
  * If sinceDate is provided, uses If-Modified-Since to fetch only new/changed transactions.
+ * If accountId is provided, scopes the query to that Xero bank account only and allows
+ * deeper pagination (up to 5,000 records) so each account gets complete history.
  */
 export async function getXeroBankTransactions(
   connection: XeroConnection,
-  sinceDate?: string
+  sinceDate?: string,
+  accountId?: string
 ): Promise<{ transactions: XeroBankTransaction[] }> {
-  const where = 'Status=="AUTHORISED"'
+  // Per-account fetch: scope to one account and paginate deeper (5,000 records max).
+  // Global fetch: all accounts but shallower (2,000 records) — used for incremental syncs.
+  const where = accountId
+    ? `Status=="AUTHORISED"&&BankAccount.AccountID=guid("${accountId}")`
+    : 'Status=="AUTHORISED"'
   const order = 'Date DESC'
   const PAGE_SIZE = 100
-  const MAX_PAGES = 20
+  const MAX_PAGES = accountId ? 50 : 20
   const BATCH = 2
 
   const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms))
