@@ -339,15 +339,50 @@ export async function upsertTransactions(rows: ProcessedTransaction[]): Promise<
     autoCategorised += data?.filter(r => r.category !== null).length ?? 0
   }
 
-  // ── Upsert rows without an external_id (CSV imports, legacy Basiq) ────────
+  // ── Insert rows without an external_id (CSV imports, legacy Basiq) ─────────
+  // We cannot use ON CONFLICT with the composite key because the unique index
+  // is partial (WHERE external_id IS NULL) and PostgREST does not support
+  // partial indexes in upsert.  Instead: query what already exists for the
+  // same (account_id, date) combinations, subtract matches, then plain-insert.
   if (rowsWithoutExtId.length > 0) {
-    const { data, error } = await supabase
-      .from('transactions')
-      .upsert(rowsWithoutExtId, { onConflict: 'account_id,date,amount,description' })
-      .select('id, category')
-    if (error) throw new Error(`upsert (composite key): ${error.message}`)
-    inserted += data?.length ?? 0
-    autoCategorised += data?.filter(r => r.category !== null).length ?? 0
+    // Group by account so we can query per-account efficiently (usually 1 account)
+    const byAccount = new Map<string, ProcessedTransaction[]>()
+    for (const r of rowsWithoutExtId) {
+      const list = byAccount.get(r.account_id) ?? []
+      list.push(r)
+      byAccount.set(r.account_id, list)
+    }
+
+    const toInsert: ProcessedTransaction[] = []
+
+    for (const [accountId, accountRows] of Array.from(byAccount.entries())) {
+      const dates = Array.from(new Set(accountRows.map(r => r.date)))
+      const { data: existing } = await supabase
+        .from('transactions')
+        .select('date, amount, description')
+        .eq('account_id', accountId)
+        .in('date', dates)
+        .is('external_id', null)
+
+      const existingKeys = new Set(
+        (existing ?? []).map(e => `${e.date}|${e.amount}|${e.description}`)
+      )
+
+      for (const r of accountRows) {
+        const key = `${r.date}|${r.amount}|${r.description}`
+        if (!existingKeys.has(key)) toInsert.push(r)
+      }
+    }
+
+    if (toInsert.length > 0) {
+      const { data, error } = await supabase
+        .from('transactions')
+        .insert(toInsert)
+        .select('id, category')
+      if (error) throw new Error(`insert (composite key): ${error.message}`)
+      inserted += data?.length ?? 0
+      autoCategorised += data?.filter(r => r.category !== null).length ?? 0
+    }
   }
 
   return { inserted, duplicates: 0, autoCategorised, backfilled }

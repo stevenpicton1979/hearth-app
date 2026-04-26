@@ -348,24 +348,28 @@ describe('upsertTransactions', () => {
     expect(capturedConflicts).not.toContain('account_id,date,amount,description')
   })
 
-  it('rows WITHOUT external_id upsert on composite key', async () => {
-    const capturedConflicts: string[] = []
+  it('rows WITHOUT external_id use select-then-insert (no ON CONFLICT)', async () => {
+    const capturedInserts: unknown[] = []
 
     mockFrom.mockImplementation(() => ({
-      upsert: vi.fn().mockImplementation((_rows: unknown, opts: { onConflict?: string }) => {
-        if (opts?.onConflict) capturedConflicts.push(opts.onConflict)
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      in: vi.fn().mockReturnThis(),
+      is: vi.fn().mockResolvedValue({ data: [], error: null }),
+      insert: vi.fn().mockImplementation((rows: unknown) => {
+        capturedInserts.push(rows)
         return { select: vi.fn().mockResolvedValue({ data: [{ id: '1', category: null }], error: null }) }
       }),
     }))
 
     const rows = [makeProcessed({ external_id: null })]
     await upsertTransactions(rows)
-    expect(capturedConflicts).toContain('account_id,date,amount,description')
-    expect(capturedConflicts).not.toContain('external_id')
+    expect(capturedInserts.length).toBeGreaterThan(0)
   })
 
-  it('mixed batch: rows are split by external_id presence', async () => {
+  it('mixed batch: rows with external_id upsert, rows without are select-then-insert', async () => {
     const capturedConflicts: string[] = []
+    const capturedInserts: unknown[] = []
 
     mockFrom.mockImplementation(() => ({
       select: vi.fn().mockReturnThis(),
@@ -376,6 +380,10 @@ describe('upsertTransactions', () => {
         if (opts?.onConflict) capturedConflicts.push(opts.onConflict)
         return { select: vi.fn().mockResolvedValue({ data: [{ id: '1', category: null }], error: null }) }
       }),
+      insert: vi.fn().mockImplementation((rows: unknown) => {
+        capturedInserts.push(rows)
+        return { select: vi.fn().mockResolvedValue({ data: [{ id: '1', category: null }], error: null }) }
+      }),
     }))
 
     const rows = [
@@ -383,8 +391,11 @@ describe('upsertTransactions', () => {
       makeProcessed({ external_id: null, description: 'CSV IMPORT', merchant: 'CSV IMPORT' }),
     ]
     await upsertTransactions(rows)
+    // Xero row: upserted on external_id
     expect(capturedConflicts).toContain('external_id')
-    expect(capturedConflicts).toContain('account_id,date,amount,description')
+    expect(capturedConflicts).not.toContain('account_id,date,amount,description')
+    // CSV row: plain inserted after dedup check
+    expect(capturedInserts.length).toBeGreaterThan(0)
   })
 
   it('backfill: stamps an existing null-external_id row via bulk upsert before main upsert', async () => {
