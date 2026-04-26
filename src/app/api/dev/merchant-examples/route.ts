@@ -113,8 +113,10 @@ export async function GET(req: NextRequest) {
     } else {
       // No linked_id — try to resolve destination from "TRANSFER TO XXnnnn" description pattern
       const desc = ((ex.description as string) || '').toUpperCase()
+      // Suffix stored in DB as bare digits (e.g. '5426'); descriptions use 'XX5426'.
+      // Strip the XX prefix before lookup so both forms resolve correctly.
       const suffixMatch = desc.match(/\bXX(\d{4})\b/)
-      const suffix = suffixMatch ? `XX${suffixMatch[1]}` : null
+      const suffix = suffixMatch ? suffixMatch[1] : null
       ex.transfer_destination = suffix ? (suffixToName.get(suffix) ?? null) : null
     }
 
