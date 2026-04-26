@@ -35,7 +35,7 @@ vi.mock('@/lib/supabase/server', () => ({
         select: () => ({
           eq: (col: string) => ({
             eq: (col2: string, val2: string) => ({
-              range: (_from: number, _to: number) => Promise.resolve({
+              range: () => Promise.resolve({
                 data:
                   col === 'household_id' && col2 === 'account_id'
                     ? db.transactions.filter((tx) => tx.account_id === val2)
