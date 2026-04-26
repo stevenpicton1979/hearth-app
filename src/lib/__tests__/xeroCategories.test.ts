@@ -162,6 +162,32 @@ describe('xeroCategories', () => {
       expect(merchant).toBe('Xero')
     })
 
+    it('skips MIS reference (catch-all code) and uses contact name instead', () => {
+      const merchant = cleanXeroMerchant('MIS', 'Google One Baranga Card xx6729', undefined, undefined)
+      expect(merchant).toBe('Google One Baranga Card xx6729')
+    })
+
+    it('skips lowercase mis reference (case-insensitive catch-all)', () => {
+      // Regression: isXeroCode must be case-insensitive so mixed-case codes are also skipped
+      const merchant = cleanXeroMerchant('mis', 'Spotify Music', undefined, undefined)
+      expect(merchant).toBe('Spotify Music')
+    })
+
+    it('skips MISC reference and falls through to contact name', () => {
+      const merchant = cleanXeroMerchant('MISC', 'STEAMGAMES.COM 4259522', undefined, undefined)
+      expect(merchant).toBe('STEAMGAMES.COM 4259522')
+    })
+
+    it('skips GEN reference and falls through to narration when contact is null', () => {
+      const merchant = cleanXeroMerchant('GEN', null, undefined, 'MICROSOFT*XBOX MSBILL.INFO AUS')
+      expect(merchant).toBe('MICROSOFT*XBOX MSBILL.INFO AUS')
+    })
+
+    it('skips MIS line item description and falls through to reference', () => {
+      const merchant = cleanXeroMerchant('REAL REF', 'Acme Corp', 'MIS', undefined)
+      expect(merchant).toBe('REAL REF')
+    })
+
     it('trims whitespace', () => {
       const merchant = cleanXeroMerchant('  ', '  Company Name  ', undefined, undefined)
       expect(merchant).toBe('Company Name')
