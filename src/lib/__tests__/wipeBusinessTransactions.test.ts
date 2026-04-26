@@ -23,7 +23,7 @@ vi.mock('@/lib/supabase/server', () => ({
       if (table === 'accounts') {
         return {
           select: () => ({
-            eq: (col: string, val: string) => ({
+            eq: (_col: string, _val: string) => ({
               or: () => Promise.resolve({ data: db.accounts, error: null }),
             }),
           }),
@@ -32,8 +32,8 @@ vi.mock('@/lib/supabase/server', () => ({
 
       // For transactions table
       return {
-        select: (cols: string) => ({
-          eq: (col: string, val: string) => ({
+        select: (_cols: string) => ({
+          eq: (col: string, _val: string) => ({
             eq: (col2: string, val2: string) => Promise.resolve({
               data:
                 col === 'household_id' && col2 === 'account_id'
