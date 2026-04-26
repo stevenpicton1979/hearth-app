@@ -357,12 +357,14 @@ export async function upsertTransactions(rows: ProcessedTransaction[]): Promise<
 
     for (const [accountId, accountRows] of Array.from(byAccount.entries())) {
       const dates = Array.from(new Set(accountRows.map(r => r.date)))
+      // Query ALL existing rows (not just null-external_id ones) so a CSV row
+      // that matches an existing Xero record on date+amount+description is
+      // correctly skipped rather than inserted as a duplicate.
       const { data: existing } = await supabase
         .from('transactions')
         .select('date, amount, description')
         .eq('account_id', accountId)
         .in('date', dates)
-        .is('external_id', null)
 
       const existingKeys = new Set(
         (existing ?? []).map(e => `${e.date}|${e.amount}|${e.description}`)

@@ -354,8 +354,14 @@ describe('upsertTransactions', () => {
     mockFrom.mockImplementation(() => ({
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
-      in: vi.fn().mockReturnThis(),
-      is: vi.fn().mockResolvedValue({ data: [], error: null }),
+      // CSV dedup path now ends at .in() (no .is() call after fix).
+      // Make .in() return a thenable so it can be awaited directly,
+      // while still exposing .is() for the backfill path if needed.
+      in: vi.fn().mockImplementation(() => {
+        const p = Promise.resolve({ data: [], error: null }) as any
+        p.is = vi.fn().mockResolvedValue({ data: [], error: null })
+        return p
+      }),
       insert: vi.fn().mockImplementation((rows: unknown) => {
         capturedInserts.push(rows)
         return { select: vi.fn().mockResolvedValue({ data: [{ id: '1', category: null }], error: null }) }
@@ -374,8 +380,12 @@ describe('upsertTransactions', () => {
     mockFrom.mockImplementation(() => ({
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
-      in: vi.fn().mockReturnThis(),
-      is: vi.fn().mockResolvedValue({ data: [], error: null }),
+      // .in() returns a thenable (for CSV dedup path) that also has .is() (for backfill path)
+      in: vi.fn().mockImplementation(() => {
+        const p = Promise.resolve({ data: [], error: null }) as any
+        p.is = vi.fn().mockResolvedValue({ data: [], error: null })
+        return p
+      }),
       upsert: vi.fn().mockImplementation((_rows: unknown, opts: { onConflict?: string }) => {
         if (opts?.onConflict) capturedConflicts.push(opts.onConflict)
         return { select: vi.fn().mockResolvedValue({ data: [{ id: '1', category: null }], error: null }) }
@@ -431,6 +441,44 @@ describe('upsertTransactions', () => {
       ])
     )
     expect(result.backfilled).toBe(1)
+  })
+
+  it('CSV row matching an existing Xero row (by date+amount+description) is skipped, not inserted', async () => {
+    // Regression test for the bug where the CSV dedup query only checked rows
+    // WHERE external_id IS NULL, so Xero rows were invisible to dedup and CSV
+    // imports would insert duplicates alongside existing Xero records.
+    const capturedInserts: unknown[] = []
+
+    const xeroRow = {
+      date: '2025-06-01',
+      amount: -29.99,
+      description: 'GOOGLE ONE BARANGA CARD XX6729',
+    }
+
+    mockFrom.mockImplementation(() => ({
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      in: vi.fn().mockImplementation(() => {
+        // Simulate a Xero row already existing with the same key (no .is() filter)
+        const p = Promise.resolve({ data: [xeroRow], error: null }) as any
+        p.is = vi.fn().mockResolvedValue({ data: [], error: null })
+        return p
+      }),
+      insert: vi.fn().mockImplementation((rows: unknown) => {
+        capturedInserts.push(rows)
+        return { select: vi.fn().mockResolvedValue({ data: [], error: null }) }
+      }),
+    }))
+
+    const csvRow = makeProcessed({
+      external_id: null,
+      date: xeroRow.date,
+      amount: xeroRow.amount,
+      description: xeroRow.description,
+    })
+    await upsertTransactions([csvRow])
+    // The CSV row matches the Xero row on date+amount+description → must not insert
+    expect(capturedInserts).toHaveLength(0)
   })
 
   it('returns 0 for everything when given an empty array', async () => {
