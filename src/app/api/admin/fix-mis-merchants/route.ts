@@ -73,9 +73,16 @@ export async function POST() {
     }
 
     const newMatchedRule = `merchant:${result.ruleName}`
+    const updatePayload: Record<string, unknown> = {
+      merchant: extracted,
+      matched_rule: newMatchedRule,
+    }
+    if (result.category !== null) updatePayload.category = result.category
+    if (result.isTransfer) updatePayload.is_transfer = true
+
     const { error } = await supabase
       .from('transactions')
-      .update({ merchant: extracted, matched_rule: newMatchedRule })
+      .update(updatePayload)
       .eq('id', tx.id)
 
     if (error) {

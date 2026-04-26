@@ -78,6 +78,27 @@ export const MERCHANT_CATEGORY_RULES: MerchantCategoryRule[] = [
     category: 'Business',
   },
 
+  {
+    name: 'oncore_income',
+    description:
+      'Oncore client payments into Brisbane Health Tech → Business income. ' +
+      'Oncore is a contractor management company that processes Steve\'s invoices ' +
+      'and remits client fees to BHT. Raw descriptions often include an invoice ' +
+      'reference prefix, e.g. "E41900232233 Oncore Contracto". Matches on income only.',
+    match: (m, ctx) => /oncore/i.test(m) && ctx.isIncome,
+    category: 'Business',
+  },
+
+  {
+    name: 'crosslateral_income',
+    description:
+      'Crosslateral client payments into Brisbane Health Tech → Business income. ' +
+      'Crosslateral is a direct BHT client; their invoice payments arrive as income. ' +
+      'Matches on income only.',
+    match: (m, ctx) => /crosslateral/i.test(m) && ctx.isIncome,
+    category: 'Business',
+  },
+
   // ─── Subscriptions & Digital Services (Business card) ───────────────────────
 
   {
