@@ -42,29 +42,32 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ dry_run: isDryRun, accounts: [], total: 0 })
   }
 
+  const PAGE_SIZE = 1000
+
   const accountSummary: AccountSummary[] = []
   const txIdsToDelete: string[] = []
 
   for (const acct of accounts) {
-    // Count and collect transaction IDs for this account
-    const { data: txRows, error: txErr } = await supabase
-      .from('transactions')
-      .select('id')
-      .eq('household_id', DEFAULT_HOUSEHOLD_ID)
-      .eq('account_id', acct.id)
+    const acctIds: string[] = []
+    let page = 0
+    while (true) {
+      const from = page * PAGE_SIZE
+      const { data: txRows, error: txErr } = await supabase
+        .from('transactions')
+        .select('id')
+        .eq('household_id', DEFAULT_HOUSEHOLD_ID)
+        .eq('account_id', acct.id)
+        .range(from, from + PAGE_SIZE - 1)
 
-    if (txErr) return NextResponse.json({ error: txErr.message }, { status: 500 })
+      if (txErr) return NextResponse.json({ error: txErr.message }, { status: 500 })
 
-    const count = (txRows ?? []).length
-    accountSummary.push({
-      name: acct.display_name,
-      id: acct.id,
-      count,
-    })
-
-    for (const row of txRows ?? []) {
-      txIdsToDelete.push(row.id)
+      for (const row of txRows ?? []) acctIds.push(row.id)
+      if (!txRows || txRows.length < PAGE_SIZE) break
+      page++
     }
+
+    accountSummary.push({ name: acct.display_name, id: acct.id, count: acctIds.length })
+    for (const id of acctIds) txIdsToDelete.push(id)
   }
 
   const total = txIdsToDelete.length

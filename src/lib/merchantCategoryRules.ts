@@ -101,6 +101,20 @@ export const MERCHANT_CATEGORY_RULES: MerchantCategoryRule[] = [
     category: 'Business',
   },
 
+  {
+    name: 'superannuation_payable',
+    description: 'Xero GL account "Superannuation Payable" — SGC super payments → Payroll Expense',
+    match: (m, ctx) => /superannuation payable/i.test(ctx.glAccount ?? ''),
+    category: 'Payroll Expense',
+  },
+
+  {
+    name: 'income_tax_provision',
+    description: 'Xero GL account matching income tax provision — company tax payments → Government & Tax',
+    match: (m, ctx) => /income tax/i.test(ctx.glAccount ?? ''),
+    category: 'Government & Tax',
+  },
+
   // ─── Subscriptions & Digital Services (Business card) ───────────────────────
 
   {
