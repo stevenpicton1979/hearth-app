@@ -177,13 +177,18 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
     const isIncome = raw.amount > 0
 
     let category: string | null = null
+    let isSubscription = false
     const accountOwner = accountOwnerMap.get(raw.account_id) ?? null
     let classification: string | null = accountOwner
     // Start with any upstream rule (e.g. a Xero non-transfer rule that resolved
     // to a category via category_hint); may be overridden below.
     let matchedRule: string | null = raw.matched_rule ?? null
 
-    const ruleResult = applyMerchantCategoryRules(merchant, { amount: raw.amount, isIncome, accountOwner })
+    const ruleResult = applyMerchantCategoryRules(merchant, {
+      isIncome,
+      accountOwner,
+      glAccount: raw.gl_account ?? null,
+    })
 
     if (ruleResult?.isTransfer) {
       toUpsert.push({
@@ -217,6 +222,8 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
       // Named merchant category rule
       category = ruleResult.category
       matchedRule = `merchant:${ruleResult.ruleName}`
+      if (ruleResult.owner !== null) classification = ruleResult.owner
+      isSubscription = ruleResult.isSubscription
       if (!isIncome && category !== null) autoMappings.set(merchant, category)
     } else if (raw.category_hint) {
       // GL account hint or Xero non-transfer rule category (passed via category_hint)
@@ -246,6 +253,7 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
       category,
       classification,
       is_transfer: false,
+      is_subscription: isSubscription,
       external_id: raw.external_id ?? null,
       raw_description: raw.raw_description ?? null,
       needs_review: raw.needs_review ?? false,

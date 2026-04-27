@@ -221,6 +221,23 @@ describe('processBatch', () => {
     expect(toUpsert[0].is_transfer).toBe(true)
     expect(toUpsert[0].external_id).toBe('xero-transfer-999')
   })
+
+  it('sets is_subscription=true when a subscription rule fires (google_one)', async () => {
+    setupMocks({ accounts: [{ id: ACCOUNT_ID, owner: 'Business' }] })
+    const { toUpsert } = await processBatch([
+      raw({ description: 'GOOGLE ONE', amount: -3.99, gl_account: 'Google One' }),
+    ])
+    expect(toUpsert[0].is_subscription).toBe(true)
+    expect(toUpsert[0].matched_rule).toBe('merchant:google_one')
+  })
+
+  it('sets is_subscription=false when no subscription rule fires', async () => {
+    setupMocks()
+    const { toUpsert } = await processBatch([
+      raw({ description: 'WOOLWORTHS 1234', amount: -50 }),
+    ])
+    expect(toUpsert[0].is_subscription).toBe(false)
+  })
 })
 
 // ---------------------------------------------------------------------------

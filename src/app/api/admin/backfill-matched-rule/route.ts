@@ -50,6 +50,7 @@ type TxRow = {
   source: string | null
   category: string | null
   account_id: string
+  gl_account: string | null
 }
 
 function inferMatchedRule(
@@ -69,7 +70,7 @@ function inferMatchedRule(
     if (isTransfer(tx.description)) return 'transfer-pattern'
 
     // 3. Merchant rule that sets isTransfer (e.g. director_loan_repayment)
-    const ruleResult = applyMerchantCategoryRules(tx.merchant, { amount: tx.amount, isIncome, accountOwner })
+    const ruleResult = applyMerchantCategoryRules(tx.merchant, { isIncome, accountOwner, glAccount: tx.gl_account })
     if (ruleResult?.isTransfer) return `merchant:${ruleResult.ruleName}`
 
     // Remaining is_transfer=true rows: Xero business-card-payoff /
@@ -79,7 +80,7 @@ function inferMatchedRule(
   }
 
   // ── 4. Named merchant category rule ────────────────────────────────────
-  const ruleResult = applyMerchantCategoryRules(tx.merchant, { amount: tx.amount, isIncome, accountOwner })
+  const ruleResult = applyMerchantCategoryRules(tx.merchant, { isIncome, accountOwner, glAccount: tx.gl_account })
   if (ruleResult && !ruleResult.isTransfer) return `merchant:${ruleResult.ruleName}`
 
   // ── 5. Xero transfer-rule inference ────────────────────────────────────
@@ -120,7 +121,7 @@ export async function POST() {
   while (true) {
     const { data: txns, error: fetchErr } = await supabase
       .from('transactions')
-      .select('id, description, merchant, amount, is_transfer, source, category, account_id')
+      .select('id, description, merchant, amount, is_transfer, source, category, account_id, gl_account')
       .eq('household_id', DEFAULT_HOUSEHOLD_ID)
       .is('matched_rule', null)
       .range(page * PAGE, (page + 1) * PAGE - 1)

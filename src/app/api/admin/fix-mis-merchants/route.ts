@@ -67,7 +67,6 @@ export async function POST() {
 
     const isIncome = tx.amount > 0
     const result = applyMerchantCategoryRules(extracted, {
-      amount: tx.amount,
       isIncome,
       glAccount: tx.gl_account,
     })

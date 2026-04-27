@@ -75,8 +75,8 @@ export async function GET() {
         id: `merchant:${r.name}`,
         name: r.name,
         description: r.description,
-        category: r.category,
-        isTransfer: r.isTransfer ?? false,
+        category: r.output.category,
+        isTransfer: r.output.isTransfer,
         hits: hitCounts[`merchant:${r.name}`] ?? 0,
       })),
       transferPattern: {
