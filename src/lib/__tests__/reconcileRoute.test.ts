@@ -1,5 +1,4 @@
 import { describe, it, expect, vi } from 'vitest'
-import { NextRequest } from 'next/server'
 
 // ── DB state shared across mock calls ────────────────────────────────────────
 const db = vi.hoisted(() => ({

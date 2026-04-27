@@ -55,9 +55,9 @@ export function detectExternalIdDuplicates(rows: { external_id: string }[]): str
     counts.set(row.external_id, (counts.get(row.external_id) ?? 0) + 1)
   }
   const dupes: string[] = []
-  for (const [id, count] of counts) {
+  Array.from(counts.entries()).forEach(([id, count]) => {
     if (count > 1) dupes.push(id)
-  }
+  })
   return dupes
 }
 

@@ -55,6 +55,7 @@ export interface ProcessedTransaction {
    *   "xero:personal-wage"
    */
   matched_rule: string | null
+  is_subscription?: boolean
 }
 
 export async function applyMappings(merchant: string): Promise<{ category: string | null; classification: string | null }> {
