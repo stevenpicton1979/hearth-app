@@ -150,9 +150,9 @@ export default function ReconcilePage() {
           <section>
             <h2 className="text-base font-semibold text-gray-800 mb-3">
               External-ID Duplicates
-              <StatusBadge ok={data.externalIdDuplicates.length === 0} children={
-                data.externalIdDuplicates.length === 0 ? '✓ none' : `${data.externalIdDuplicates.length} found`
-              } />
+              <StatusBadge ok={data.externalIdDuplicates.length === 0}>
+                {data.externalIdDuplicates.length === 0 ? '✓ none' : `${data.externalIdDuplicates.length} found`}
+              </StatusBadge>
             </h2>
             {data.externalIdDuplicates.length > 0 ? (
               <ul className="text-sm space-y-1 text-red-700">
@@ -169,9 +169,9 @@ export default function ReconcilePage() {
           <section>
             <h2 className="text-base font-semibold text-gray-800 mb-3">
               CSV Near-Duplicates{' '}
-              <StatusBadge ok={data.csvNearDuplicates.length === 0} children={
-                data.csvNearDuplicates.length === 0 ? '✓ none' : `${data.csvNearDuplicates.length} groups`
-              } />
+              <StatusBadge ok={data.csvNearDuplicates.length === 0}>
+                {data.csvNearDuplicates.length === 0 ? '✓ none' : `${data.csvNearDuplicates.length} groups`}
+              </StatusBadge>
             </h2>
             {data.csvNearDuplicates.length > 0 ? (
               <div className="overflow-x-auto rounded border border-gray-200">

@@ -79,7 +79,7 @@ describe('GET /api/admin/reconcile', () => {
     db.allExternalIds = ['ext-1', 'ext-2', 'ext-3']
     db.csvRows = []
 
-    const req = new NextRequest('http://localhost/api/admin/reconcile')
+    const _req = new NextRequest('http://localhost/api/admin/reconcile')
     const res = await GET()
     const data = await res.json()
 
