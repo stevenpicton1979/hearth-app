@@ -163,6 +163,7 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
         category: raw.category_hint ?? null,
         classification: null,
         is_transfer: true,
+        is_subscription: false,
         external_id: raw.external_id ?? null,
         raw_description: raw.raw_description ?? null,
         needs_review: raw.needs_review ?? false,
