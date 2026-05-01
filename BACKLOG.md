@@ -227,8 +227,35 @@ When multiple rules share the same fingerprint, it means the category taxonomy c
 
 ---
 
+## [ ] 14. Fix reconciliation page — DB count = 0 for most accounts
+
+**Problem:** `/dev/reconcile` shows DB COUNT = 0 for BHT, AmEx, and NAB CC accounts. Only Mastercard Bus. Plat returns a real count (497). The Xero API count is also wrong (shows 0 for most accounts).
+
+**Root cause:** The reconcile endpoint fetches Xero accounts using the Xero API and maps them to DB accounts, but the account ID matching logic is broken. The Xero API returns accounts by their Xero `BankAccountID`, but the DB `accounts` table uses internal UUIDs. The mapping between these two ID spaces is not being applied correctly.
+
+**Fix:**
+1. Read `src/lib/reconcile.ts` and `src/app/api/admin/reconcile/route.ts` to understand the current matching logic.
+2. The `xero_connections` or `accounts` table likely has a column that stores the Xero `BankAccountID` — find it (probably `xero_account_id` or `external_id` on the accounts table).
+3. Fix the account matching so Xero API counts are joined to DB counts by the correct ID.
+4. Also fix the Xero API call — it may be using the wrong endpoint or wrong filter to count bank transactions per account. Check against the working sync logic in `src/app/api/xero/sync/route.ts` for the correct API call pattern.
+5. The page should show a ✓ green row for each account where Xero count ≈ DB count (within a small tolerance), and a ✗ red row where they diverge.
+
+**Tests:** Update `reconcile.test.ts` if any pure function logic changes. The integration test in `reconcileRoute.test.ts` should assert that accounts are correctly matched by the right ID field.
+
+---
+
+## [ ] 15. Coverage inspector — add merchant name search/filter
+
+**Problem:** `/dev/coverage` loads all merchants at once with no way to search. To look up a specific merchant (e.g. "spotify") you have to scroll through the full list.
+
+**Fix:** Add a text input at the top of the coverage page that filters the merchant list client-side (no API changes needed — the data is already loaded). Filter should be case-insensitive, match anywhere in the merchant name, and update the table in real time as the user types. Clear button would be a nice touch.
+
+**Tests:** No new API tests needed. If there's a `buildCoverageRows` unit test, no changes needed there either — this is purely a UI change.
+
+---
+
 ## Done when:
-- All 13 tasks committed and pushed
+- All 15 tasks committed and pushed
 - `npm test` passes after all changes
 - Vercel deployment is READY
 - Update STATE_HEARTH.md in C:\dev\portfoliostate\ with what shipped, then commit and push portfoliostate
