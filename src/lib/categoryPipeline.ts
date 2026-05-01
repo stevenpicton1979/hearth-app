@@ -64,6 +64,7 @@ export async function applyMappings(merchant: string): Promise<{ category: strin
     .from('merchant_mappings')
     .select('category, classification')
     .eq('household_id', DEFAULT_HOUSEHOLD_ID)
+    .eq('source', 'manual')
     .eq('merchant', merchant)
     .single()
   return { category: data?.category ?? null, classification: data?.classification ?? null }
@@ -83,7 +84,8 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
     supabase
       .from('merchant_mappings')
       .select('merchant, category, classification')
-      .eq('household_id', DEFAULT_HOUSEHOLD_ID),
+      .eq('household_id', DEFAULT_HOUSEHOLD_ID)
+      .eq('source', 'manual'),
     supabase
       .from('accounts')
       .select('id, owner')
@@ -227,7 +229,6 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
       matchedRule = `merchant:${ruleResult.ruleName}`
       if (ruleResult.owner !== null) classification = ruleResult.owner
       isSubscription = ruleResult.isSubscription
-      if (!isIncome && category !== null) autoMappings.set(merchant, category)
     } else if (raw.category_hint) {
       // GL account hint or Xero non-transfer rule category (passed via category_hint)
       category = raw.category_hint
@@ -272,6 +273,7 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
       merchant,
       category,
       classification: null,
+      source: 'auto',
     }))
     await supabase
       .from('merchant_mappings')

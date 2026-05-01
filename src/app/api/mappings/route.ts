@@ -7,7 +7,7 @@ export async function PUT(req: NextRequest) {
   const supabase = createServerClient()
   const { error } = await supabase
     .from('merchant_mappings')
-    .update({ category, classification, notes, updated_at: new Date().toISOString() })
+    .update({ category, classification, notes, source: 'manual', updated_at: new Date().toISOString() })
     .eq('household_id', DEFAULT_HOUSEHOLD_ID)
     .eq('merchant', merchant)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -33,7 +33,7 @@ export async function PATCH(req: NextRequest) {
   const { error } = await supabase
     .from('merchant_mappings')
     .upsert(
-      { household_id: DEFAULT_HOUSEHOLD_ID, merchant, ...fields, updated_at: new Date().toISOString() },
+      { household_id: DEFAULT_HOUSEHOLD_ID, merchant, ...fields, source: 'manual', updated_at: new Date().toISOString() },
       { onConflict: 'household_id,merchant' }
     )
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

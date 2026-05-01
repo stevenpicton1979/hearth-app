@@ -22,6 +22,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         merchant: txn.merchant,
         ...(category !== undefined && { category }),
         ...(classification !== undefined && { classification }),
+        source: 'manual',
         updated_at: new Date().toISOString(),
       },
       { onConflict: 'household_id,merchant' }

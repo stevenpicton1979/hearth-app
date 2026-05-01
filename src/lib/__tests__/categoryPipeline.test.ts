@@ -19,14 +19,20 @@ function setupMocks(opts: {
 
   mockFrom.mockImplementation((table: string) => {
     if (table === 'merchant_mappings') {
-      return {
+      // Must be a thenable so the chained .eq().eq() query can be awaited directly.
+      // select/eq return `this` for chaining; then() resolves the whole chain.
+      const builder = {
         select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockResolvedValue({ data: mappings, error: null }),
+        eq: vi.fn().mockReturnThis(),
         upsert: vi.fn().mockImplementation((rows: unknown) => {
           capturedUpsertRows.push(rows)
           return Promise.resolve({ error: null })
         }),
+        then(resolve: (v: { data: typeof mappings; error: null }) => unknown, reject?: (e: unknown) => unknown) {
+          return Promise.resolve({ data: mappings, error: null }).then(resolve, reject)
+        },
       }
+      return builder
     }
     if (table === 'accounts') {
       return {
@@ -237,6 +243,39 @@ describe('processBatch', () => {
       raw({ description: 'WOOLWORTHS 1234', amount: -50 }),
     ])
     expect(toUpsert[0].is_subscription).toBe(false)
+  })
+
+  // ── Task 16: source column behaviour ──────────────────────────────────────
+
+  it('ruleResult branch does not write to autoMappings', async () => {
+    setupMocks({ mappings: [] })
+    // ATO PAYMENT matches the ato_payments named rule
+    await processBatch([raw({ description: 'ATO PAYMENT REF12345', amount: -2000 })])
+    expect(capturedUpsertRows).toHaveLength(0)
+  })
+
+  it('keyword-fallback branch writes source: auto to autoMappings', async () => {
+    setupMocks({ mappings: [] })
+    await processBatch([raw({ description: 'WOOLWORTHS 1234', amount: -50 })])
+    expect(capturedUpsertRows.length).toBeGreaterThan(0)
+    const rows = capturedUpsertRows[0] as Array<{ source: string }>
+    expect(rows.every(r => r.source === 'auto')).toBe(true)
+  })
+
+  it('manual mapping (source=manual) overrides a named rule result', async () => {
+    setupMocks({
+      mappings: [{ merchant: 'ATO PAYMENT REF12345', category: 'Business', classification: null }],
+    })
+    const { toUpsert } = await processBatch([raw({ description: 'ATO PAYMENT REF12345', amount: -2000 })])
+    expect(toUpsert[0].category).toBe('Business')
+    expect(toUpsert[0].matched_rule).toBeNull()
+  })
+
+  it('when no manual mapping exists, named rule fires (simulates auto mapping filtered out)', async () => {
+    setupMocks({ mappings: [] })
+    const { toUpsert } = await processBatch([raw({ description: 'ATO PAYMENT REF12345', amount: -2000 })])
+    expect(toUpsert[0].category).toBe('Government & Tax')
+    expect(toUpsert[0].matched_rule).toBe('merchant:ato_payments')
   })
 })
 

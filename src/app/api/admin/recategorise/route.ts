@@ -19,7 +19,7 @@ export async function POST() {
   if (!txns || txns.length === 0) return NextResponse.json({ updated: 0 })
 
   let updated = 0
-  const mappingsToUpsert: { household_id: string; merchant: string; category: string; classification: null }[] = []
+  const mappingsToUpsert: { household_id: string; merchant: string; category: string; classification: null; source: string }[] = []
 
   const updates = txns
     .map(t => ({ id: t.id, merchant: t.merchant, category: guessCategory(t.merchant) }))
@@ -36,7 +36,7 @@ export async function POST() {
   // Persist new auto-categorised merchants as mappings
   for (const { merchant, category } of updates) {
     if (category) {
-      mappingsToUpsert.push({ household_id: DEFAULT_HOUSEHOLD_ID, merchant, category, classification: null })
+      mappingsToUpsert.push({ household_id: DEFAULT_HOUSEHOLD_ID, merchant, category, classification: null, source: 'auto' })
     }
   }
 
