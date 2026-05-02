@@ -20,7 +20,7 @@ export async function POST() {
 
   const { data: rows, error } = await supabase
     .from('transactions')
-    .select('id, account_id, date, amount, description, external_id, source, is_transfer, category_hint, raw_description, gl_account, gl_tax_type')
+    .select('id, account_id, date, amount, merchant, external_id, source, is_transfer, raw_description, gl_account')
     .eq('household_id', DEFAULT_HOUSEHOLD_ID)
     .eq('source', 'csv')
 
@@ -30,14 +30,16 @@ export async function POST() {
     account_id: row.account_id as string,
     date: row.date as string,
     amount: row.amount as number,
-    description: row.description as string,
+    // Use the already-cleaned merchant name as description so processBatch
+    // re-runs rules against the same string the original import used.
+    description: row.merchant as string,
     external_id: row.external_id as string | undefined,
     source: row.source as string,
     is_transfer: row.is_transfer as boolean,
-    category_hint: row.category_hint as string | null,
+    category_hint: null,
     raw_description: row.raw_description as string | null,
     gl_account: row.gl_account as string | null,
-    gl_tax_type: row.gl_tax_type as string | null,
+    gl_tax_type: null,
   }))
 
   const { toUpsert, transfersSkipped } = await processBatch(raws)
