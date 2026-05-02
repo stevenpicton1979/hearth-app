@@ -48,3 +48,34 @@ export const CATEGORIES = [
 ] as const
 
 export type Category = typeof CATEGORIES[number]
+
+export function getOutcomeBucket(tx: {
+  owner: string | null
+  isIncome: boolean
+  isSubscription: boolean
+  category: string | null
+}): string[] {
+  const { owner, isIncome, isSubscription, category } = tx
+
+  // Business realm
+  if (owner === 'Business') {
+    if (isIncome) return ['Business', 'Income', category ?? 'Uncategorised']
+    return ['Business', 'Expenses', isSubscription ? 'Subscriptions' : (category ?? 'Uncategorised')]
+  }
+
+  // Joint realm
+  if (owner === 'Joint') {
+    if (isIncome) return ['Personal', 'Joint', 'Income', category ?? 'Uncategorised']
+    return ['Personal', 'Joint', 'Expenses', category ?? 'Uncategorised']
+  }
+
+  // Personal realms (Steven / Nicola / Unknown)
+  const person = owner ?? 'Unknown'
+  if (isIncome) return ['Personal', person, 'Income', category ?? 'Uncategorised']
+  if (isSubscription) return ['Personal', person, 'Expenses', 'Subscriptions', category ?? 'Uncategorised']
+  return ['Personal', person, 'Expenses', category ?? 'Uncategorised']
+}
+
+export function formatBucketPath(bucket: string[]): string {
+  return bucket.join(' → ')
+}
