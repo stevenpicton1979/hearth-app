@@ -6,6 +6,7 @@ interface AccountReconciliation {
   id: string
   name: string
   xeroCount: number | null
+  lastSyncedAt: string | null
   dbCount: number
   minDate: string | null
   maxDate: string | null
@@ -103,7 +104,7 @@ export default function ReconcilePage() {
               <table className="min-w-full text-sm divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    {['Account', 'Xero count', 'DB count', 'Match', 'Date range', 'Gap months', 'Status'].map(h => (
+                    {['Account', 'Xero count', 'DB count', 'Match', 'Synced', 'Date range', 'Gap months', 'Status'].map(h => (
                       <th key={h} className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         {h}
                       </th>
@@ -113,7 +114,7 @@ export default function ReconcilePage() {
                 <tbody className="bg-white divide-y divide-gray-100">
                   {data.accounts.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="px-4 py-4 text-center text-gray-400 text-sm">
+                      <td colSpan={8} className="px-4 py-4 text-center text-gray-400 text-sm">
                         No Xero accounts found.
                       </td>
                     </tr>
@@ -137,6 +138,11 @@ export default function ReconcilePage() {
                           ) : (
                             <span className="text-green-700 font-medium">✓</span>
                           )}
+                        </td>
+                        <td className="px-4 py-2 text-gray-500 tabular-nums text-xs">
+                          {acct.lastSyncedAt
+                            ? acct.lastSyncedAt.slice(0, 10)
+                            : <span className="text-gray-400">never</span>}
                         </td>
                         <td className="px-4 py-2 text-gray-600 tabular-nums">
                           {acct.minDate && acct.maxDate

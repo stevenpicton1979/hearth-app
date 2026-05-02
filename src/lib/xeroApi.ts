@@ -195,56 +195,6 @@ export async function getXeroBankTransactions(
 }
 
 /**
- * Count bank transactions for one Xero account without fetching full records.
- * Paginates up to 5,000 (50 pages × 100) — same cap as the full sync.
- * Excludes RECEIVE-TRANSFER transactions because the sync skips them; only
- * the SPEND-TRANSFER side is stored in Hearth, so counts are comparable.
- */
-export async function getXeroBankTransactionCount(
-  connection: XeroConnection,
-  accountId: string
-): Promise<number> {
-  const where = `Status=="AUTHORISED"&&Type!="RECEIVE-TRANSFER"&&BankAccount.AccountID=guid("${accountId}")`
-  const PAGE_SIZE = 100
-  const MAX_PAGES = 50
-
-  const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms))
-
-  const fetchPageCount = async (page: number, attempt = 0): Promise<number> => {
-    const params = new URLSearchParams({ where, page: page.toString() })
-    const url = `${XERO_API_BASE}/BankTransactions?${params.toString()}`
-    const res = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${connection.access_token}`,
-        'Xero-tenant-id': connection.tenant_id,
-        'Accept': 'application/json',
-      },
-    })
-    if (res.status === 429) {
-      if (attempt >= 3) throw new Error(`Xero rate limit exceeded counting transactions (page ${page})`)
-      const retryAfter = parseInt(res.headers.get('Retry-After') ?? '15', 10)
-      await sleep(retryAfter * 1000)
-      return fetchPageCount(page, attempt + 1)
-    }
-    if (!res.ok) {
-      const err = await res.text()
-      throw new Error(`Xero BankTransactions count (page ${page}): HTTP ${res.status} — ${err}`)
-    }
-    const data = await res.json() as { BankTransactions?: unknown[] }
-    return data.BankTransactions?.length ?? 0
-  }
-
-  let total = 0
-  for (let page = 1; page <= MAX_PAGES; page++) {
-    const pageCount = await fetchPageCount(page)
-    total += pageCount
-    if (pageCount < PAGE_SIZE) break
-  }
-  return total
-}
-
-/**
  * Fetch accounts from Xero API to build lookup table.
  */
 export async function getXeroAccounts(connection: XeroConnection): Promise<Map<string, XeroAccount>> {

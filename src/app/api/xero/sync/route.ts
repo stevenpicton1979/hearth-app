@@ -300,6 +300,31 @@ export async function POST(req: NextRequest) {
     const { inserted, backfilled } = await upsertTransactions(deduped)
 
     // ----------------------------------------------------------------
+    // Phase 3b: Store per-account Xero counts (full sync only).
+    // raws excludes RECEIVE-TRANSFER, matching exactly what is stored in
+    // Hearth. Stored here so the reconcile page can compare without making
+    // live Xero API calls on every page load.
+    // ----------------------------------------------------------------
+    if (isFull) {
+      const xeroCounts = new Map<string, number>()
+      for (const raw of raws) {
+        xeroCounts.set(raw.account_id, (xeroCounts.get(raw.account_id) ?? 0) + 1)
+      }
+      await Promise.all(
+        Array.from(xeroCounts.entries()).map(([accountId, count]) =>
+          supabase
+            .from('accounts')
+            .update({
+              last_xero_sync_count: count,
+              last_xero_synced_at: new Date().toISOString(),
+            })
+            .eq('id', accountId)
+            .eq('household_id', DEFAULT_HOUSEHOLD_ID)
+        )
+      )
+    }
+
+    // ----------------------------------------------------------------
     // Phase 4: Link transfer pairs and salary pairs.
     // ----------------------------------------------------------------
     const batchDates = Array.from(new Set(raws.map(r => r.date)))

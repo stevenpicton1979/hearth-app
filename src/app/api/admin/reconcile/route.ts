@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
 import { DEFAULT_HOUSEHOLD_ID } from '@/lib/constants'
-import { getXeroConnection, getXeroBankTransactionCount } from '@/lib/xeroApi'
 import {
   detectGapMonths,
   detectExternalIdDuplicates,
@@ -14,39 +13,32 @@ import type { AccountReconciliation, ReconcileResult } from '@/lib/reconcile'
 //
 // Analyses data quality for all known Xero accounts:
 //  1. Per-account DB transaction count + date coverage (gap months)
-//  2. Per-account Xero API count (compared against DB count)
+//  2. Xero count comparison — reads last_xero_sync_count stored at full-sync
+//     time (Phase 3b in sync route). No live Xero API calls; the count is
+//     updated whenever the user runs a full sync.
 //  3. External-id duplicate check across all Xero transactions
 //  4. CSV near-duplicate check (same merchant + amount + date)
 //
 // DB count: uses { count: 'exact' } to bypass Supabase's 1,000-row default
 // limit, then fetches up to 10,000 date rows for gap analysis.
 //
-// Xero count: paginates BankTransactions per account (max 5,000), excluding
-// RECEIVE-TRANSFER (which the sync skips). xeroCount is null when Xero is
-// not connected or the lookup fails.
-//
 // Account matching: filters DB to institution='Xero' accounts.
 // Within those accounts, external_id IS NOT NULL identifies Xero-sourced rows.
 // ---------------------------------------------------------------------------
 
-const XERO_DEFAULT_ACCOUNT_ID = '__xero_default__'
-
 export async function GET() {
   const supabase = createServerClient()
 
-  // ── 1. Load known Xero accounts + Xero connection in parallel ────────────
-  const [{ data: accounts, error: acctErr }, connection] = await Promise.all([
-    supabase
-      .from('accounts')
-      .select('id, display_name, xero_account_id')
-      .eq('household_id', DEFAULT_HOUSEHOLD_ID)
-      .eq('institution', 'Xero'),
-    getXeroConnection().catch(() => null),
-  ])
+  // ── 1. Load known Xero accounts ──────────────────────────────────────────
+  const { data: accounts, error: acctErr } = await supabase
+    .from('accounts')
+    .select('id, display_name, xero_account_id, last_xero_sync_count, last_xero_synced_at')
+    .eq('household_id', DEFAULT_HOUSEHOLD_ID)
+    .eq('institution', 'Xero')
 
   if (acctErr) return NextResponse.json({ error: acctErr.message }, { status: 500 })
 
-  // ── 2. Per-account: DB count + gap analysis + Xero API count ─────────────
+  // ── 2. Per-account: DB count + gap analysis + stored Xero count ───────────
   const accountSummaries: AccountReconciliation[] = []
 
   await Promise.all((accounts ?? []).map(async (acct) => {
@@ -66,21 +58,15 @@ export async function GET() {
     const dbCount = count ?? dates.length
     const sorted = [...dates].sort()
 
-    // Xero API count — skip pseudo-accounts and accounts without a Xero ID
-    const xeroAccId = acct.xero_account_id as string | null
-    let xeroCount: number | null = null
-    if (connection && xeroAccId && xeroAccId !== XERO_DEFAULT_ACCOUNT_ID) {
-      try {
-        xeroCount = await getXeroBankTransactionCount(connection, xeroAccId)
-      } catch {
-        xeroCount = null  // non-fatal; page shows — for this account
-      }
-    }
+    // Xero count — written at full-sync time; null until first full sync runs.
+    const xeroCount: number | null = (acct.last_xero_sync_count as number | null) ?? null
+    const lastSyncedAt: string | null = (acct.last_xero_synced_at as string | null) ?? null
 
     accountSummaries.push({
       id: acct.id,
       name: acct.display_name,
       xeroCount,
+      lastSyncedAt,
       dbCount,
       minDate: sorted[0] ?? null,
       maxDate: sorted[sorted.length - 1] ?? null,
