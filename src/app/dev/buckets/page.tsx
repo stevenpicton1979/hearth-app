@@ -73,7 +73,7 @@ function buildTree(buckets: BucketRow[]): GroupNode[] {
       continue
     }
 
-    const [l2, ...rest3] = rest2
+    const [l2] = rest2
     let sub = mid.children.find((c): c is GroupNode => c.kind === 'group' && c.key === l2) ?? null
     if (!sub) {
       sub = { kind: 'group', key: l2, totalAmount: 0, count: 0, children: [] }
@@ -128,7 +128,7 @@ function SubTree({ nodes, depth }: { nodes: TreeNode[]; depth: number }) {
   const [open, setOpen] = useState<Set<string>>(new Set())
   const toggle = (key: string) => setOpen(prev => {
     const next = new Set(prev)
-    next.has(key) ? next.delete(key) : next.add(key)
+    if (next.has(key)) { next.delete(key) } else { next.add(key) }
     return next
   })
 
@@ -176,7 +176,7 @@ export default function BucketsPage() {
 
   const toggle = (key: string) => setOpen(prev => {
     const next = new Set(prev)
-    next.has(key) ? next.delete(key) : next.add(key)
+    if (next.has(key)) { next.delete(key) } else { next.add(key) }
     return next
   })
 
