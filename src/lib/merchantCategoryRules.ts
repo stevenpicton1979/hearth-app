@@ -192,6 +192,141 @@ export const MERCHANT_CATEGORY_RULES: MerchantCategoryRule[] = [
     output: { category: 'Entertainment', isIncome: null, isTransfer: false, isSubscription: true, owner: 'Business' },
   },
 
+  // ─── Personal Income ─────────────────────────────────────────────────────────
+
+  {
+    name: 'salary_nicola_education_qld',
+    description: "Nicola's salary from Education Queensland — always a credit, always hers",
+    match: (m, ctx) => /salary education qld/i.test(m) && ctx.isIncome,
+    output: { category: 'Salary', isIncome: true, isTransfer: false, isSubscription: false, owner: 'Nicola' },
+  },
+
+  // ─── Personal Transport ──────────────────────────────────────────────────────
+
+  {
+    name: 'translink',
+    description: 'Translink public transport → Transport',
+    match: (m) => /translink/i.test(m),
+    output: { category: 'Transport', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+
+  {
+    name: 'qld_transport_rego',
+    description: 'Queensland Department of Transport — car registration → Government & Tax',
+    match: (m) => /qld department of transport/i.test(m),
+    output: { category: 'Government & Tax', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+
+  // ─── Personal Education ──────────────────────────────────────────────────────
+
+  {
+    name: 'mansfield_state_high',
+    description: 'Mansfield State High school canteen purchases — not school fees → Eating Out',
+    match: (m) => /mansfield state high/i.test(m),
+    output: { category: 'Eating Out', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+
+  {
+    name: 'learning_ladders',
+    description: 'Learning Ladders educational app subscription → Education',
+    match: (m) => /learningladders/i.test(m),
+    output: { category: 'Education', isIncome: false, isTransfer: false, isSubscription: true, owner: 'Joint' },
+  },
+
+  // ─── Personal Health & Fitness ───────────────────────────────────────────────
+
+  {
+    name: 'fitness_passport',
+    description: 'Fitness Passport gym access program → Health & Fitness',
+    match: (m) => /fitness passport/i.test(m),
+    output: { category: 'Health & Fitness', isIncome: false, isTransfer: false, isSubscription: true, owner: 'Joint' },
+  },
+
+  {
+    name: 'fitstop',
+    description: 'Fitstop gym franchise subscription → Health & Fitness',
+    match: (m) => /^fitstop/i.test(m),
+    output: { category: 'Health & Fitness', isIncome: false, isTransfer: false, isSubscription: true, owner: 'Joint' },
+  },
+
+  {
+    name: 'fitbox',
+    description: 'Fitbox boxing gym subscription → Health & Fitness',
+    match: (m) => /fitbox/i.test(m),
+    output: { category: 'Health & Fitness', isIncome: false, isTransfer: false, isSubscription: true, owner: 'Joint' },
+  },
+
+  {
+    name: 'ironfist_gym',
+    description: 'Iron Fist Gym — covers EZI*THEIRONFISTGYM and IRONFIST GYM → Health & Fitness',
+    match: (m) => /ironfist/i.test(m),
+    output: { category: 'Health & Fitness', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+
+  // ─── Personal Insurance ──────────────────────────────────────────────────────
+
+  {
+    name: 'hcf_health_insurance',
+    description: 'HCF health insurance direct debit → Insurance (not Healthcare)',
+    match: (m) => /hcfhealth/i.test(m),
+    output: { category: 'Insurance', isIncome: false, isTransfer: false, isSubscription: true, owner: 'Joint' },
+  },
+
+  {
+    name: 'hospitals_contribution',
+    description: 'The Hospitals Contribution Fund — health insurance, not Medical → Insurance',
+    match: (m) => /hospitals contri/i.test(m),
+    output: { category: 'Insurance', isIncome: false, isTransfer: false, isSubscription: true, owner: 'Joint' },
+  },
+
+  {
+    name: 'clearview_insurance',
+    description: 'ClearView life/income protection insurance direct debit → Insurance',
+    match: (m) => /clearview/i.test(m),
+    output: { category: 'Insurance', isIncome: false, isTransfer: false, isSubscription: true, owner: 'Joint' },
+  },
+
+  // ─── Personal Utilities & Government ────────────────────────────────────────
+
+  {
+    name: 'qld_urban_utilities',
+    description: 'QLD Urban Utilities water bill → Utilities',
+    match: (m) => /qld urban util/i.test(m),
+    output: { category: 'Utilities', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+
+  {
+    name: 'brisbane_city_council',
+    description: 'Brisbane City Council rates → Government & Tax (not Utilities)',
+    match: (m) => /brisbane city co/i.test(m),
+    output: { category: 'Government & Tax', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+
+  {
+    name: 'bcc_rates',
+    description: 'BCC rates via BPAY → Government & Tax',
+    match: (m) => /bcc rates/i.test(m),
+    output: { category: 'Government & Tax', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+
+  // ─── Personal Food ───────────────────────────────────────────────────────────
+
+  {
+    name: 'the_bread_corner',
+    description: 'The Bread Corner local bakery → Food & Groceries (not Business)',
+    match: (m) => /bread corner/i.test(m),
+    output: { category: 'Food & Groceries', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+
+  // ─── Personal Technology ─────────────────────────────────────────────────────
+
+  {
+    name: 'apple_bill',
+    description: 'Apple.com/bill — App Store / iCloud subscriptions → Technology',
+    match: (m) => /apple\.com\/bill/i.test(m),
+    output: { category: 'Technology', isIncome: false, isTransfer: false, isSubscription: true, owner: 'Joint' },
+  },
+
   // ─── Transfers ───────────────────────────────────────────────────────────────
 
   {

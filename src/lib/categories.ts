@@ -34,13 +34,15 @@ export const CATEGORIES = [
 
   // Personal — Expenses
   'Groceries',
+  'Food & Groceries', // bakeries, specialty food, food outside supermarkets
   'Eating Out',
   'Entertainment',    // gaming, media, streaming, subscriptions
   'Housing',          // mortgage, rent
   'Utilities',        // energy, water, gas
   'Internet & Phone', // NBN, mobile plans
-  'Healthcare',       // medical, pharmacy, health insurance
-  'Insurance',        // home, car, life insurance
+  'Healthcare',       // medical, pharmacy
+  'Health & Fitness', // gym memberships, fitness subscriptions
+  'Insurance',        // home, car, life, health insurance
   'Education',
   'Shopping',         // general retail, clothing
   'Childcare',

@@ -420,6 +420,264 @@ describe('director_loan_repayment', () => {
   })
 })
 
+// ─── salary_nicola_education_qld ──────────────────────────────────────────────
+
+describe('salary_nicola_education_qld', () => {
+  it('matches income — full fingerprint', () => {
+    const result = applyMerchantCategoryRules('SALARY EDUCATION QLD', income)
+    expect(result?.category).toBe('Salary')
+    expect(result?.isIncome).toBe(true)
+    expect(result?.isTransfer).toBe(false)
+    expect(result?.isSubscription).toBe(false)
+    expect(result?.owner).toBe('Nicola')
+    expect(result?.ruleName).toBe('salary_nicola_education_qld')
+  })
+
+  it('does NOT match on expense (debit)', () => {
+    expect(applyMerchantCategoryRules('SALARY EDUCATION QLD', expense)).toBeNull()
+  })
+})
+
+// ─── translink ────────────────────────────────────────────────────────────────
+
+describe('translink', () => {
+  it('matches "TRANSLINK" — full fingerprint', () => {
+    const result = applyMerchantCategoryRules('TRANSLINK', expense)
+    expect(result?.category).toBe('Transport')
+    expect(result?.isIncome).toBe(false)
+    expect(result?.isTransfer).toBe(false)
+    expect(result?.isSubscription).toBe(false)
+    expect(result?.owner).toBe('Joint')
+    expect(result?.ruleName).toBe('translink')
+  })
+
+  it('matches mid-string', () => {
+    expect(applyMerchantCategoryRules('BPAY TRANSLINK QLD', expense)?.ruleName).toBe('translink')
+  })
+})
+
+// ─── qld_transport_rego ───────────────────────────────────────────────────────
+
+describe('qld_transport_rego', () => {
+  it('matches "QLD DEPARTMENT OF TRANSPORT" — full fingerprint', () => {
+    const result = applyMerchantCategoryRules('QLD DEPARTMENT OF TRANSPORT', expense)
+    expect(result?.category).toBe('Government & Tax')
+    expect(result?.isIncome).toBe(false)
+    expect(result?.isTransfer).toBe(false)
+    expect(result?.isSubscription).toBe(false)
+    expect(result?.owner).toBe('Joint')
+    expect(result?.ruleName).toBe('qld_transport_rego')
+  })
+})
+
+// ─── mansfield_state_high ─────────────────────────────────────────────────────
+
+describe('mansfield_state_high', () => {
+  it('matches "MANSFIELD STATE HIGH" — full fingerprint', () => {
+    const result = applyMerchantCategoryRules('MANSFIELD STATE HIGH', expense)
+    expect(result?.category).toBe('Eating Out')
+    expect(result?.isIncome).toBe(false)
+    expect(result?.isTransfer).toBe(false)
+    expect(result?.isSubscription).toBe(false)
+    expect(result?.owner).toBe('Joint')
+    expect(result?.ruleName).toBe('mansfield_state_high')
+  })
+})
+
+// ─── learning_ladders ─────────────────────────────────────────────────────────
+
+describe('learning_ladders', () => {
+  it('matches "LEARNINGLADDERS" — full fingerprint', () => {
+    const result = applyMerchantCategoryRules('LEARNINGLADDERS', expense)
+    expect(result?.category).toBe('Education')
+    expect(result?.isIncome).toBe(false)
+    expect(result?.isTransfer).toBe(false)
+    expect(result?.isSubscription).toBe(true)
+    expect(result?.owner).toBe('Joint')
+    expect(result?.ruleName).toBe('learning_ladders')
+  })
+})
+
+// ─── fitness_passport ─────────────────────────────────────────────────────────
+
+describe('fitness_passport', () => {
+  it('matches "FITNESS PASSPORT" — full fingerprint', () => {
+    const result = applyMerchantCategoryRules('FITNESS PASSPORT', expense)
+    expect(result?.category).toBe('Health & Fitness')
+    expect(result?.isIncome).toBe(false)
+    expect(result?.isTransfer).toBe(false)
+    expect(result?.isSubscription).toBe(true)
+    expect(result?.owner).toBe('Joint')
+    expect(result?.ruleName).toBe('fitness_passport')
+  })
+})
+
+// ─── fitstop ──────────────────────────────────────────────────────────────────
+
+describe('fitstop', () => {
+  it('matches "FITSTOP CARINDALE" — full fingerprint', () => {
+    const result = applyMerchantCategoryRules('FITSTOP CARINDALE', expense)
+    expect(result?.category).toBe('Health & Fitness')
+    expect(result?.isIncome).toBe(false)
+    expect(result?.isTransfer).toBe(false)
+    expect(result?.isSubscription).toBe(true)
+    expect(result?.owner).toBe('Joint')
+    expect(result?.ruleName).toBe('fitstop')
+  })
+
+  it('does NOT match "GYM FITSTOP" (must start with fitstop)', () => {
+    expect(applyMerchantCategoryRules('GYM FITSTOP', expense)?.ruleName).not.toBe('fitstop')
+  })
+})
+
+// ─── fitbox ───────────────────────────────────────────────────────────────────
+
+describe('fitbox', () => {
+  it('matches "FITBOX BOXING" — full fingerprint', () => {
+    const result = applyMerchantCategoryRules('FITBOX BOXING', expense)
+    expect(result?.category).toBe('Health & Fitness')
+    expect(result?.isIncome).toBe(false)
+    expect(result?.isTransfer).toBe(false)
+    expect(result?.isSubscription).toBe(true)
+    expect(result?.owner).toBe('Joint')
+    expect(result?.ruleName).toBe('fitbox')
+  })
+})
+
+// ─── ironfist_gym ─────────────────────────────────────────────────────────────
+
+describe('ironfist_gym', () => {
+  it('matches "EZI*THEIRONFISTGYM" — full fingerprint', () => {
+    const result = applyMerchantCategoryRules('EZI*THEIRONFISTGYM', expense)
+    expect(result?.category).toBe('Health & Fitness')
+    expect(result?.isIncome).toBe(false)
+    expect(result?.isTransfer).toBe(false)
+    expect(result?.isSubscription).toBe(false)
+    expect(result?.owner).toBe('Joint')
+    expect(result?.ruleName).toBe('ironfist_gym')
+  })
+
+  it('matches "IRONFIST GYM"', () => {
+    expect(applyMerchantCategoryRules('IRONFIST GYM', expense)?.ruleName).toBe('ironfist_gym')
+  })
+})
+
+// ─── hcf_health_insurance ─────────────────────────────────────────────────────
+
+describe('hcf_health_insurance', () => {
+  it('matches "HCFHEALTH" — full fingerprint', () => {
+    const result = applyMerchantCategoryRules('HCFHEALTH', expense)
+    expect(result?.category).toBe('Insurance')
+    expect(result?.isIncome).toBe(false)
+    expect(result?.isTransfer).toBe(false)
+    expect(result?.isSubscription).toBe(true)
+    expect(result?.owner).toBe('Joint')
+    expect(result?.ruleName).toBe('hcf_health_insurance')
+  })
+})
+
+// ─── hospitals_contribution ───────────────────────────────────────────────────
+
+describe('hospitals_contribution', () => {
+  it('matches "THE HOSPITALS CONTRIBUTION" — full fingerprint', () => {
+    const result = applyMerchantCategoryRules('THE HOSPITALS CONTRI FUND', expense)
+    expect(result?.category).toBe('Insurance')
+    expect(result?.isIncome).toBe(false)
+    expect(result?.isTransfer).toBe(false)
+    expect(result?.isSubscription).toBe(true)
+    expect(result?.owner).toBe('Joint')
+    expect(result?.ruleName).toBe('hospitals_contribution')
+  })
+})
+
+// ─── clearview_insurance ──────────────────────────────────────────────────────
+
+describe('clearview_insurance', () => {
+  it('matches "CLEARVIEW LIFE" — full fingerprint', () => {
+    const result = applyMerchantCategoryRules('CLEARVIEW LIFE ASSURANCE', expense)
+    expect(result?.category).toBe('Insurance')
+    expect(result?.isIncome).toBe(false)
+    expect(result?.isTransfer).toBe(false)
+    expect(result?.isSubscription).toBe(true)
+    expect(result?.owner).toBe('Joint')
+    expect(result?.ruleName).toBe('clearview_insurance')
+  })
+})
+
+// ─── qld_urban_utilities ──────────────────────────────────────────────────────
+
+describe('qld_urban_utilities', () => {
+  it('matches "QLD URBAN UTILITIES" — full fingerprint', () => {
+    const result = applyMerchantCategoryRules('QLD URBAN UTILITIES', expense)
+    expect(result?.category).toBe('Utilities')
+    expect(result?.isIncome).toBe(false)
+    expect(result?.isTransfer).toBe(false)
+    expect(result?.isSubscription).toBe(false)
+    expect(result?.owner).toBe('Joint')
+    expect(result?.ruleName).toBe('qld_urban_utilities')
+  })
+})
+
+// ─── brisbane_city_council ────────────────────────────────────────────────────
+
+describe('brisbane_city_council', () => {
+  it('matches "BRISBANE CITY COUNCIL" — full fingerprint', () => {
+    const result = applyMerchantCategoryRules('BRISBANE CITY COUNCIL', expense)
+    expect(result?.category).toBe('Government & Tax')
+    expect(result?.isIncome).toBe(false)
+    expect(result?.isTransfer).toBe(false)
+    expect(result?.isSubscription).toBe(false)
+    expect(result?.owner).toBe('Joint')
+    expect(result?.ruleName).toBe('brisbane_city_council')
+  })
+})
+
+// ─── bcc_rates ────────────────────────────────────────────────────────────────
+
+describe('bcc_rates', () => {
+  it('matches "BCC RATES" — full fingerprint', () => {
+    const result = applyMerchantCategoryRules('BCC RATES BPAY', expense)
+    expect(result?.category).toBe('Government & Tax')
+    expect(result?.isIncome).toBe(false)
+    expect(result?.isTransfer).toBe(false)
+    expect(result?.isSubscription).toBe(false)
+    expect(result?.owner).toBe('Joint')
+    expect(result?.ruleName).toBe('bcc_rates')
+  })
+})
+
+// ─── the_bread_corner ─────────────────────────────────────────────────────────
+
+describe('the_bread_corner', () => {
+  it('matches "THE BREAD CORNER" — full fingerprint', () => {
+    const result = applyMerchantCategoryRules('THE BREAD CORNER', expense)
+    expect(result?.category).toBe('Food & Groceries')
+    expect(result?.isIncome).toBe(false)
+    expect(result?.isTransfer).toBe(false)
+    expect(result?.isSubscription).toBe(false)
+    expect(result?.owner).toBe('Joint')
+    expect(result?.ruleName).toBe('the_bread_corner')
+  })
+})
+
+// ─── apple_bill ───────────────────────────────────────────────────────────────
+
+describe('apple_bill', () => {
+  it('matches "APPLE.COM/BILL" — full fingerprint', () => {
+    const result = applyMerchantCategoryRules('APPLE.COM/BILL', expense)
+    expect(result?.category).toBe('Technology')
+    expect(result?.isIncome).toBe(false)
+    expect(result?.isTransfer).toBe(false)
+    expect(result?.isSubscription).toBe(true)
+    expect(result?.owner).toBe('Joint')
+    expect(result?.ruleName).toBe('apple_bill')
+  })
+
+  it('matches "APPLE.COM/BILL ITUNES.COM AUS"', () => {
+    expect(applyMerchantCategoryRules('APPLE.COM/BILL ITUNES.COM AUS', expense)?.ruleName).toBe('apple_bill')
+  })
+})
+
 // ─── no match ─────────────────────────────────────────────────────────────────
 
 describe('no match', () => {
@@ -439,6 +697,12 @@ describe('fingerprint integrity', () => {
       JSON.stringify({ category: null, isIncome: null, isTransfer: true, isSubscription: false, owner: null }),
       // xbox, spotify — both Entertainment subscriptions on the BHT account
       JSON.stringify({ category: 'Entertainment', isIncome: null, isTransfer: false, isSubscription: true, owner: 'Business' }),
+      // fitness_passport, fitstop, fitbox — all Joint Health & Fitness subscriptions
+      JSON.stringify({ category: 'Health & Fitness', isIncome: false, isTransfer: false, isSubscription: true, owner: 'Joint' }),
+      // hcf_health_insurance, hospitals_contribution, clearview_insurance — all Joint Insurance subscriptions
+      JSON.stringify({ category: 'Insurance', isIncome: false, isTransfer: false, isSubscription: true, owner: 'Joint' }),
+      // brisbane_city_council, bcc_rates, qld_transport_rego — all Joint Government & Tax (non-subscription)
+      JSON.stringify({ category: 'Government & Tax', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' }),
     ])
 
     const seen = new Map<string, string>()
