@@ -48,7 +48,7 @@ export async function POST() {
     category: Category | null
     matched_rule: string | null
     is_subscription: boolean
-    owner: string | null
+    classification: string | null   // DB column name for owner/realm
   }[] = []
 
   for (const row of rows ?? []) {
@@ -66,7 +66,7 @@ export async function POST() {
         category: ruleResult.category,
         matched_rule: `merchant:${ruleResult.ruleName}`,
         is_subscription: ruleResult.isSubscription,
-        owner: ruleResult.owner,
+        classification: ruleResult.owner,  // owner → classification column
       })
     } else {
       // Manual mapping → keyword fallback → null
@@ -76,7 +76,7 @@ export async function POST() {
         category,
         matched_rule: null,
         is_subscription: false,
-        owner: null,
+        classification: null,
       })
     }
   }
