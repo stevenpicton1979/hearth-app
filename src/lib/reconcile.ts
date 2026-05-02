@@ -90,6 +90,8 @@ export function detectCsvNearDuplicates(
 export interface AccountReconciliation {
   id: string
   name: string
+  /** Total transactions counted by the Xero API. null = Xero not connected or lookup failed. */
+  xeroCount: number | null
   dbCount: number
   minDate: string | null
   maxDate: string | null

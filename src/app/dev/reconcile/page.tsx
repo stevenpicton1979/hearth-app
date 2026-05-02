@@ -5,6 +5,7 @@ import { useState, useCallback } from 'react'
 interface AccountReconciliation {
   id: string
   name: string
+  xeroCount: number | null
   dbCount: number
   minDate: string | null
   maxDate: string | null
@@ -57,7 +58,10 @@ export default function ReconcilePage() {
   const isClean = data
     ? data.externalIdDuplicates.length === 0 &&
       data.csvNearDuplicates.length === 0 &&
-      data.accounts.every(a => a.gapMonths.length === 0)
+      data.accounts.every(a =>
+        a.gapMonths.length === 0 &&
+        (a.xeroCount === null || Math.abs(a.xeroCount - a.dbCount) <= 2)
+      )
     : null
 
   return (
@@ -99,7 +103,7 @@ export default function ReconcilePage() {
               <table className="min-w-full text-sm divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    {['Account', 'DB count', 'Date range', 'Gap months', 'Status'].map(h => (
+                    {['Account', 'Xero count', 'DB count', 'Match', 'Date range', 'Gap months', 'Status'].map(h => (
                       <th key={h} className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         {h}
                       </th>
@@ -109,18 +113,31 @@ export default function ReconcilePage() {
                 <tbody className="bg-white divide-y divide-gray-100">
                   {data.accounts.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="px-4 py-4 text-center text-gray-400 text-sm">
+                      <td colSpan={7} className="px-4 py-4 text-center text-gray-400 text-sm">
                         No Xero accounts found.
                       </td>
                     </tr>
                   )}
                   {data.accounts.map(acct => {
                     const hasGaps = acct.gapMonths.length > 0
-                    const rowBg = hasGaps ? 'bg-red-50' : ''
+                    const countMismatch = acct.xeroCount !== null && Math.abs(acct.xeroCount - acct.dbCount) > 2
+                    const rowBg = hasGaps || countMismatch ? 'bg-red-50' : ''
                     return (
                       <tr key={acct.id} className={rowBg}>
                         <td className="px-4 py-2 font-medium text-gray-900">{acct.name}</td>
+                        <td className="px-4 py-2 tabular-nums text-gray-700">
+                          {acct.xeroCount !== null ? acct.xeroCount.toLocaleString() : <span className="text-gray-400">—</span>}
+                        </td>
                         <td className="px-4 py-2 tabular-nums">{acct.dbCount.toLocaleString()}</td>
+                        <td className="px-4 py-2">
+                          {acct.xeroCount === null ? (
+                            <span className="text-gray-400">—</span>
+                          ) : countMismatch ? (
+                            <span className="text-red-700 font-semibold">✗ {acct.xeroCount - acct.dbCount > 0 ? '+' : ''}{acct.xeroCount - acct.dbCount}</span>
+                          ) : (
+                            <span className="text-green-700 font-medium">✓</span>
+                          )}
+                        </td>
                         <td className="px-4 py-2 text-gray-600 tabular-nums">
                           {acct.minDate && acct.maxDate
                             ? `${acct.minDate} → ${acct.maxDate}`
@@ -134,8 +151,12 @@ export default function ReconcilePage() {
                           )}
                         </td>
                         <td className="px-4 py-2">
-                          <StatusBadge ok={!hasGaps}>
-                            {hasGaps ? `${acct.gapMonths.length} gap${acct.gapMonths.length > 1 ? 's' : ''}` : '✓ clean'}
+                          <StatusBadge ok={!hasGaps && !countMismatch}>
+                            {hasGaps
+                              ? `${acct.gapMonths.length} gap${acct.gapMonths.length > 1 ? 's' : ''}`
+                              : countMismatch
+                                ? 'count mismatch'
+                                : '✓ clean'}
                           </StatusBadge>
                         </td>
                       </tr>
