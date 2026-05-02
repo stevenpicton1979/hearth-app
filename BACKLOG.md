@@ -244,13 +244,48 @@ When multiple rules share the same fingerprint, it means the category taxonomy c
 
 ---
 
-## [ ] 15. Coverage inspector — add merchant name search/filter
+## [ ] 15. Coverage inspector — three-state match status + merchant search
 
-**Problem:** `/dev/coverage` loads all merchants at once with no way to search. To look up a specific merchant (e.g. "spotify") you have to scroll through the full list.
+**Problem 1 — false noise in "Unmatched only" view:**
+The coverage inspector currently has two states: "matched" (named rule fired) and "unmatched" (no named rule). But "unmatched" conflates two genuinely different situations:
+- **GL covered** — no named rule fired, but a Xero GL hint provided a correct category via `category_hint`. These transactions are correctly categorised. Amazon AU Retail is the canonical example: 56 transactions, no rule, but all correctly showing "Office Expenses" via Xero's GL account.
+- **Genuinely unmatched** — no named rule, no GL hint, category is empty or came from the noisy keyword fallback. These are the ones that actually need attention.
 
-**Fix:** Add a text input at the top of the coverage page that filters the merchant list client-side (no API changes needed — the data is already loaded). Filter should be case-insensitive, match anywhere in the merchant name, and update the table in real time as the user types. Clear button would be a nice touch.
+Showing both as "unmatched" means the actionable gaps are buried in noise. The "Unmatched only" toggle is not useful until this is fixed.
 
-**Tests:** No new API tests needed. If there's a `buildCoverageRows` unit test, no changes needed there either — this is purely a UI change.
+**Problem 2 — no merchant search:**
+No way to look up a specific merchant without scrolling the full list.
+
+**Solution:**
+
+**Step 1 — add `matchStatus` to `buildCoverageRows` output in `src/lib/coverageReport.ts`:**
+```typescript
+type MatchStatus = 'rule' | 'gl' | 'unmatched'
+```
+- `'rule'` — `matched_rule` is non-null on at least one transaction for this merchant
+- `'gl'` — `matched_rule` is null but `category` is non-null and came from a GL hint (i.e. the transaction has a non-null `gl_account` value). Detect this by checking if any transaction for this merchant has `gl_account IS NOT NULL` and `matched_rule IS NULL`.
+- `'unmatched'` — `matched_rule` is null AND no GL hint (gl_account is null or category came only from keyword fallback). These are the genuine gaps.
+
+**Step 2 — update the API route** (`src/app/api/dev/coverage/route.ts`) to:
+- Include `gl_account` in the transaction query so `buildCoverageRows` can compute `matchStatus`
+- Accept a `status` query param (`rule` | `gl` | `unmatched`) for server-side filtering, replacing the current boolean `unmatched` param
+- Keep `unmatched=true` as a backwards-compatible alias for `status=unmatched`
+
+**Step 3 — update the UI** (`src/app/dev/coverage/page.tsx`):
+- Replace the "Unmatched only" checkbox with a three-way toggle or segmented control: **All** | **Rule matched** | **GL covered** | **Unmatched**
+- The summary line (currently "297 merchants — 0 matched, 297 unmatched") should show all three counts: e.g. "297 merchants — 12 rule matched, 241 GL covered, 44 unmatched"
+- Default view on load: **Unmatched** only — so the page opens showing only genuine gaps
+- Add a text search input that filters the visible list client-side (case-insensitive, matches anywhere in merchant name, updates in real time)
+
+**Step 4 — update `buildCoverageRows` tests** in the coverage test file:
+- Test that a merchant with `matched_rule` non-null gets `matchStatus: 'rule'`
+- Test that a merchant with `matched_rule` null but `gl_account` non-null gets `matchStatus: 'gl'`
+- Test that a merchant with both null gets `matchStatus: 'unmatched'`
+- Test the three counts in the summary
+
+**Tests:** Update API route integration test to assert the new `matchStatus` field and `status` query param filtering. UI is not unit-tested.
+
+**After this task:** The "Unmatched" view shows only genuinely uncategorised merchants. The "GL covered" view shows merchants correctly handled by Xero's GL coding (no action needed). The "Rule matched" view shows rule coverage. This makes the coverage inspector the primary tool for iterating on rules.
 
 ---
 
