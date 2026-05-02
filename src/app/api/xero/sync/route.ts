@@ -316,37 +316,4 @@ export async function POST(req: NextRequest) {
             .from('accounts')
             .update({
               last_xero_sync_count: count,
-              last_xero_synced_at: new Date().toISOString(),
-            })
-            .eq('id', accountId)
-            .eq('household_id', DEFAULT_HOUSEHOLD_ID)
-        )
-      )
-    }
-
-    // ----------------------------------------------------------------
-    // Phase 4: Link transfer pairs and salary pairs.
-    // ----------------------------------------------------------------
-    const batchDates = Array.from(new Set(raws.map(r => r.date)))
-    await Promise.all([
-      linkTransferPairs(batchDates),
-      linkSalaryPairs(batchDates),
-    ])
-
-    // Update last_synced_at
-    await supabase
-      .from('xero_connections')
-      .update({ last_synced_at: new Date().toISOString() })
-      .eq('household_id', DEFAULT_HOUSEHOLD_ID)
-
-    return NextResponse.json({
-      synced: inserted,
-      skipped: transfersSkipped,
-      backfilled,
-      errors,
-    })
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : String(e)
-    return NextResponse.json({ error: msg }, { status: 500 })
-  }
-}
+              last_xero_synced_

@@ -327,6 +327,193 @@ export const MERCHANT_CATEGORY_RULES: MerchantCategoryRule[] = [
     output: { category: 'Technology', isIncome: false, isTransfer: false, isSubscription: true, owner: 'Joint' },
   },
 
+
+  // ─── Personal Groceries ──────────────────────────────────────────────────────
+
+  {
+    name: 'aldi',
+    description: 'ALDI supermarket purchases → Groceries',
+    match: (m) => /^aldi\b/i.test(m),
+    output: { category: 'Groceries', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+
+  {
+    name: 'woolworths',
+    description: 'Woolworths supermarket purchases (any store number) → Groceries',
+    match: (m) => /^woolworths\b/i.test(m),
+    output: { category: 'Groceries', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+
+  {
+    name: 'coles',
+    description: 'Coles supermarket — covers COLES, COLES 4574, COLES ONLINE, etc → Groceries',
+    match: (m) => /^coles\b/i.test(m),
+    output: { category: 'Groceries', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+
+  {
+    name: 'iga',
+    description: "IGA supermarket — covers IGA LOCAL GROCER, CHRIS\' IGA CARINA, etc → Groceries",
+    match: (m) => /\biga\b/i.test(m),
+    output: { category: 'Groceries', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+
+  {
+    name: 'the_source_bulk_foods',
+    description: 'The Source Bulk Foods health/bulk food store → Groceries',
+    match: (m) => /source bulk food/i.test(m),
+    output: { category: 'Groceries', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+
+  {
+    name: 'hanaro_trading',
+    description: 'Hanaro Trading — Asian grocery/food store in Carindale → Food & Groceries',
+    match: (m) => /hanaro trading/i.test(m),
+    output: { category: 'Food & Groceries', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+
+  // ─── Personal Eating Out ─────────────────────────────────────────────────────
+
+  {
+    name: 'little_genovese',
+    description: 'Little Genovese restaurant Coorparoo → Eating Out',
+    match: (m) => /little genovese/i.test(m),
+    output: { category: 'Eating Out', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+
+  {
+    name: 'guzman_y_gomez',
+    description: 'Guzman y Gomez Mexican fast food → Eating Out',
+    match: (m) => /guzman y gomez/i.test(m),
+    output: { category: 'Eating Out', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+
+  {
+    name: 'kfc',
+    description: 'KFC (any store) → Eating Out',
+    match: (m) => /^kfc\b/i.test(m),
+    output: { category: 'Eating Out', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+
+  {
+    name: 'mcdonalds',
+    description: "McDonald\'s (any store) → Eating Out",
+    match: (m) => /^mc\s*donalds/i.test(m),
+    output: { category: 'Eating Out', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+
+  {
+    name: 'old_mr_rabbit',
+    description: 'Old Mr Rabbit café → Eating Out',
+    match: (m) => /old mr rabbit/i.test(m),
+    output: { category: 'Eating Out', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+
+  {
+    name: 'asian_delights',
+    description: 'Asian Delights restaurant Carindale → Eating Out',
+    match: (m) => /asian delights/i.test(m),
+    output: { category: 'Eating Out', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+
+  {
+    name: 'rivercity_catering',
+    description: 'RiverCity Catering café/caterer (SQ prefix) → Eating Out',
+    match: (m) => /rivercity catering/i.test(m),
+    output: { category: 'Eating Out', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+
+  {
+    name: 'dicky_beach_seafood',
+    description: 'Dicky Beach Seafood (SQ prefix) → Eating Out',
+    match: (m) => /dicky beach seafo/i.test(m),
+    output: { category: 'Eating Out', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+
+  // ─── Personal Healthcare ─────────────────────────────────────────────────────
+
+  {
+    name: 'carina_med_spec',
+    description: 'Carina Medical & Specialists clinic → Healthcare',
+    match: (m) => /carina med/i.test(m),
+    output: { category: 'Healthcare', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+
+  {
+    name: 'metropol_pharmacy',
+    description: 'Metropol Pharmacy Carindale → Healthcare',
+    match: (m) => /metropol pharmacy/i.test(m),
+    output: { category: 'Healthcare', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+
+  {
+    name: 'medibank_private',
+    description: 'Medibank Private health insurance claim payment / refund → Insurance',
+    match: (m) => /medibank private/i.test(m),
+    output: { category: 'Insurance', isIncome: null, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+
+  // ─── Personal Pets ───────────────────────────────────────────────────────────
+
+  {
+    name: 'carindale_vet',
+    description: 'Carindale Vet (Mansfield) → Pets',
+    match: (m) => /carindale vet/i.test(m),
+    output: { category: 'Pets', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+
+  // ─── Personal Shopping ───────────────────────────────────────────────────────
+
+  {
+    name: 'target',
+    description: 'Target department stores (any store number) → Shopping',
+    match: (m) => /^target\b/i.test(m),
+    output: { category: 'Shopping', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+
+  {
+    name: 'myer',
+    description: 'Myer department store → Shopping',
+    match: (m) => /^myer\b/i.test(m),
+    output: { category: 'Shopping', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+
+  {
+    name: 'the_reject_shop',
+    description: 'The Reject Shop discount variety → Shopping',
+    match: (m) => /reject shop/i.test(m),
+    output: { category: 'Shopping', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+
+  // ─── Personal Entertainment ──────────────────────────────────────────────────
+
+  {
+    name: 'hubbl_binge',
+    description: 'Hubbl streaming service (Foxtel/Binge) → Entertainment subscription',
+    match: (m) => /hubbl/i.test(m),
+    output: { category: 'Entertainment', isIncome: false, isTransfer: false, isSubscription: true, owner: 'Joint' },
+  },
+
+  {
+    name: 'mater_lotteries',
+    description: 'Mater Lotteries charity lottery → Entertainment',
+    match: (m) => /mater lotteries/i.test(m),
+    output: { category: 'Entertainment', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+
+  // ─── Transfers (CommBank internal) ───────────────────────────────────────────
+
+  {
+    name: 'commbank_internal_transfer',
+    description:
+      "CommBank NetBank/app transfers between the Pictons' own accounts. " +
+      'Merchant format: "TRANSFER FROM XX####" where #### is the last 4 digits of the source account. ' +
+      'Covers all suffix variants: COMMBANK APP, NETBANK WAGE, COMMBANK APP FUEL, etc. ' +
+      'These are inter-account movements, not income or expenses.',
+    match: (m) => /^transfer from\s+xx\d{4}/i.test(m),
+    output: { category: null, isIncome: null, isTransfer: true, isSubscription: false, owner: null },
+  },
+
   // ─── Transfers ───────────────────────────────────────────────────────────────
 
   {

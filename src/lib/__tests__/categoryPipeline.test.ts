@@ -51,7 +51,7 @@ function raw(overrides: Partial<RawTransaction> = {}): RawTransaction {
     account_id: ACCOUNT_ID,
     date: '2025-08-11',
     amount: -50,
-    description: 'WOOLWORTHS 1234',
+    description: 'FOODWORKS 5678',
     ...overrides,
   }
 }
@@ -67,7 +67,7 @@ describe('processBatch', () => {
 
   it('auto-categorises a debit using guessCategory when no mapping exists', async () => {
     setupMocks()
-    const { toUpsert } = await processBatch([raw({ description: 'WOOLWORTHS 1234', amount: -50 })])
+    const { toUpsert } = await processBatch([raw({ description: 'FOODWORKS 5678', amount: -50 })])
     expect(toUpsert).toHaveLength(1)
     expect(toUpsert[0].category).toBe('Food & Groceries')
     expect(toUpsert[0].is_transfer).toBe(false)
@@ -75,10 +75,10 @@ describe('processBatch', () => {
 
   it('uses an existing merchant mapping over auto-category', async () => {
     setupMocks({
-      mappings: [{ merchant: 'WOOLWORTHS 1234', category: 'Household', classification: 'Joint' }],
+      mappings: [{ merchant: 'FOODWORKS 5678', category: 'Household', classification: 'Joint' }],
       accounts: [{ id: ACCOUNT_ID, owner: 'Steven' }],
     })
-    const { toUpsert } = await processBatch([raw({ description: 'WOOLWORTHS 1234', amount: -50 })])
+    const { toUpsert } = await processBatch([raw({ description: 'FOODWORKS 5678', amount: -50 })])
     expect(toUpsert[0].category).toBe('Household')
     expect(toUpsert[0].classification).toBe('Joint')
   })
@@ -93,7 +93,7 @@ describe('processBatch', () => {
 
   it('saves a new auto-mapping to merchant_mappings when guessCategory succeeds', async () => {
     setupMocks({ mappings: [] })
-    await processBatch([raw({ description: 'WOOLWORTHS METRO', amount: -30 })])
+    await processBatch([raw({ description: 'FOODWORKS METRO', amount: -30 })])
     expect(capturedUpsertRows.length).toBeGreaterThan(0)
   })
 
@@ -109,7 +109,7 @@ describe('processBatch', () => {
   it('forced_is_transfer=true marks a non-transfer description as a transfer', async () => {
     setupMocks()
     const { toUpsert } = await processBatch([
-      raw({ description: 'WOOLWORTHS 1234', amount: -50, forced_is_transfer: true }),
+      raw({ description: 'FOODWORKS 5678', amount: -50, forced_is_transfer: true }),
     ])
     expect(toUpsert[0].is_transfer).toBe(true)
   })
@@ -187,7 +187,7 @@ describe('processBatch', () => {
   it('processes multiple rows, skipping zero-amount ones', async () => {
     setupMocks()
     const { toUpsert } = await processBatch([
-      raw({ description: 'WOOLWORTHS 1234', amount: -50 }),
+      raw({ description: 'FOODWORKS 5678', amount: -50 }),
       raw({ description: 'UBER', amount: -15 }),
       raw({ amount: 0 }),
     ])
@@ -197,7 +197,7 @@ describe('processBatch', () => {
   it('counts transfersSkipped correctly across a mixed batch', async () => {
     setupMocks()
     const { toUpsert, transfersSkipped } = await processBatch([
-      raw({ description: 'WOOLWORTHS 1234', amount: -50 }),
+      raw({ description: 'FOODWORKS 5678', amount: -50 }),
       raw({ description: 'TRANSFER TO XX5426', amount: -1000 }),
       raw({ description: 'TRANSFER TO XX1234', amount: -500 }),
     ])
@@ -240,7 +240,7 @@ describe('processBatch', () => {
   it('sets is_subscription=false when no subscription rule fires', async () => {
     setupMocks()
     const { toUpsert } = await processBatch([
-      raw({ description: 'WOOLWORTHS 1234', amount: -50 }),
+      raw({ description: 'FOODWORKS 5678', amount: -50 }),
     ])
     expect(toUpsert[0].is_subscription).toBe(false)
   })
@@ -256,7 +256,7 @@ describe('processBatch', () => {
 
   it('keyword-fallback branch writes source: auto to autoMappings', async () => {
     setupMocks({ mappings: [] })
-    await processBatch([raw({ description: 'WOOLWORTHS 1234', amount: -50 })])
+    await processBatch([raw({ description: 'FOODWORKS 5678', amount: -50 })])
     expect(capturedUpsertRows.length).toBeGreaterThan(0)
     const rows = capturedUpsertRows[0] as Array<{ source: string }>
     expect(rows.every(r => r.source === 'auto')).toBe(true)
@@ -341,7 +341,7 @@ describe('processBatch matched_rule', () => {
 
   it('sets matched_rule to null for keyword guesses (guessCategory)', async () => {
     setupMocks()
-    const { toUpsert } = await processBatch([raw({ description: 'WOOLWORTHS 1234', amount: -50 })])
+    const { toUpsert } = await processBatch([raw({ description: 'FOODWORKS 5678', amount: -50 })])
     expect(toUpsert[0].category).toBe('Food & Groceries')
     expect(toUpsert[0].matched_rule).toBeNull()
   })
