@@ -16,10 +16,17 @@ import type { AccountReconciliation, ReconcileResult } from '@/lib/reconcile'
 //  2. External-id duplicate check across all Xero transactions
 //  3. CSV near-duplicate check (same merchant + amount + date)
 //
-// Note: Live Xero API count comparison is not implemented here — the Xero
+// Note: Live Xero API count comparison is not implemented — the Xero
 // BankTransactions API does not expose a total-count header and full
-// pagination is too slow for an on-demand endpoint. Use the last-sync
-// count from the DB as the authoritative source after a full sync.
+// pagination would be too slow for an on-demand endpoint.
+//
+// Account matching: the accounts table filters to institution='Xero'.
+// Within those accounts, external_id IS NOT NULL identifies Xero-sourced
+// rows (Xero assigns a BankTransactionID to every transaction; CSV rows
+// never have an external_id). We do NOT filter by source='xero' because
+// the transactions.source column defaults to 'csv' — the sync pipeline
+// stores Xero transactions without an explicit source value, so they all
+// carry the DB default and a source='xero' filter would return zero rows.
 // ---------------------------------------------------------------------------
 
 export async function GET() {
@@ -43,7 +50,6 @@ export async function GET() {
       .select('date')
       .eq('household_id', DEFAULT_HOUSEHOLD_ID)
       .eq('account_id', acct.id)
-      .eq('source', 'xero')
       .not('external_id', 'is', null)
 
     if (error) return  // skip errored accounts; they'll show as 0-count

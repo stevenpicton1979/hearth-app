@@ -14,6 +14,8 @@ export interface RawTransaction {
   description: string
   /** Stable external ID for upsert deduplication — Xero BankTransactionID or Basiq transaction ID */
   external_id?: string
+  /** Transaction source tag written to the DB column ('xero', 'csv', etc.) */
+  source?: string
   is_transfer?: boolean
   forced_is_transfer?: boolean
   category_hint?: string | null
@@ -124,6 +126,7 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
         classification: 'Joint',
         is_transfer: false,
         external_id: raw.external_id ?? null,
+        source: raw.source,
         raw_description: raw.raw_description ?? null,
         needs_review: raw.needs_review ?? false,
         gl_account: raw.gl_account ?? null,
@@ -168,6 +171,7 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
         is_transfer: true,
         is_subscription: false,
         external_id: raw.external_id ?? null,
+        source: raw.source,
         raw_description: raw.raw_description ?? null,
         needs_review: raw.needs_review ?? false,
         gl_account: raw.gl_account ?? null,
@@ -208,6 +212,7 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
         is_transfer: true,
         is_subscription: false,
         external_id: raw.external_id ?? null,
+        source: raw.source,
         raw_description: raw.raw_description ?? null,
         needs_review: raw.needs_review ?? false,
         gl_account: raw.gl_account ?? null,
@@ -260,6 +265,7 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
       is_transfer: false,
       is_subscription: isSubscription,
       external_id: raw.external_id ?? null,
+      source: raw.source,
       raw_description: raw.raw_description ?? null,
       needs_review: raw.needs_review ?? false,
       gl_account: raw.gl_account ?? null,

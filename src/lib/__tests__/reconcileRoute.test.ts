@@ -27,15 +27,14 @@ vi.mock('@/lib/supabase/server', () => ({
         // per-account Xero date fetch
         select: (cols: string) => {
           if (cols === 'date') {
-            // chain: .eq(household_id).eq(account_id).eq(source).not(external_id)
+            // chain: .eq(household_id).eq(account_id).not(external_id)
+            // source filter removed — external_id IS NOT NULL is the correct Xero discriminator
             return {
               eq: () => ({
                 eq: (_col: string, accountId: string) => ({
-                  eq: () => ({
-                    not: () => Promise.resolve({
-                      data: (db.xeroDatesByAccount[accountId] ?? []).map(d => ({ date: d })),
-                      error: null,
-                    }),
+                  not: () => Promise.resolve({
+                    data: (db.xeroDatesByAccount[accountId] ?? []).map(d => ({ date: d })),
+                    error: null,
                   }),
                 }),
               }),

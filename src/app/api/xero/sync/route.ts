@@ -262,6 +262,7 @@ export async function POST(req: NextRequest) {
           amount,
           description: merchant,
           external_id: xTx.BankTransactionID,
+          source: 'xero',
           is_transfer: txType === 'SPEND-TRANSFER' || txType === 'RECEIVE-TRANSFER',
           forced_is_transfer: forcedIsTransfer,
           category_hint: ruleCategory ?? categoryHint,
