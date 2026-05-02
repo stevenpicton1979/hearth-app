@@ -8,9 +8,23 @@ import {
 
 // ─── detectGapMonths ──────────────────────────────────────────────────────────
 
+// Helpers — generate dates relative to today so they stay within the 12-month window
+function monthAgo(n: number): string {
+  const d = new Date()
+  d.setDate(1)
+  d.setMonth(d.getMonth() - n)
+  return d.toISOString().slice(0, 10)  // 'YYYY-MM-DD'
+}
+function monthLabel(n: number): string {
+  const d = new Date()
+  d.setDate(1)
+  d.setMonth(d.getMonth() - n)
+  return d.toISOString().slice(0, 7)   // 'YYYY-MM'
+}
+
 describe('detectGapMonths', () => {
   it('returns empty array for single transaction (no range)', () => {
-    expect(detectGapMonths(['2024-03-15'])).toEqual([])
+    expect(detectGapMonths([monthAgo(1)])).toEqual([])
   })
 
   it('returns empty array for empty input', () => {
@@ -19,49 +33,56 @@ describe('detectGapMonths', () => {
 
   it('returns empty array when all months are covered', () => {
     const dates = [
-      '2024-01-10', '2024-01-25',
-      '2024-02-05', '2024-02-20',
-      '2024-03-01', '2024-03-30',
+      monthAgo(3), monthAgo(3),
+      monthAgo(2), monthAgo(2),
+      monthAgo(1), monthAgo(1),
     ]
     expect(detectGapMonths(dates)).toEqual([])
   })
 
   it('detects a gap month in the middle', () => {
-    const dates = [
-      '2024-01-10',
-      // no February
-      '2024-03-01',
-    ]
-    expect(detectGapMonths(dates)).toEqual(['2024-02'])
+    // m-2 present, m-1 missing, m-0 present
+    const dates = [monthAgo(2), monthAgo(0)]
+    expect(detectGapMonths(dates)).toEqual([monthLabel(1)])
   })
 
   it('detects multiple gap months in the middle', () => {
-    const dates = ['2024-01-01', '2024-04-01']
-    expect(detectGapMonths(dates)).toEqual(['2024-02', '2024-03'])
+    // m-3 present, m-2 and m-1 missing, m-0 present
+    const dates = [monthAgo(3), monthAgo(0)]
+    expect(detectGapMonths(dates)).toEqual([monthLabel(2), monthLabel(1)])
   })
 
   it('does not flag the start or end month as a gap', () => {
-    // min and max months always have at least one transaction by definition
-    const dates = ['2024-01-01', '2024-03-01']
+    const dates = [monthAgo(2), monthAgo(0)]
     const gaps = detectGapMonths(dates)
-    expect(gaps).not.toContain('2024-01')
-    expect(gaps).not.toContain('2024-03')
-    expect(gaps).toContain('2024-02')
+    expect(gaps).not.toContain(monthLabel(2))
+    expect(gaps).not.toContain(monthLabel(0))
+    expect(gaps).toContain(monthLabel(1))
   })
 
   it('handles a gap spanning a year boundary', () => {
-    const dates = ['2023-11-01', '2024-02-01']
-    expect(detectGapMonths(dates)).toEqual(['2023-12', '2024-01'])
+    // Use 6 months ago → 3 months ago with months 5 and 4 missing.
+    // This will cross a year boundary when run in Jan–Jun.
+    const dates = [monthAgo(6), monthAgo(3)]
+    const gaps = detectGapMonths(dates)
+    expect(gaps).toEqual([monthLabel(5), monthLabel(4)])
   })
 
   it('returns empty array when dates span only two adjacent months', () => {
-    const dates = ['2024-01-31', '2024-02-01']
+    const dates = [monthAgo(1), monthAgo(0)]
     expect(detectGapMonths(dates)).toEqual([])
   })
 
   it('works with unsorted dates', () => {
-    const dates = ['2024-03-01', '2024-01-15']
-    expect(detectGapMonths(dates)).toEqual(['2024-02'])
+    const dates = [monthAgo(0), monthAgo(2)]  // reversed order
+    expect(detectGapMonths(dates)).toEqual([monthLabel(1)])
+  })
+
+  it('ignores gaps older than 12 months', () => {
+    // A gap at 13 months ago should not be reported
+    const dates = [monthAgo(14), monthAgo(0)]
+    const gaps = detectGapMonths(dates)
+    expect(gaps).not.toContain(monthLabel(13))
   })
 })
 

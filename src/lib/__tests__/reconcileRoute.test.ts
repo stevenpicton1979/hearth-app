@@ -128,6 +128,11 @@ describe('GET /api/admin/reconcile', () => {
   })
 
   it('reports gap months when a calendar month has no transactions', async () => {
+    // Use dates within the 12-month window so they aren't filtered as historical noise.
+    // Pick m-2 and m-0 — the month in between (m-1) is the expected gap.
+    const d = (n: number) => { const x = new Date(); x.setDate(1); x.setMonth(x.getMonth() - n); return x.toISOString().slice(0, 10) }
+    const gap = () => { const x = new Date(); x.setDate(1); x.setMonth(x.getMonth() - 1); return x.toISOString().slice(0, 7) }
+
     db.accounts = [{
       id: 'acct-1',
       display_name: 'Business Cheque',
@@ -136,7 +141,7 @@ describe('GET /api/admin/reconcile', () => {
       last_xero_synced_at: null,
     }]
     db.xeroDatesByAccount = {
-      'acct-1': ['2024-01-10', /* no Feb */ '2024-03-20'],
+      'acct-1': [d(2), /* no middle month */ d(0)],
     }
     db.allExternalIds = ['ext-1']
     db.csvRows = []
@@ -144,7 +149,7 @@ describe('GET /api/admin/reconcile', () => {
     const res = await GET()
     const data = await res.json()
 
-    expect(data.accounts[0].gapMonths).toEqual(['2024-02'])
+    expect(data.accounts[0].gapMonths).toEqual([gap()])
     expect(data.accounts[0].xeroCount).toBe(2)
   })
 

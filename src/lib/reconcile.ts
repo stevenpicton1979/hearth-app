@@ -6,6 +6,8 @@
 /**
  * Given an array of ISO date strings ('YYYY-MM-DD'), returns the 'YYYY-MM'
  * months that fall within the min–max range but have zero transactions.
+ * Only checks the trailing 12 months — older gaps are considered historical
+ * noise and are not reported.
  * Returns [] when fewer than 2 dates are provided (no range to check).
  */
 export function detectGapMonths(dates: string[]): string[] {
@@ -13,11 +15,19 @@ export function detectGapMonths(dates: string[]): string[] {
 
   const monthSet = new Set(dates.map(d => d.slice(0, 7)))
 
+  // Clamp window start to 12 months ago so historical gaps aren't reported
+  const twelveMonthsAgo = new Date()
+  twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12)
+  const windowStart = twelveMonthsAgo.toISOString().slice(0, 7)  // 'YYYY-MM'
+
   const minDate = dates.reduce((a, b) => (a < b ? a : b))
   const maxDate = dates.reduce((a, b) => (a > b ? a : b))
 
-  let year = parseInt(minDate.slice(0, 4))
-  let month = parseInt(minDate.slice(5, 7))
+  // Use the later of the actual min date or the 12-month window start
+  const effectiveStart = minDate.slice(0, 7) < windowStart ? windowStart : minDate.slice(0, 7)
+
+  let year = parseInt(effectiveStart.slice(0, 4))
+  let month = parseInt(effectiveStart.slice(5, 7))
   const endYear = parseInt(maxDate.slice(0, 4))
   const endMonth = parseInt(maxDate.slice(5, 7))
 
