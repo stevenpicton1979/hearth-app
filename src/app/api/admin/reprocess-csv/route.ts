@@ -81,16 +81,31 @@ export async function POST() {
     }
   }
 
-  // ── 4. Bulk UPDATE by ID in batches of 200 ────────────────────────────────
-  const BATCH = 200
+  // ── 4. UPDATE each row by ID in parallel batches ─────────────────────────
+  // Cannot use upsert (requires all NOT NULL columns on the INSERT path).
+  // .update().eq('id') targets existing rows only — correct for reprocessing.
+  const BATCH = 50
   let updated = 0
 
   for (let i = 0; i < updates.length; i += BATCH) {
     const batch = updates.slice(i, i + BATCH)
-    const { error: upErr } = await supabase
-      .from('transactions')
-      .upsert(batch, { onConflict: 'id' })
-    if (upErr) return NextResponse.json({ error: `batch ${i}: ${upErr.message}` }, { status: 500 })
+    const results = await Promise.all(
+      batch.map(u =>
+        supabase
+          .from('transactions')
+          .update({
+            category: u.category,
+            matched_rule: u.matched_rule,
+            is_subscription: u.is_subscription,
+            classification: u.classification,
+          })
+          .eq('id', u.id)
+      )
+    )
+    const batchErr = results.find(r => r.error)
+    if (batchErr?.error) {
+      return NextResponse.json({ error: `batch ${i}: ${batchErr.error.message}` }, { status: 500 })
+    }
     updated += batch.length
   }
 
