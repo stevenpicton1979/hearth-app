@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
 import { DEFAULT_HOUSEHOLD_ID } from '@/lib/constants'
-import { processBatch, upsertTransactions } from '@/lib/categoryPipeline'
-import type { RawTransaction } from '@/lib/categoryPipeline'
+import { applyMerchantCategoryRules } from '@/lib/merchantCategoryRules'
+import { guessCategory } from '@/lib/autoCategory'
+import type { Category } from '@/lib/categories'
 
 // Vercel Pro: allow up to 5 minutes for large datasets
 export const maxDuration = 300
@@ -10,40 +11,88 @@ export const maxDuration = 300
 // ---------------------------------------------------------------------------
 // POST /api/admin/reprocess-csv
 //
-// Re-runs the category pipeline over all existing CSV transactions so that
-// newly added merchant rules, category mappings, and transfer patterns are
-// applied retroactively. Idempotent — safe to call multiple times.
+// Re-runs the categorisation rules over all existing CSV transactions and
+// UPDATE them in-place by ID. Does NOT use the insert/upsert path — all
+// rows already exist, so we go straight to UPDATE.
+// Idempotent — safe to call multiple times.
 // ---------------------------------------------------------------------------
 
 export async function POST() {
   const supabase = createServerClient()
 
+  // ── 1. Load manual merchant mappings ──────────────────────────────────────
+  const { data: mappingRows, error: mapErr } = await supabase
+    .from('merchant_mappings')
+    .select('merchant, category')
+    .eq('household_id', DEFAULT_HOUSEHOLD_ID)
+    .eq('source', 'manual')
+
+  if (mapErr) return NextResponse.json({ error: mapErr.message }, { status: 500 })
+
+  const manualMappings = new Map<string, Category>(
+    (mappingRows ?? []).map(r => [r.merchant as string, r.category as Category])
+  )
+
+  // ── 2. Fetch all CSV transactions ─────────────────────────────────────────
   const { data: rows, error } = await supabase
     .from('transactions')
-    .select('id, account_id, date, amount, merchant, external_id, source, is_transfer, raw_description, gl_account')
+    .select('id, merchant, amount, gl_account')
     .eq('household_id', DEFAULT_HOUSEHOLD_ID)
     .eq('source', 'csv')
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  const raws: RawTransaction[] = (rows ?? []).map(row => ({
-    account_id: row.account_id as string,
-    date: row.date as string,
-    amount: row.amount as number,
-    // Use the already-cleaned merchant name as description so processBatch
-    // re-runs rules against the same string the original import used.
-    description: row.merchant as string,
-    external_id: row.external_id as string | undefined,
-    source: row.source as string,
-    is_transfer: row.is_transfer as boolean,
-    category_hint: null,
-    raw_description: row.raw_description as string | null,
-    gl_account: row.gl_account as string | null,
-    gl_tax_type: null,
-  }))
+  // ── 3. Re-apply rules to each row ─────────────────────────────────────────
+  const updates: {
+    id: string
+    category: Category | null
+    matched_rule: string | null
+    is_subscription: boolean
+    owner: string | null
+  }[] = []
 
-  const { toUpsert, transfersSkipped } = await processBatch(raws)
-  const { inserted } = await upsertTransactions(toUpsert)
+  for (const row of rows ?? []) {
+    const merchant = row.merchant as string
+    const amount = row.amount as number
+    const glAccount = row.gl_account as string | null
+    const isIncome = amount > 0
 
-  return NextResponse.json({ reprocessed: inserted, skipped: transfersSkipped })
+    const ctx = { isIncome, glAccount }
+    const ruleResult = applyMerchantCategoryRules(merchant, ctx)
+
+    if (ruleResult) {
+      updates.push({
+        id: row.id as string,
+        category: ruleResult.category,
+        matched_rule: `merchant:${ruleResult.ruleName}`,
+        is_subscription: ruleResult.isSubscription,
+        owner: ruleResult.owner,
+      })
+    } else {
+      // Manual mapping → keyword fallback → null
+      const category = manualMappings.get(merchant) ?? (guessCategory(merchant) as Category | null) ?? null
+      updates.push({
+        id: row.id as string,
+        category,
+        matched_rule: null,
+        is_subscription: false,
+        owner: null,
+      })
+    }
+  }
+
+  // ── 4. Bulk UPDATE by ID in batches of 200 ────────────────────────────────
+  const BATCH = 200
+  let updated = 0
+
+  for (let i = 0; i < updates.length; i += BATCH) {
+    const batch = updates.slice(i, i + BATCH)
+    const { error: upErr } = await supabase
+      .from('transactions')
+      .upsert(batch, { onConflict: 'id' })
+    if (upErr) return NextResponse.json({ error: `batch ${i}: ${upErr.message}` }, { status: 500 })
+    updated += batch.length
+  }
+
+  return NextResponse.json({ reprocessed: updated })
 }
