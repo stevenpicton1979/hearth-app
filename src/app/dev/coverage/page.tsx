@@ -1,12 +1,12 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import type { CoverageRow, TxExpansionRow } from '@/lib/coverageReport'
+import type { CoverageRow, TxExpansionRow, MatchStatus } from '@/lib/coverageReport'
 
 // ─── Filter state ─────────────────────────────────────────────────────────────
 
 interface Filters {
-  unmatchedOnly: boolean
+  status: MatchStatus | ''
   source: string
   from: string
   to: string
@@ -14,7 +14,7 @@ interface Filters {
 
 function buildUrl(filters: Filters): string {
   const p = new URLSearchParams()
-  if (filters.unmatchedOnly) p.set('unmatched', 'true')
+  if (filters.status) p.set('status', filters.status)
   if (filters.source) p.set('source', filters.source)
   if (filters.from) p.set('from', filters.from)
   if (filters.to) p.set('to', filters.to)
@@ -32,17 +32,24 @@ function buildExpandUrl(merchant: string, filters: Filters): string {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function RuleBadge({ rule }: { rule: string | null }) {
-  if (rule) {
+function MatchStatusBadge({ status, rule }: { status: MatchStatus; rule: string | null }) {
+  if (status === 'rule') {
     return (
       <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono bg-blue-50 text-blue-700 border border-blue-200">
         {rule}
       </span>
     )
   }
+  if (status === 'gl') {
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-50 text-yellow-700 border border-yellow-200">
+        gl only
+      </span>
+    )
+  }
   return (
     <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700">
-      no match
+      unmatched
     </span>
   )
 }
@@ -109,7 +116,7 @@ function MerchantRow({
           {row.totalValue < 0 ? '-' : '+'}${Math.abs(row.totalValue).toFixed(2)}
         </td>
         <td className="px-4 py-2">
-          <RuleBadge rule={row.matchedRule} />
+          <MatchStatusBadge status={row.matchStatus} rule={row.matchedRule} />
         </td>
         <td className="px-4 py-2 text-gray-600 text-sm">{row.autoCategory ?? <span className="text-gray-400">—</span>}</td>
         <td className="px-4 py-2 text-gray-600 text-sm">{row.autoOwner ?? <span className="text-gray-400">—</span>}</td>
@@ -129,11 +136,20 @@ function MerchantRow({
   )
 }
 
+// ─── Segmented control ────────────────────────────────────────────────────────
+
+const STATUS_OPTIONS: { value: MatchStatus | ''; label: string }[] = [
+  { value: '', label: 'All' },
+  { value: 'rule', label: 'Rule' },
+  { value: 'gl', label: 'GL' },
+  { value: 'unmatched', label: 'Unmatched' },
+]
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function CoveragePage() {
   const [filters, setFilters] = useState<Filters>({
-    unmatchedOnly: true,
+    status: 'unmatched',
     source: '',
     from: '',
     to: '',
@@ -141,6 +157,7 @@ export default function CoveragePage() {
   const [rows, setRows] = useState<CoverageRow[] | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
 
   const runQuery = useCallback(async (f: Filters) => {
     setLoading(true)
@@ -163,8 +180,13 @@ export default function CoveragePage() {
   const setFilter = <K extends keyof Filters>(key: K, value: Filters[K]) =>
     setFilters(prev => ({ ...prev, [key]: value }))
 
-  const matchedCount = rows ? rows.filter(r => r.matchedRule !== null).length : 0
-  const unmatchedCount = rows ? rows.filter(r => r.matchedRule === null).length : 0
+  const displayRows = rows === null ? null : rows.filter(r =>
+    !search || r.merchant.toLowerCase().includes(search.toLowerCase())
+  )
+
+  const ruleCount = rows ? rows.filter(r => r.matchStatus === 'rule').length : 0
+  const glCount = rows ? rows.filter(r => r.matchStatus === 'gl').length : 0
+  const unmatchedCount = rows ? rows.filter(r => r.matchStatus === 'unmatched').length : 0
 
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-6">
@@ -177,15 +199,25 @@ export default function CoveragePage() {
 
       {/* Filter bar */}
       <div className="flex flex-wrap items-end gap-4 bg-gray-50 border border-gray-200 rounded p-4">
-        <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={filters.unmatchedOnly}
-            onChange={e => setFilter('unmatchedOnly', e.target.checked)}
-            className="rounded border-gray-300"
-          />
-          Unmatched only
-        </label>
+        {/* Segmented control */}
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Match status</label>
+          <div className="flex items-center rounded border border-gray-300 bg-white overflow-hidden text-sm">
+            {STATUS_OPTIONS.map(({ value, label }) => (
+              <button
+                key={value}
+                onClick={() => setFilter('status', value)}
+                className={`px-3 py-1.5 font-medium border-r last:border-r-0 border-gray-300 ${
+                  filters.status === value
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
 
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Source</label>
@@ -235,28 +267,38 @@ export default function CoveragePage() {
         </div>
       )}
 
-      {/* Summary badges */}
+      {/* Summary badges + search */}
       {rows !== null && (
-        <div className="flex items-center gap-3 text-sm">
+        <div className="flex flex-wrap items-center gap-3 text-sm">
           <span className="text-gray-600">{rows.length} merchants</span>
           <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
-            {matchedCount} matched
+            {ruleCount} rule
+          </span>
+          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-50 text-yellow-700 border border-yellow-200">
+            {glCount} gl
           </span>
           {unmatchedCount > 0 && (
             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700">
               {unmatchedCount} unmatched
             </span>
           )}
+          <input
+            type="search"
+            placeholder="Search merchants…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="ml-auto text-sm border border-gray-300 rounded px-3 py-1.5 w-64"
+          />
         </div>
       )}
 
       {/* Table */}
-      {rows !== null && (
+      {displayRows !== null && (
         <div className="overflow-x-auto rounded border border-gray-200">
           <table className="min-w-full text-sm divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                {['Merchant', 'Count', 'Total value', 'Matched rule', 'Category', 'Owner', 'Example raw description'].map(h => (
+                {['Merchant', 'Count', 'Total value', 'Match status', 'Category', 'Owner', 'Example raw description'].map(h => (
                   <th key={h} className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     {h}
                   </th>
@@ -264,14 +306,14 @@ export default function CoveragePage() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-100">
-              {rows.length === 0 && (
+              {displayRows.length === 0 && (
                 <tr>
                   <td colSpan={7} className="px-4 py-6 text-center text-gray-400 text-sm">
                     No merchants found.
                   </td>
                 </tr>
               )}
-              {rows.map(row => (
+              {displayRows.map(row => (
                 <MerchantRow key={row.merchant} row={row} filters={filters} />
               ))}
             </tbody>

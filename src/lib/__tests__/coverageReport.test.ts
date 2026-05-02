@@ -20,6 +20,7 @@ describe('buildCoverageRows', () => {
     expect(woolworths.totalValue).toBe(-80)
     expect(woolworths.autoCategory).toBe('Groceries')
     expect(woolworths.autoOwner).toBe('Joint')
+    expect(woolworths.matchStatus).toBe('unmatched')
   })
 
   it('picks the first raw_description seen for each merchant', () => {
@@ -60,33 +61,98 @@ describe('buildCoverageRows', () => {
   })
 })
 
-// ─── buildCoverageRows — unmatched filter ─────────────────────────────────────
+// ─── buildCoverageRows — matchStatus ─────────────────────────────────────────
 
-describe('buildCoverageRows — unmatchedOnly filter', () => {
-  it('returns only unmatched merchants when unmatchedOnly is true', () => {
+describe('buildCoverageRows — matchStatus', () => {
+  it('assigns matchStatus=rule when matched_rule is present', () => {
+    const rows: TxForCoverage[] = [
+      { merchant: 'NETFLIX', amount: -22.99, category: null, matched_rule: 'merchant:netflix', classification: null, raw_description: null },
+    ]
+    const result = buildCoverageRows(rows)
+    expect(result[0].matchStatus).toBe('rule')
+  })
+
+  it('assigns matchStatus=gl when no rule but at least one tx has gl_account', () => {
+    const rows: TxForCoverage[] = [
+      { merchant: 'BHT PAYMENT', amount: -1000, category: null, matched_rule: null, classification: null, raw_description: null, gl_account: 'Superannuation Payable' },
+      { merchant: 'BHT PAYMENT', amount: -500, category: null, matched_rule: null, classification: null, raw_description: null, gl_account: null },
+    ]
+    const result = buildCoverageRows(rows)
+    expect(result[0].matchStatus).toBe('gl')
+  })
+
+  it('assigns matchStatus=unmatched when no rule and no gl_account on any tx', () => {
+    const rows: TxForCoverage[] = [
+      { merchant: 'UNKNOWN CO', amount: -50, category: null, matched_rule: null, classification: null, raw_description: null, gl_account: null },
+      { merchant: 'UNKNOWN CO', amount: -30, category: null, matched_rule: null, classification: null, raw_description: null, gl_account: null },
+    ]
+    const result = buildCoverageRows(rows)
+    expect(result[0].matchStatus).toBe('unmatched')
+  })
+
+  it('gl_account on any one tx is enough to make the merchant gl', () => {
+    const rows: TxForCoverage[] = [
+      { merchant: 'MIXED', amount: -10, category: null, matched_rule: null, classification: null, raw_description: null, gl_account: null },
+      { merchant: 'MIXED', amount: -10, category: null, matched_rule: null, classification: null, raw_description: null, gl_account: null },
+      { merchant: 'MIXED', amount: -10, category: null, matched_rule: null, classification: null, raw_description: null, gl_account: 'Sales Revenue' },
+    ]
+    const result = buildCoverageRows(rows)
+    expect(result[0].matchStatus).toBe('gl')
+  })
+
+  it('filterStatus=unmatched returns only unmatched merchants', () => {
     const rows: TxForCoverage[] = [
       { merchant: 'ATO', amount: -100, category: 'Government & Tax', matched_rule: 'merchant:ato_payments', classification: null, raw_description: null },
+      { merchant: 'BHT PAYMENT', amount: -1000, category: null, matched_rule: null, classification: null, raw_description: null, gl_account: 'Wages & Salaries' },
       { merchant: 'RANDOM CO', amount: -50, category: null, matched_rule: null, classification: null, raw_description: null },
-      { merchant: 'NETFLIX', amount: -23, category: 'Entertainment', matched_rule: 'merchant:netflix', classification: null, raw_description: null },
       { merchant: 'UNKNOWN VENDOR', amount: -80, category: null, matched_rule: null, classification: null, raw_description: null },
     ]
 
-    const result = buildCoverageRows(rows, true)
+    const result = buildCoverageRows(rows, 'unmatched')
 
     expect(result).toHaveLength(2)
     expect(result.map(r => r.merchant)).toContain('RANDOM CO')
     expect(result.map(r => r.merchant)).toContain('UNKNOWN VENDOR')
     expect(result.map(r => r.merchant)).not.toContain('ATO')
-    expect(result.map(r => r.merchant)).not.toContain('NETFLIX')
+    expect(result.map(r => r.merchant)).not.toContain('BHT PAYMENT')
   })
 
-  it('returns all merchants when unmatchedOnly is false (default)', () => {
+  it('filterStatus=gl returns only gl merchants', () => {
+    const rows: TxForCoverage[] = [
+      { merchant: 'ATO', amount: -100, category: null, matched_rule: 'merchant:ato_payments', classification: null, raw_description: null },
+      { merchant: 'BHT PAYMENT', amount: -1000, category: null, matched_rule: null, classification: null, raw_description: null, gl_account: 'Wages & Salaries' },
+      { merchant: 'RANDOM CO', amount: -50, category: null, matched_rule: null, classification: null, raw_description: null },
+    ]
+
+    const result = buildCoverageRows(rows, 'gl')
+
+    expect(result).toHaveLength(1)
+    expect(result[0].merchant).toBe('BHT PAYMENT')
+    expect(result[0].matchStatus).toBe('gl')
+  })
+
+  it('filterStatus=rule returns only rule merchants', () => {
+    const rows: TxForCoverage[] = [
+      { merchant: 'NETFLIX', amount: -22.99, category: null, matched_rule: 'merchant:netflix', classification: null, raw_description: null },
+      { merchant: 'ATO', amount: -100, category: null, matched_rule: 'merchant:ato_payments', classification: null, raw_description: null },
+      { merchant: 'RANDOM CO', amount: -50, category: null, matched_rule: null, classification: null, raw_description: null },
+    ]
+
+    const result = buildCoverageRows(rows, 'rule')
+
+    expect(result).toHaveLength(2)
+    expect(result.map(r => r.merchant)).toContain('NETFLIX')
+    expect(result.map(r => r.merchant)).toContain('ATO')
+    expect(result.map(r => r.merchant)).not.toContain('RANDOM CO')
+  })
+
+  it('null filterStatus returns all merchants', () => {
     const rows: TxForCoverage[] = [
       { merchant: 'ATO', amount: -100, category: 'Government & Tax', matched_rule: 'merchant:ato_payments', classification: null, raw_description: null },
       { merchant: 'RANDOM CO', amount: -50, category: null, matched_rule: null, classification: null, raw_description: null },
     ]
 
-    const result = buildCoverageRows(rows, false)
+    const result = buildCoverageRows(rows, null)
     expect(result).toHaveLength(2)
   })
 })

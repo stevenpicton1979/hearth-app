@@ -57,9 +57,10 @@ describe('GET /api/dev/coverage', () => {
     const woolworths = data.rows.find((r: { merchant: string }) => r.merchant === 'WOOLWORTHS')
     expect(woolworths.count).toBe(2)
     expect(woolworths.totalValue).toBe(-80)
+    expect(woolworths.matchStatus).toBe('unmatched')
   })
 
-  it('filters to unmatched merchants when unmatched=true', async () => {
+  it('filters to unmatched merchants when unmatched=true (legacy alias)', async () => {
     db.rows = [
       { merchant: 'WOOLWORTHS', amount: -50, category: 'Groceries', matched_rule: null, classification: null, raw_description: null, gl_account: null, date: '2024-01-10' },
       { merchant: 'NETFLIX', amount: -22.99, category: null, matched_rule: 'merchant:netflix', classification: null, raw_description: null, gl_account: null, date: '2024-01-12' },
@@ -70,6 +71,50 @@ describe('GET /api/dev/coverage', () => {
 
     expect(data.rows).toHaveLength(1)
     expect(data.rows[0].merchant).toBe('WOOLWORTHS')
+    expect(data.rows[0].matchStatus).toBe('unmatched')
+  })
+
+  it('filters to unmatched merchants when status=unmatched', async () => {
+    db.rows = [
+      { merchant: 'WOOLWORTHS', amount: -50, category: 'Groceries', matched_rule: null, classification: null, raw_description: null, gl_account: null, date: '2024-01-10' },
+      { merchant: 'NETFLIX', amount: -22.99, category: null, matched_rule: 'merchant:netflix', classification: null, raw_description: null, gl_account: null, date: '2024-01-12' },
+    ]
+
+    const res = await GET(req('status=unmatched'))
+    const data = await res.json()
+
+    expect(data.rows).toHaveLength(1)
+    expect(data.rows[0].merchant).toBe('WOOLWORTHS')
+  })
+
+  it('filters to rule merchants when status=rule', async () => {
+    db.rows = [
+      { merchant: 'WOOLWORTHS', amount: -50, category: 'Groceries', matched_rule: null, classification: null, raw_description: null, gl_account: null, date: '2024-01-10' },
+      { merchant: 'NETFLIX', amount: -22.99, category: null, matched_rule: 'merchant:netflix', classification: null, raw_description: null, gl_account: null, date: '2024-01-12' },
+      { merchant: 'BHT PAY', amount: -500, category: null, matched_rule: null, classification: null, raw_description: null, gl_account: 'Wages & Salaries', date: '2024-01-13' },
+    ]
+
+    const res = await GET(req('status=rule'))
+    const data = await res.json()
+
+    expect(data.rows).toHaveLength(1)
+    expect(data.rows[0].merchant).toBe('NETFLIX')
+    expect(data.rows[0].matchStatus).toBe('rule')
+  })
+
+  it('filters to gl merchants when status=gl', async () => {
+    db.rows = [
+      { merchant: 'WOOLWORTHS', amount: -50, category: 'Groceries', matched_rule: null, classification: null, raw_description: null, gl_account: null, date: '2024-01-10' },
+      { merchant: 'NETFLIX', amount: -22.99, category: null, matched_rule: 'merchant:netflix', classification: null, raw_description: null, gl_account: null, date: '2024-01-12' },
+      { merchant: 'BHT PAY', amount: -500, category: null, matched_rule: null, classification: null, raw_description: null, gl_account: 'Wages & Salaries', date: '2024-01-13' },
+    ]
+
+    const res = await GET(req('status=gl'))
+    const data = await res.json()
+
+    expect(data.rows).toHaveLength(1)
+    expect(data.rows[0].merchant).toBe('BHT PAY')
+    expect(data.rows[0].matchStatus).toBe('gl')
   })
 
   it('returns transaction expansion rows when merchant= is provided', async () => {

@@ -2,23 +2,26 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
 import { DEFAULT_HOUSEHOLD_ID } from '@/lib/constants'
 import { buildCoverageRows, expandMerchantRows } from '@/lib/coverageReport'
-import type { TxForCoverage } from '@/lib/coverageReport'
+import type { TxForCoverage, MatchStatus } from '@/lib/coverageReport'
 
 // ---------------------------------------------------------------------------
 // GET /api/dev/coverage
 //
 // Query params:
-//   unmatched=true        only return merchants with no matched_rule
-//   account=<id>          filter to a single account
-//   source=xero|csv       filter by transaction source
-//   from=YYYY-MM-DD       filter by date range start (inclusive)
-//   to=YYYY-MM-DD         filter by date range end (inclusive)
-//   merchant=<name>       expand: return individual transactions for one merchant
+//   status=rule|gl|unmatched  filter by match status
+//   unmatched=true            legacy alias for status=unmatched
+//   account=<id>              filter to a single account
+//   source=xero|csv           filter by transaction source
+//   from=YYYY-MM-DD           filter by date range start (inclusive)
+//   to=YYYY-MM-DD             filter by date range end (inclusive)
+//   merchant=<name>           expand: return individual transactions for one merchant
 // ---------------------------------------------------------------------------
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl
+  const statusParam = searchParams.get('status') as MatchStatus | null
   const unmatchedOnly = searchParams.get('unmatched') === 'true'
+  const filterStatus: MatchStatus | null = statusParam ?? (unmatchedOnly ? 'unmatched' : null)
   const accountId = searchParams.get('account')
   const source = searchParams.get('source')
   const from = searchParams.get('from')
@@ -49,5 +52,5 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ transactions: expandMerchantRows(rows) })
   }
 
-  return NextResponse.json({ rows: buildCoverageRows(rows, unmatchedOnly) })
+  return NextResponse.json({ rows: buildCoverageRows(rows, filterStatus) })
 }
