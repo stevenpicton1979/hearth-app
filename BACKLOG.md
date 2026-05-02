@@ -254,8 +254,152 @@ When multiple rules share the same fingerprint, it means the category taxonomy c
 
 ---
 
+## [ ] 16. Fix merchant_mappings priority — named rules must beat auto-generated entries
+
+**Problem:** The pipeline checks `merchant_mappings` before named rules. Because the pipeline also auto-writes keyword guesses (and previously wrote named rule results) into `merchant_mappings`, stale auto-generated entries permanently silence the correct named rule. For example, Spotify was auto-written as `Technology` and that entry now overrides the `spotify` named rule that correctly says `Entertainment`.
+
+There are two bugs compounding each other:
+1. The pipeline checks ALL `merchant_mappings` rows before named rules — it can't distinguish a user's manual override from a stale auto-generated entry.
+2. The ruleResult branch in `processBatch` calls `autoMappings.set(merchant, category)`, writing named rule results into `merchant_mappings`. That cached entry then shadows the rule itself on future runs.
+
+**Solution:**
+
+1. **DB migration** — add a `source` column to `merchant_mappings`:
+   ```sql
+   ALTER TABLE merchant_mappings ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'auto';
+   ```
+   This stamps all existing rows as `'auto'`. Save as `scripts/addMerchantMappingSource.sql`.
+
+2. **`categoryPipeline.ts`** — change the mappingMap build to only load `source = 'manual'` rows. Update the Supabase query:
+   ```typescript
+   supabase.from('merchant_mappings')
+     .select('merchant, category, classification')
+     .eq('household_id', DEFAULT_HOUSEHOLD_ID)
+     .eq('source', 'manual')
+   ```
+   This means manual mappings still beat named rules (explicit user intent is respected), but auto-generated entries are never consulted.
+
+3. **`categoryPipeline.ts`** — remove `autoMappings.set(merchant, category)` from the `ruleResult` branch entirely. Named rules are self-contained and must not write to `merchant_mappings`. Only the keyword-fallback branch (`guessCategory`) should write to `autoMappings`, and those writes should include `source: 'auto'` in the upsert rows.
+
+4. **Mappings API** — any endpoint that writes to `merchant_mappings` on behalf of a user action (confirm, save, update from the `/mappings` UI) must set `source: 'manual'` explicitly. Find all `insert`/`upsert` calls to `merchant_mappings` in API routes and add `source: 'manual'` to those rows.
+
+5. **`applyMappings` in `categoryPipeline.ts`** — this standalone function (used by the training pipeline) also queries `merchant_mappings`. Add `.eq('source', 'manual')` to its query too.
+
+**New priority order after this fix:**
+1. Director income rules (highest — fires before transfer check, unchanged)
+2. Transfer detection (unchanged)
+3. Manual `merchant_mappings` entries (explicit user override — `source = 'manual'` only)
+4. Named merchant category rules (`applyMerchantCategoryRules`)
+5. `category_hint` / GL account hint
+6. Keyword fallback (`guessCategory`)
+
+**After deploying:** run a full re-sync so all transactions get re-categorised without the stale auto entries interfering:
+```bash
+curl -s -X POST "https://app.hearth.money/api/admin/wipe-business-transactions?confirm=true"
+curl -s -X POST "https://app.hearth.money/api/xero/sync?full=true"
+```
+
+**Tests:**
+- Update `categoryPipeline` tests (if any) to assert that a `source = 'auto'` mapping does NOT override a named rule result.
+- Add a test asserting that a `source = 'manual'` mapping DOES override a named rule result.
+- Assert that the ruleResult branch no longer writes to autoMappings.
+- Assert that the keyword-fallback branch still writes to autoMappings with `source: 'auto'`.
+
+---
+
+## [ ] 17. Category taxonomy — define canonical leaf categories and update all rules
+
+**Problem:** The `category` field is used inconsistently. Some rules output `'Business'` when they mean "BHT operating expense" — but `owner: 'Business'` already encodes the entity. The `category` field should always be the **leaf node** (the specific type of income or expense), never the realm. Without a canonical list, every new rule invents its own string and the reporting layer can never group reliably.
+
+**Design:** The full taxonomy is expressed by four fields together:
+
+```
+owner     → realm   (Business | Steven | Nicola | Joint)
+isIncome  → direction  (true = Income, false = Expenses)
+isSubscription → sub-bucket within Expenses
+category  → leaf node  (the specific type — see list below)
+```
+
+**Step 1 — Create `src/lib/categories.ts`**
+
+Define a `CATEGORIES` const and a `Category` type covering all allowed leaf strings. Organise by realm for readability but the type is just a union string:
+
+```typescript
+// Business — Income
+'Business Revenue'
+
+// Business — Expenses (non-subscription)
+'Accounting'          // accountants, bookkeepers (Bell Partners)
+'Office Expenses'     // general supplies, Amazon, Officeworks
+'Technology'          // software, cloud, SaaS (non-subscription one-offs)
+'Meals'               // food/drink on business card
+'Travel'              // accommodation (Airbnb on business card)
+'Transport'           // Uber, taxis on business card
+'Payroll Expense'     // wages, superannuation
+'Government & Tax'    // ATO payments, income tax
+
+// Business — Expenses (subscription, isSubscription: true)
+'Technology'          // SaaS subscriptions (Google One, Xero)
+'Entertainment'       // gaming/media subscriptions (Spotify, Xbox, Steam)
+
+// Personal — Income
+'Salary'              // PAYG wages into personal account
+'Director Income'     // director's fees / profit distributions
+
+// Personal — Expenses (non-subscription)
+'Groceries'
+'Eating Out'
+'Transport'           // personal Uber, fuel, public transport
+'Travel'              // personal accommodation
+'Entertainment'       // personal cinema, events
+'Housing'             // mortgage, rent
+'Utilities'           // energy, water, gas
+'Internet & Phone'    // NBN, mobile plans
+'Healthcare'          // medical, pharmacy, health insurance
+'Insurance'           // home, car, life insurance
+'Education'
+'Shopping'            // general retail, clothing
+'Childcare'
+'Pets'
+
+// Personal — Expenses (subscription, isSubscription: true)
+'Entertainment'       // personal streaming
+'Technology'          // personal software
+```
+
+Export `Category` as a TypeScript union type of all the above strings. Transfer rules use `category: null` — that is the only permitted null.
+
+**Step 2 — Update `merchantCategoryRules.ts`**
+
+- Change `output.category` type from `string | null` to `Category | null`
+- Update all rules to use the canonical strings:
+  - `bell_partners`: change `'Business'` → `'Accounting'`
+  - `xero_misc_code`: change `'Business'` → `'Office Expenses'` (it's a catch-all for BHT expenses)
+  - `invoice_income`, `oncore_income`, `crosslateral_income`: change `'Business'` → `'Business Revenue'`
+  - All other rules: verify their category is already in the canonical list (most are fine)
+- Update the file header category conventions section to reference the canonical list
+
+**Step 3 — Add a schema validation test**
+
+In `merchantCategoryRules.test.ts`, add a test that imports `CATEGORIES` and asserts every rule's `output.category` is either `null` or a member of the canonical set. This prevents future rules from inventing ad-hoc strings.
+
+**Step 4 — Update `categoryPipeline.ts`**
+
+The `ProcessedTransaction.category` field type should change from `string | null` to `Category | null`. This makes the TypeScript compiler enforce the taxonomy at every write point — keyword fallback, GL hints, manual mappings.
+
+Note: GL account hints (category_hint from Xero) arrive as raw strings and may not match the canonical list. Add a mapping in `src/lib/xeroCategories.ts` (where `mapXeroAccountToCategory` lives) that normalises Xero GL account names to canonical category strings. For example: `'Office Expenses' → 'Office Expenses'`, `'Computer Expenses' → 'Technology'`, `'Travel & Accommodation' → 'Travel'` etc. Check what GL account strings actually arrive in the data before writing this map.
+
+**Tests:**
+- Schema validation test (every rule's category is in CATEGORIES or null)
+- For each rule whose category changed, update its fingerprint test to assert the new string
+- A test for the Xero GL → canonical category mapping function (input: raw GL string, output: canonical or null)
+
+**After this task:** every rule outputs a category from a known finite set. The coverage inspector and reporting UI can use `CATEGORIES` to build consistent groupings. New rules can't silently introduce new strings without updating `categories.ts` first.
+
+---
+
 ## Done when:
-- All 15 tasks committed and pushed
+- All 17 tasks committed and pushed
 - `npm test` passes after all changes
 - Vercel deployment is READY
 - Update STATE_HEARTH.md in C:\dev\portfoliostate\ with what shipped, then commit and push portfoliostate
