@@ -5,6 +5,7 @@ import { guessCategory } from './autoCategory'
 import { isTransfer } from './transferPatterns'
 import { classifyDirectorIncome } from './directorIncome'
 import { applyMerchantCategoryRules } from './merchantCategoryRules'
+import type { Category } from './categories'
 
 export interface RawTransaction {
   account_id: string
@@ -35,7 +36,7 @@ export interface ProcessedTransaction {
   amount: number
   description: string
   merchant: string
-  category: string | null
+  category: Category | null
   classification: string | null
   is_transfer: boolean
   /** Stable external ID — Xero BankTransactionID or Basiq transaction ID. Used as upsert key when present. */
@@ -120,7 +121,7 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
         description: raw.description,
         merchant,
         category: directorResult.category,
-        classification: null,
+        classification: 'Joint',
         is_transfer: false,
         external_id: raw.external_id ?? null,
         raw_description: raw.raw_description ?? null,
@@ -162,7 +163,7 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
         amount: raw.amount,
         description: raw.description,
         merchant,
-        category: raw.category_hint ?? null,
+        category: (raw.category_hint ?? null) as Category | null,
         classification: null,
         is_transfer: true,
         is_subscription: false,
@@ -180,7 +181,7 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
     // ── 3. Non-transfer categorisation ────────────────────────────────────
     const isIncome = raw.amount > 0
 
-    let category: string | null = null
+    let category: Category | null = null
     let isSubscription = false
     const accountOwner = accountOwnerMap.get(raw.account_id) ?? null
     let classification: string | null = accountOwner
@@ -220,7 +221,7 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
     const mapping = mappingMap.get(merchant)
     if (mapping) {
       // Manual merchant mapping — highest confidence, clears any upstream rule
-      category = mapping.category
+      category = mapping.category as Category | null
       if (mapping.classification != null) classification = mapping.classification
       matchedRule = null
     } else if (ruleResult) {
@@ -231,17 +232,17 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
       isSubscription = ruleResult.isSubscription
     } else if (raw.category_hint) {
       // GL account hint or Xero non-transfer rule category (passed via category_hint)
-      category = raw.category_hint
+      category = raw.category_hint as Category
       // Keep matchedRule = raw.matched_rule (e.g. "xero:personal-wage") if set
       if (!isIncome) autoMappings.set(merchant, category)
     } else if (!isIncome) {
       // Keyword fallback — not a named rule
-      category = guessCategory(merchant)
+      category = guessCategory(merchant) as Category | null
       if (category === null && /^\d{10,}\s+COMMBANK APP BPA/i.test(raw.description)) {
-        category = 'Business'
+        category = 'Government & Tax'
       }
       if (category === null && raw.gl_tax_type === 'GST') {
-        category = 'Business'
+        category = 'Office Expenses'
       }
       matchedRule = null
       if (category !== null) autoMappings.set(merchant, category)

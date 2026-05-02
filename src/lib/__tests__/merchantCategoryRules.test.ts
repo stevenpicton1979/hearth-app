@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { applyMerchantCategoryRules, MERCHANT_CATEGORY_RULES } from '../merchantCategoryRules'
 import type { RuleContext } from '../merchantCategoryRules'
+import { CATEGORIES } from '../categories'
 
 const expense: RuleContext = { isIncome: false }
 const income: RuleContext = { isIncome: true }
@@ -107,7 +108,7 @@ describe('uber', () => {
 describe('bell_partners', () => {
   it('matches "BELL PARTNERS" — full fingerprint', () => {
     const result = applyMerchantCategoryRules('BELL PARTNERS', expense)
-    expect(result?.category).toBe('Business')
+    expect(result?.category).toBe('Accounting')
     expect(result?.isIncome).toBeNull()
     expect(result?.isTransfer).toBe(false)
     expect(result?.isSubscription).toBe(false)
@@ -116,7 +117,7 @@ describe('bell_partners', () => {
 
   it('matches "IPY*BELL PARTNERS BRISBANE QL"', () => {
     const result = applyMerchantCategoryRules('IPY*BELL PARTNERS BRISBANE QL', expense)
-    expect(result?.category).toBe('Business')
+    expect(result?.category).toBe('Accounting')
     expect(result?.isIncome).toBeNull()
     expect(result?.isTransfer).toBe(false)
     expect(result?.isSubscription).toBe(false)
@@ -129,7 +130,7 @@ describe('bell_partners', () => {
 describe('invoice_income', () => {
   it('matches "INVOICE" on income — full fingerprint', () => {
     const result = applyMerchantCategoryRules('INVOICE', income)
-    expect(result?.category).toBe('Business')
+    expect(result?.category).toBe('Business Revenue')
     expect(result?.isIncome).toBe(true)
     expect(result?.isTransfer).toBe(false)
     expect(result?.isSubscription).toBe(false)
@@ -147,7 +148,7 @@ describe('invoice_income', () => {
 describe('oncore_income', () => {
   it('matches "ONCORE" on income — full fingerprint', () => {
     const result = applyMerchantCategoryRules('ONCORE', income)
-    expect(result?.category).toBe('Business')
+    expect(result?.category).toBe('Business Revenue')
     expect(result?.isIncome).toBe(true)
     expect(result?.isTransfer).toBe(false)
     expect(result?.isSubscription).toBe(false)
@@ -157,7 +158,7 @@ describe('oncore_income', () => {
 
   it('matches "E41900232233 Oncore Contracto" on income', () => {
     const result = applyMerchantCategoryRules('E41900232233 Oncore Contracto', income)
-    expect(result?.category).toBe('Business')
+    expect(result?.category).toBe('Business Revenue')
     expect(result?.isIncome).toBe(true)
     expect(result?.isTransfer).toBe(false)
     expect(result?.isSubscription).toBe(false)
@@ -174,7 +175,7 @@ describe('oncore_income', () => {
 describe('crosslateral_income', () => {
   it('matches "CROSSLATERAL" on income — full fingerprint', () => {
     const result = applyMerchantCategoryRules('CROSSLATERAL', income)
-    expect(result?.category).toBe('Business')
+    expect(result?.category).toBe('Business Revenue')
     expect(result?.isIncome).toBe(true)
     expect(result?.isTransfer).toBe(false)
     expect(result?.isSubscription).toBe(false)
@@ -236,7 +237,7 @@ describe('income_tax_provision', () => {
 describe('xero_misc_code', () => {
   it('matches "MIS" exactly — full fingerprint', () => {
     const result = applyMerchantCategoryRules('MIS', expense)
-    expect(result?.category).toBe('Business')
+    expect(result?.category).toBe('Office Expenses')
     expect(result?.isIncome).toBeNull()
     expect(result?.isTransfer).toBe(false)
     expect(result?.isSubscription).toBe(false)
@@ -433,7 +434,7 @@ describe('fingerprint integrity', () => {
   it('has no unintentional fingerprint collisions', () => {
     const intentionalCollisions = new Set([
       // invoice_income, oncore_income, crosslateral_income — same output type, different match patterns
-      JSON.stringify({ category: 'Business', isIncome: true, isTransfer: false, isSubscription: false, owner: 'Business' }),
+      JSON.stringify({ category: 'Business Revenue', isIncome: true, isTransfer: false, isSubscription: false, owner: 'Business' }),
       // bht_directors_loan_transfer, director_loan_repayment — both inter-account transfers
       JSON.stringify({ category: null, isIncome: null, isTransfer: true, isSubscription: false, owner: null }),
       // xbox, spotify — both Entertainment subscriptions on the BHT account
@@ -462,6 +463,18 @@ describe('fingerprint integrity', () => {
     )
     for (const rule of incomeMatchingRules) {
       expect(rule.output.isIncome, `${rule.name} matches on isIncome but outputs null`).not.toBeNull()
+    }
+  })
+
+  it('every rule category is null or a member of the canonical CATEGORIES set', () => {
+    const validCategories = new Set<string>(CATEGORIES)
+    for (const rule of MERCHANT_CATEGORY_RULES) {
+      if (rule.output.category !== null) {
+        expect(
+          validCategories.has(rule.output.category),
+          `Rule "${rule.name}" outputs category "${rule.output.category}" which is not in CATEGORIES`
+        ).toBe(true)
+      }
     }
   })
 })

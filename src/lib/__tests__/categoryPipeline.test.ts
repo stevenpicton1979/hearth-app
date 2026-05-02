@@ -372,7 +372,7 @@ function makeProcessed(overrides: Partial<ProcessedTransaction> = {}): Processed
     amount: -100,
     description: 'MERCHANT A',
     merchant: 'MERCHANT A',
-    category: 'Business',
+    category: 'Office Expenses',
     classification: 'Steven',
     is_transfer: false,
     external_id: null,

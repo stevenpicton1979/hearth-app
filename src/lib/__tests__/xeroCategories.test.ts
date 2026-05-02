@@ -6,6 +6,7 @@ import {
   parseXeroDate,
   cleanXeroMerchant,
   composeXeroRawDescription,
+  mapGlNameToCanonicalCategory,
 } from '../xeroCategories'
 
 describe('xeroCategories', () => {
@@ -197,6 +198,40 @@ describe('xeroCategories', () => {
       const long = 'A'.repeat(150)
       const merchant = cleanXeroMerchant(long, null, undefined, undefined)
       expect(merchant).toHaveLength(100)
+    })
+  })
+
+  describe('mapGlNameToCanonicalCategory', () => {
+    it('maps "Superannuation Payable" to Payroll Expense', () => {
+      expect(mapGlNameToCanonicalCategory('Superannuation Payable')).toBe('Payroll Expense')
+    })
+
+    it('maps "Computer Expenses" to Technology', () => {
+      expect(mapGlNameToCanonicalCategory('Computer Expenses')).toBe('Technology')
+    })
+
+    it('maps "Travel & Accommodation" to Travel', () => {
+      expect(mapGlNameToCanonicalCategory('Travel & Accommodation')).toBe('Travel')
+    })
+
+    it('maps "Sales Revenue" to Business Revenue', () => {
+      expect(mapGlNameToCanonicalCategory('Sales Revenue')).toBe('Business Revenue')
+    })
+
+    it('maps "Motor Vehicle Expenses" to Transport', () => {
+      expect(mapGlNameToCanonicalCategory('Motor Vehicle Expenses')).toBe('Transport')
+    })
+
+    it('maps "Consulting & Accounting" to Accounting', () => {
+      expect(mapGlNameToCanonicalCategory('Consulting & Accounting')).toBe('Accounting')
+    })
+
+    it('returns null for unknown GL account names', () => {
+      expect(mapGlNameToCanonicalCategory('Some Custom Account')).toBeNull()
+    })
+
+    it('returns null for empty string', () => {
+      expect(mapGlNameToCanonicalCategory('')).toBeNull()
     })
   })
 

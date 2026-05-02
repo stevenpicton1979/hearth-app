@@ -14,29 +14,25 @@
  *
  * ─── Category conventions ─────────────────────────────────────────────────────
  *
- * Business       = BHT operating expenses (accounting, admin, misc).
- *                  owner is always 'Business' for named rules; null only for the
- *                  legacy xero_misc_code catch-all.
+ * All category strings must be members of the Category union in src/lib/categories.ts.
+ * Transfer rules use category: null — that is the only permitted null.
  *
- * Entertainment  = Entertainment and media on the BHT account. Legitimate
- *                  business expenses; owner is 'Business'.
- *
- * Technology     = Cloud and software subscriptions on the BHT account.
- *                  owner is 'Business'.
- *
- * Salary         = PAYG wages received into a personal account. Owner will always
- *                  be 'Steven' or 'Nicola' — never null. (No rules yet; noted
- *                  here for future rules.)
- *
- * Director Income = Director's fees or profit distributions, taxed differently
- *                   from salary. Owner will always be 'Steven' or 'Nicola' —
- *                   never null. (No rules yet; noted for future.)
+ * Business Revenue = BHT income (Oncore, Crosslateral, invoices). isIncome: true.
+ * Accounting       = accountants and bookkeepers (Bell Partners).
+ * Office Expenses  = general BHT operating costs; catch-all for non-specific expenses.
+ * Entertainment    = gaming/media on business card. owner: 'Business'.
+ * Technology       = cloud/SaaS subscriptions on business card. owner: 'Business'.
+ * Salary           = PAYG wages into personal account.
+ * Director Income  = director's fees / profit distributions (taxed at year-end).
+ *                    owner: 'Joint' — split decided by accountant.
  *
  * isIncome: null = inherit from transaction amount sign. Only use true/false when
  * the match condition already knows the direction (e.g. checks ctx.isIncome).
  * For transfer rules (isTransfer: true), isIncome is always null — the is_transfer
  * flag is the authoritative classification; direction is irrelevant.
  */
+
+import type { Category } from './categories'
 
 export interface RuleContext {
   /** Used by income/transfer rules to gate on transaction direction. */
@@ -57,7 +53,7 @@ export interface MerchantCategoryRule {
   /** Full classification fingerprint for this rule */
   output: {
     /** Category to assign. null = no category (always paired with isTransfer: true) */
-    category: string | null
+    category: Category | null
     /** null = inherit from amount sign; true/false = this rule asserts the direction */
     isIncome: boolean | null
     isTransfer: boolean
@@ -68,7 +64,7 @@ export interface MerchantCategoryRule {
 
 export interface RuleResult {
   ruleName: string
-  category: string | null
+  category: Category | null
   isIncome: boolean | null
   isTransfer: boolean
   isSubscription: boolean
@@ -107,16 +103,16 @@ export const MERCHANT_CATEGORY_RULES: MerchantCategoryRule[] = [
 
   {
     name: 'bell_partners',
-    description: 'Bell Partners accounting firm → Business',
+    description: 'Bell Partners accounting firm → Accounting',
     match: (m) => /bell\s*partners/i.test(m),
-    output: { category: 'Business', isIncome: null, isTransfer: false, isSubscription: false, owner: 'Business' },
+    output: { category: 'Accounting', isIncome: null, isTransfer: false, isSubscription: false, owner: 'Business' },
   },
 
   {
     name: 'invoice_income',
-    description: 'Generic "INVOICE" description on income transactions → Business',
+    description: 'Generic "INVOICE" description on income transactions → Business Revenue',
     match: (m, ctx) => /^invoice$/i.test(m) && ctx.isIncome,
-    output: { category: 'Business', isIncome: true, isTransfer: false, isSubscription: false, owner: 'Business' },
+    output: { category: 'Business Revenue', isIncome: true, isTransfer: false, isSubscription: false, owner: 'Business' },
   },
 
   {
@@ -127,7 +123,7 @@ export const MERCHANT_CATEGORY_RULES: MerchantCategoryRule[] = [
       'and remits client fees to BHT. Raw descriptions often include an invoice ' +
       'reference prefix, e.g. "E41900232233 Oncore Contracto". Matches on income only.',
     match: (m, ctx) => /oncore/i.test(m) && ctx.isIncome,
-    output: { category: 'Business', isIncome: true, isTransfer: false, isSubscription: false, owner: 'Business' },
+    output: { category: 'Business Revenue', isIncome: true, isTransfer: false, isSubscription: false, owner: 'Business' },
   },
 
   {
@@ -137,7 +133,7 @@ export const MERCHANT_CATEGORY_RULES: MerchantCategoryRule[] = [
       'Crosslateral is a direct BHT client; their invoice payments arrive as income. ' +
       'Matches on income only.',
     match: (m, ctx) => /crosslateral/i.test(m) && ctx.isIncome,
-    output: { category: 'Business', isIncome: true, isTransfer: false, isSubscription: false, owner: 'Business' },
+    output: { category: 'Business Revenue', isIncome: true, isTransfer: false, isSubscription: false, owner: 'Business' },
   },
 
   // ─── Payroll ─────────────────────────────────────────────────────────────────
@@ -165,7 +161,7 @@ export const MERCHANT_CATEGORY_RULES: MerchantCategoryRule[] = [
       'synced before cleanXeroMerchant learned to skip short Xero codes in the reference field. ' +
       'New syncs produce real contact names which are caught by the specific rules below.',
     match: (m) => m === 'MIS',
-    output: { category: 'Business', isIncome: null, isTransfer: false, isSubscription: false, owner: null },
+    output: { category: 'Office Expenses', isIncome: null, isTransfer: false, isSubscription: false, owner: null },
   },
 
   {

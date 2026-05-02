@@ -1,3 +1,55 @@
+import type { Category } from './categories'
+
+/**
+ * Direct mapping from Xero GL account display names to canonical Hearth categories.
+ * Used when only the stored gl_account name is available (e.g. training-labels API).
+ * Returns null for GL names not in the map — caller should fall back to mapXeroAccountToCategory.
+ */
+const GL_NAME_TO_CANONICAL: Record<string, Category> = {
+  // Payroll
+  'Superannuation Payable': 'Payroll Expense',
+  'Wages & Salaries': 'Payroll Expense',
+  'Payroll Expenses': 'Payroll Expense',
+  // Office / Admin
+  'Office Expenses': 'Office Expenses',
+  'General Expenses': 'Office Expenses',
+  'Printing & Stationery': 'Office Expenses',
+  'Bank Fees & Charges': 'Office Expenses',
+  // Technology
+  'Computer Expenses': 'Technology',
+  'Software Subscriptions': 'Technology',
+  'Subscriptions': 'Technology',
+  // Accounting
+  'Consulting & Accounting': 'Accounting',
+  'Legal & Professional Fees': 'Accounting',
+  // Travel
+  'Travel & Accommodation': 'Travel',
+  'Travel - National': 'Travel',
+  'Travel - International': 'Travel',
+  'Accommodation': 'Travel',
+  // Transport
+  'Motor Vehicle Expenses': 'Transport',
+  'Parking & Tolls': 'Transport',
+  // Meals
+  'Meals & Entertainment': 'Meals',
+  'Entertainment & Meals': 'Meals',
+  // Tax
+  'Income Tax Provision': 'Government & Tax',
+  'Income Tax': 'Government & Tax',
+  // Insurance
+  'Insurance': 'Insurance',
+  // Utilities
+  'Utilities': 'Utilities',
+  'Light, Power, Heating': 'Utilities',
+  // Income
+  'Sales Revenue': 'Business Revenue',
+  'Revenue': 'Business Revenue',
+}
+
+export function mapGlNameToCanonicalCategory(name: string): Category | null {
+  return GL_NAME_TO_CANONICAL[name] ?? null
+}
+
 /**
  * Maps Xero account type/code/name to a Hearth category.
  * Priority: account code (AU standard chart) > type > name keywords
