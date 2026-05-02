@@ -433,8 +433,87 @@ Note: GL account hints (category_hint from Xero) arrive as raw strings and may n
 
 ---
 
+## [ ] 18. Outcome bucket grouping — wire taxonomy into spending and reporting views
+
+**Problem:** The four fields (`owner`, `isIncome`, `isSubscription`, `category`) encode the full taxonomy but nothing groups by them. The spending view and dashboard don't reflect the outcome bucket structure. There's no way to answer "what did I spend on Business → Expenses → Subscriptions this quarter?" without writing ad-hoc SQL.
+
+**The outcome bucket hierarchy:**
+```
+Business
+├── Income                    (owner=Business, isIncome=true)
+├── Expenses
+│   ├── Subscriptions         (owner=Business, isIncome=false, isSubscription=true)
+│   ├── Payroll               (owner=Business, isIncome=false, category='Payroll Expense')
+│   ├── Tax                   (owner=Business, isIncome=false, category='Government & Tax')
+│   └── Other                 (owner=Business, isIncome=false, isSubscription=false, other categories)
+└── Transfers                 (isTransfer=true, owner=Business)
+
+Personal — Steven
+├── Income                    (owner=Steven, isIncome=true)
+└── Expenses
+    ├── Subscriptions         (owner=Steven, isIncome=false, isSubscription=true)
+    └── [category leaf]       (owner=Steven, isIncome=false, isSubscription=false)
+
+Personal — Nicola            (same structure as Steven)
+Personal — Joint             (same structure)
+```
+
+**Step 1 — Create `src/lib/outcomeBuckets.ts`**
+
+Define types and a pure function:
+
+```typescript
+export interface OutcomeBucket {
+  realm: 'Business' | 'Personal'
+  owner: 'Business' | 'Steven' | 'Nicola' | 'Joint'
+  direction: 'Income' | 'Expense' | 'Transfer'
+  subBucket: 'Subscriptions' | 'Payroll' | 'Tax' | 'Other' | null  // null for Income and Transfer
+  leaf: Category | null
+}
+
+export function getOutcomeBucket(tx: {
+  owner: string | null
+  is_income: boolean
+  is_transfer: boolean
+  is_subscription: boolean
+  category: string | null
+}): OutcomeBucket
+```
+
+Rules for `subBucket`:
+- `isTransfer` → direction: 'Transfer', subBucket: null
+- `isIncome` → direction: 'Income', subBucket: null
+- `isSubscription` → subBucket: 'Subscriptions'
+- `category = 'Payroll Expense'` → subBucket: 'Payroll'
+- `category = 'Government & Tax'` → subBucket: 'Tax'
+- everything else → subBucket: 'Other'
+
+**Step 2 — Tests for `getOutcomeBucket` in `src/lib/__tests__/outcomeBuckets.test.ts`**
+
+Test every combination: business income, business subscription, business payroll, business tax, business other expense, personal income, personal subscription, personal other expense, transfer. Assert all four fields of OutcomeBucket for each.
+
+**Step 3 — Spending view (`/spending`)**
+
+Read the current spending page before changing anything. Then:
+- Group transactions by `getOutcomeBucket` rather than flat category
+- Top level: Business / Personal — Steven / Personal — Nicola / Personal — Joint tabs or sections
+- Within each: Income bar/total, then Expenses broken down by subBucket, then Transfers line
+- Within Expenses → Other: group by `leaf` category (e.g. Office Expenses $X, Travel $Y, Eating Out $Z)
+- Subscriptions subBucket: list individual merchants with monthly cost
+- Keep existing date range filter
+
+**Step 4 — Dashboard (`/`)**
+
+Read the current dashboard before changing anything. Add a summary widget showing the current month's outcome buckets at a glance — Business Income vs Business Expenses, Personal Income vs Personal Expenses, with a net position. This replaces or supplements whatever category breakdown is currently shown.
+
+**Tests:** `getOutcomeBucket` pure function is fully unit tested (Step 2). Spending view and dashboard changes are UI-only — no new API tests needed, but verify `npm test` and `npx next build` both pass.
+
+**Note:** Do not change the DB schema or the pipeline. This task is purely about computing and displaying the hierarchy from existing fields.
+
+---
+
 ## Done when:
-- All 17 tasks committed and pushed
+- All 18 tasks committed and pushed
 - `npm test` passes after all changes
 - Vercel deployment is READY
 - Update STATE_HEARTH.md in C:\dev\portfoliostate\ with what shipped, then commit and push portfoliostate
