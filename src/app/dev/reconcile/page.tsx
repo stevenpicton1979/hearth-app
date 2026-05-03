@@ -223,4 +223,17 @@ export default function ReconcilePage() {
                     ))}
                   </tbody>
                 </table>
-           
+              </div>
+            ) : (
+              <p className="text-sm text-gray-400">No CSV near-duplicates found.</p>
+            )}
+          </section>
+        </>
+      )}
+
+      {!data && !loading && !error && (
+        <p className="text-sm text-gray-400">Click &ldquo;Run check&rdquo; to analyse your data.</p>
+      )}
+    </div>
+  )
+}
