@@ -1639,6 +1639,280 @@ describe('river_city_corporation', () => {
 })
 
 
+// ─── Batch 5: Streaming & SaaS ───────────────────────────────────────────────
+
+describe('netflix_streaming', () => {
+  it('matches "NETFLIX.COM" — full fingerprint', () => {
+    const result = applyMerchantCategoryRules('NETFLIX.COM', expense)
+    expect(result?.category).toBe('Entertainment')
+    expect(result?.isIncome).toBeNull()
+    expect(result?.isTransfer).toBe(false)
+    expect(result?.isSubscription).toBe(true)
+    expect(result?.owner).toBe('Business')
+    expect(result?.ruleName).toBe('netflix_streaming')
+  })
+
+  it('matches "NETFLIX" (bare)', () => {
+    expect(applyMerchantCategoryRules('NETFLIX', expense)?.ruleName).toBe('netflix_streaming')
+  })
+
+  it('matches "NETFLIX.COM MELBOURNE AUS"', () => {
+    expect(applyMerchantCategoryRules('NETFLIX.COM MELBOURNE AUS', expense)?.ruleName).toBe('netflix_streaming')
+  })
+
+  it('does not match unrelated merchants', () => {
+    expect(applyMerchantCategoryRules('RANDOM STORE', expense)?.ruleName).not.toBe('netflix_streaming')
+  })
+})
+
+describe('disney_plus', () => {
+  it('matches "DISNEY PLUS" — full fingerprint', () => {
+    const result = applyMerchantCategoryRules('DISNEY PLUS', expense)
+    expect(result?.category).toBe('Entertainment')
+    expect(result?.isIncome).toBeNull()
+    expect(result?.isTransfer).toBe(false)
+    expect(result?.isSubscription).toBe(true)
+    expect(result?.owner).toBe('Business')
+    expect(result?.ruleName).toBe('disney_plus')
+  })
+
+  it('matches "DISNEY+"', () => {
+    expect(applyMerchantCategoryRules('DISNEY+', expense)?.ruleName).toBe('disney_plus')
+  })
+
+  it('matches "DISNEYPLUS.COM"', () => {
+    expect(applyMerchantCategoryRules('DISNEYPLUS.COM', expense)?.ruleName).toBe('disney_plus')
+  })
+
+  it('does not match bare "DISNEY" (could be Disney Store)', () => {
+    expect(applyMerchantCategoryRules('DISNEY STORE', expense)?.ruleName).not.toBe('disney_plus')
+  })
+})
+
+describe('amazon_prime_video', () => {
+  it('matches "AMAZON PRIME" — full fingerprint', () => {
+    const result = applyMerchantCategoryRules('AMAZON PRIME', expense)
+    expect(result?.category).toBe('Entertainment')
+    expect(result?.isIncome).toBeNull()
+    expect(result?.isTransfer).toBe(false)
+    expect(result?.isSubscription).toBe(true)
+    expect(result?.owner).toBe('Business')
+    expect(result?.ruleName).toBe('amazon_prime_video')
+  })
+
+  it('matches "AMAZON PRIME VIDEO"', () => {
+    expect(applyMerchantCategoryRules('AMAZON PRIME VIDEO', expense)?.ruleName).toBe('amazon_prime_video')
+  })
+
+  it('matches "PRIME VIDEO"', () => {
+    expect(applyMerchantCategoryRules('PRIME VIDEO', expense)?.ruleName).toBe('amazon_prime_video')
+  })
+
+  it('does NOT match bare "AMAZON.COM.AU" (retail shopping)', () => {
+    expect(applyMerchantCategoryRules('AMAZON.COM.AU', expense)?.ruleName).not.toBe('amazon_prime_video')
+  })
+})
+
+describe('youtube_premium', () => {
+  it('matches "YOUTUBE PREMIUM" — full fingerprint', () => {
+    const result = applyMerchantCategoryRules('YOUTUBE PREMIUM', expense)
+    expect(result?.category).toBe('Entertainment')
+    expect(result?.isIncome).toBeNull()
+    expect(result?.isTransfer).toBe(false)
+    expect(result?.isSubscription).toBe(true)
+    expect(result?.owner).toBe('Business')
+    expect(result?.ruleName).toBe('youtube_premium')
+  })
+
+  it('matches "GOOGLE*YOUTUBE PREMIUM"', () => {
+    expect(applyMerchantCategoryRules('GOOGLE*YOUTUBE PREMIUM', expense)?.ruleName).toBe('youtube_premium')
+  })
+
+  it('does not match unrelated merchants', () => {
+    expect(applyMerchantCategoryRules('RANDOM STORE', expense)?.ruleName).not.toBe('youtube_premium')
+  })
+})
+
+describe('playstation_network', () => {
+  it('matches "PLAYSTATION NETWORK" — full fingerprint', () => {
+    const result = applyMerchantCategoryRules('PLAYSTATION NETWORK', expense)
+    expect(result?.category).toBe('Entertainment')
+    expect(result?.isIncome).toBeNull()
+    expect(result?.isTransfer).toBe(false)
+    expect(result?.isSubscription).toBe(true)
+    expect(result?.owner).toBe('Business')
+    expect(result?.ruleName).toBe('playstation_network')
+  })
+
+  it('matches "PLAYSTATION STORE"', () => {
+    expect(applyMerchantCategoryRules('PLAYSTATION STORE', expense)?.ruleName).toBe('playstation_network')
+  })
+
+  it('matches "PSN" (exact prefix)', () => {
+    expect(applyMerchantCategoryRules('PSN', expense)?.ruleName).toBe('playstation_network')
+  })
+
+  it('does not match unrelated merchants', () => {
+    expect(applyMerchantCategoryRules('RANDOM STORE', expense)?.ruleName).not.toBe('playstation_network')
+  })
+})
+
+describe('nintendo_eshop', () => {
+  it('matches "NINTENDO ESHOP" — full fingerprint', () => {
+    const result = applyMerchantCategoryRules('NINTENDO ESHOP', expense)
+    expect(result?.category).toBe('Entertainment')
+    expect(result?.isIncome).toBeNull()
+    expect(result?.isTransfer).toBe(false)
+    expect(result?.isSubscription).toBe(true)
+    expect(result?.owner).toBe('Business')
+    expect(result?.ruleName).toBe('nintendo_eshop')
+  })
+
+  it('matches "NINTENDO" (bare)', () => {
+    expect(applyMerchantCategoryRules('NINTENDO', expense)?.ruleName).toBe('nintendo_eshop')
+  })
+
+  it('matches "NINTENDO OF EUROPE"', () => {
+    expect(applyMerchantCategoryRules('NINTENDO OF EUROPE', expense)?.ruleName).toBe('nintendo_eshop')
+  })
+})
+
+describe('crunchyroll', () => {
+  it('matches "CRUNCHYROLL" — full fingerprint', () => {
+    const result = applyMerchantCategoryRules('CRUNCHYROLL', expense)
+    expect(result?.category).toBe('Entertainment')
+    expect(result?.isIncome).toBeNull()
+    expect(result?.isTransfer).toBe(false)
+    expect(result?.isSubscription).toBe(true)
+    expect(result?.owner).toBe('Business')
+    expect(result?.ruleName).toBe('crunchyroll')
+  })
+
+  it('matches "CRUNCHYROLL.COM"', () => {
+    expect(applyMerchantCategoryRules('CRUNCHYROLL.COM', expense)?.ruleName).toBe('crunchyroll')
+  })
+})
+
+describe('audible', () => {
+  it('matches "AUDIBLE" — full fingerprint', () => {
+    const result = applyMerchantCategoryRules('AUDIBLE', expense)
+    expect(result?.category).toBe('Entertainment')
+    expect(result?.isIncome).toBeNull()
+    expect(result?.isTransfer).toBe(false)
+    expect(result?.isSubscription).toBe(true)
+    expect(result?.owner).toBe('Business')
+    expect(result?.ruleName).toBe('audible')
+  })
+
+  it('matches "AUDIBLE.COM"', () => {
+    expect(applyMerchantCategoryRules('AUDIBLE.COM', expense)?.ruleName).toBe('audible')
+  })
+
+  it('matches "AUDIBLE *MEMBERSHIP"', () => {
+    expect(applyMerchantCategoryRules('AUDIBLE *MEMBERSHIP', expense)?.ruleName).toBe('audible')
+  })
+})
+
+describe('kayo_sports', () => {
+  it('matches "KAYO" — full fingerprint', () => {
+    const result = applyMerchantCategoryRules('KAYO', expense)
+    expect(result?.category).toBe('Entertainment')
+    expect(result?.isIncome).toBeNull()
+    expect(result?.isTransfer).toBe(false)
+    expect(result?.isSubscription).toBe(true)
+    expect(result?.owner).toBe('Business')
+    expect(result?.ruleName).toBe('kayo_sports')
+  })
+
+  it('matches "KAYO SPORTS"', () => {
+    expect(applyMerchantCategoryRules('KAYO SPORTS', expense)?.ruleName).toBe('kayo_sports')
+  })
+
+  it('does not match merchants where "kayo" appears within another word', () => {
+    expect(applyMerchantCategoryRules('YAKAYOS RESTAURANT', expense)?.ruleName).not.toBe('kayo_sports')
+  })
+})
+
+describe('adobe_subscription', () => {
+  it('matches "ADOBE CREATIVECLOUD" — full fingerprint', () => {
+    const result = applyMerchantCategoryRules('ADOBE CREATIVECLOUD', expense)
+    expect(result?.category).toBe('Technology')
+    expect(result?.isIncome).toBeNull()
+    expect(result?.isTransfer).toBe(false)
+    expect(result?.isSubscription).toBe(true)
+    expect(result?.owner).toBe('Business')
+    expect(result?.ruleName).toBe('adobe_subscription')
+  })
+
+  it('matches "ADOBE SYSTEMS"', () => {
+    expect(applyMerchantCategoryRules('ADOBE SYSTEMS', expense)?.ruleName).toBe('adobe_subscription')
+  })
+
+  it('matches "ADOBE *PHOTOSHOP"', () => {
+    expect(applyMerchantCategoryRules('ADOBE *PHOTOSHOP', expense)?.ruleName).toBe('adobe_subscription')
+  })
+
+  it('does not match unrelated merchants', () => {
+    expect(applyMerchantCategoryRules('RANDOM STORE', expense)?.ruleName).not.toBe('adobe_subscription')
+  })
+})
+
+describe('canva_subscription', () => {
+  it('matches "CANVA" — full fingerprint', () => {
+    const result = applyMerchantCategoryRules('CANVA', expense)
+    expect(result?.category).toBe('Technology')
+    expect(result?.isIncome).toBeNull()
+    expect(result?.isTransfer).toBe(false)
+    expect(result?.isSubscription).toBe(true)
+    expect(result?.owner).toBe('Business')
+    expect(result?.ruleName).toBe('canva_subscription')
+  })
+
+  it('matches "CANVA PTY LTD"', () => {
+    expect(applyMerchantCategoryRules('CANVA PTY LTD', expense)?.ruleName).toBe('canva_subscription')
+  })
+
+  it('matches "CANVA.COM"', () => {
+    expect(applyMerchantCategoryRules('CANVA.COM', expense)?.ruleName).toBe('canva_subscription')
+  })
+})
+
+describe('dropbox_subscription', () => {
+  it('matches "DROPBOX" — full fingerprint', () => {
+    const result = applyMerchantCategoryRules('DROPBOX', expense)
+    expect(result?.category).toBe('Technology')
+    expect(result?.isIncome).toBeNull()
+    expect(result?.isTransfer).toBe(false)
+    expect(result?.isSubscription).toBe(true)
+    expect(result?.owner).toBe('Business')
+    expect(result?.ruleName).toBe('dropbox_subscription')
+  })
+
+  it('matches "DROPBOX.COM"', () => {
+    expect(applyMerchantCategoryRules('DROPBOX.COM', expense)?.ruleName).toBe('dropbox_subscription')
+  })
+})
+
+describe('notion_subscription', () => {
+  it('matches "NOTION" — full fingerprint', () => {
+    const result = applyMerchantCategoryRules('NOTION', expense)
+    expect(result?.category).toBe('Technology')
+    expect(result?.isIncome).toBeNull()
+    expect(result?.isTransfer).toBe(false)
+    expect(result?.isSubscription).toBe(true)
+    expect(result?.owner).toBe('Business')
+    expect(result?.ruleName).toBe('notion_subscription')
+  })
+
+  it('matches "NOTION SO"', () => {
+    expect(applyMerchantCategoryRules('NOTION SO', expense)?.ruleName).toBe('notion_subscription')
+  })
+
+  it('does not match words containing "notion" (e.g. "DEVOTION")', () => {
+    expect(applyMerchantCategoryRules('DEVOTION FITNESS', expense)?.ruleName).not.toBe('notion_subscription')
+  })
+})
+
 // ─── no match ─────────────────────────────────────────────────────────────────
 
 describe('no match', () => {
@@ -1656,8 +1930,11 @@ describe('fingerprint integrity', () => {
       JSON.stringify({ category: 'Business Revenue', isIncome: true, isTransfer: false, isSubscription: false, owner: 'Business' }),
       // bht_directors_loan_transfer, director_loan_repayment, commbank_internal_transfer — inter-account transfers
       JSON.stringify({ category: null, isIncome: null, isTransfer: true, isSubscription: false, owner: null }),
-      // xbox, spotify — both Entertainment subscriptions on the BHT account
+      // xbox, spotify, netflix_streaming, disney_plus, amazon_prime_video, youtube_premium,
+      // playstation_network, nintendo_eshop, crunchyroll, audible, kayo_sports — Business Entertainment subscriptions
       JSON.stringify({ category: 'Entertainment', isIncome: null, isTransfer: false, isSubscription: true, owner: 'Business' }),
+      // google_one, adobe_subscription, canva_subscription, dropbox_subscription, notion_subscription — Business Technology subscriptions
+      JSON.stringify({ category: 'Technology', isIncome: null, isTransfer: false, isSubscription: true, owner: 'Business' }),
       // fitness_passport, fitstop, fitbox — all Joint Health & Fitness subscriptions
       JSON.stringify({ category: 'Health & Fitness', isIncome: false, isTransfer: false, isSubscription: true, owner: 'Joint' }),
       // hcf_health_insurance, hospitals_contribution, clearview_insurance — all Joint Insurance subscriptions

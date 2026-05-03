@@ -192,6 +192,99 @@ export const MERCHANT_CATEGORY_RULES: MerchantCategoryRule[] = [
     output: { category: 'Entertainment', isIncome: null, isTransfer: false, isSubscription: true, owner: 'Business' },
   },
 
+  // ─── Batch 5: Streaming & SaaS (Business card) ───────────────────────────────
+
+  {
+    name: 'netflix_streaming',
+    description: 'Netflix streaming subscription on business card → Entertainment',
+    match: (m) => /netflix/i.test(m),
+    output: { category: 'Entertainment', isIncome: null, isTransfer: false, isSubscription: true, owner: 'Business' },
+  },
+
+  {
+    name: 'disney_plus',
+    description: 'Disney+ streaming subscription on business card → Entertainment',
+    match: (m) => /disney\+|disney\s*plus|disneyplus/i.test(m),
+    output: { category: 'Entertainment', isIncome: null, isTransfer: false, isSubscription: true, owner: 'Business' },
+  },
+
+  {
+    name: 'amazon_prime_video',
+    description: 'Amazon Prime / Prime Video subscription on business card → Entertainment. Avoids matching Amazon retail (AMAZON.COM.AU).',
+    match: (m) => /amazon.*prime|prime\s*video/i.test(m),
+    output: { category: 'Entertainment', isIncome: null, isTransfer: false, isSubscription: true, owner: 'Business' },
+  },
+
+  {
+    name: 'youtube_premium',
+    description: 'YouTube Premium / YouTube subscription on business card → Entertainment',
+    match: (m) => /youtube/i.test(m),
+    output: { category: 'Entertainment', isIncome: null, isTransfer: false, isSubscription: true, owner: 'Business' },
+  },
+
+  {
+    name: 'playstation_network',
+    description: 'PlayStation Network / PS Store subscription on business card → Entertainment',
+    match: (m) => /playstation|^psn\b/i.test(m),
+    output: { category: 'Entertainment', isIncome: null, isTransfer: false, isSubscription: true, owner: 'Business' },
+  },
+
+  {
+    name: 'nintendo_eshop',
+    description: 'Nintendo eShop / Nintendo Switch Online on business card → Entertainment',
+    match: (m) => /nintendo/i.test(m),
+    output: { category: 'Entertainment', isIncome: null, isTransfer: false, isSubscription: true, owner: 'Business' },
+  },
+
+  {
+    name: 'crunchyroll',
+    description: 'Crunchyroll anime streaming on business card → Entertainment',
+    match: (m) => /crunchyroll/i.test(m),
+    output: { category: 'Entertainment', isIncome: null, isTransfer: false, isSubscription: true, owner: 'Business' },
+  },
+
+  {
+    name: 'audible',
+    description: 'Audible audiobook subscription on business card → Entertainment',
+    match: (m) => /audible/i.test(m),
+    output: { category: 'Entertainment', isIncome: null, isTransfer: false, isSubscription: true, owner: 'Business' },
+  },
+
+  {
+    name: 'kayo_sports',
+    description: 'Kayo Sports streaming subscription on business card → Entertainment',
+    match: (m) => /\bkayo\b/i.test(m),
+    output: { category: 'Entertainment', isIncome: null, isTransfer: false, isSubscription: true, owner: 'Business' },
+  },
+
+  {
+    name: 'adobe_subscription',
+    description: 'Adobe Creative Cloud / Adobe subscriptions on business card → Technology',
+    match: (m) => /\badobe\b/i.test(m),
+    output: { category: 'Technology', isIncome: null, isTransfer: false, isSubscription: true, owner: 'Business' },
+  },
+
+  {
+    name: 'canva_subscription',
+    description: 'Canva design platform subscription on business card → Technology',
+    match: (m) => /\bcanva\b/i.test(m),
+    output: { category: 'Technology', isIncome: null, isTransfer: false, isSubscription: true, owner: 'Business' },
+  },
+
+  {
+    name: 'dropbox_subscription',
+    description: 'Dropbox cloud storage subscription on business card → Technology',
+    match: (m) => /dropbox/i.test(m),
+    output: { category: 'Technology', isIncome: null, isTransfer: false, isSubscription: true, owner: 'Business' },
+  },
+
+  {
+    name: 'notion_subscription',
+    description: 'Notion productivity app subscription on business card → Technology',
+    match: (m) => /\bnotion\b/i.test(m),
+    output: { category: 'Technology', isIncome: null, isTransfer: false, isSubscription: true, owner: 'Business' },
+  },
+
   // ─── Personal Income ─────────────────────────────────────────────────────────
 
   {
