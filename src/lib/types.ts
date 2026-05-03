@@ -115,6 +115,19 @@ export interface Goal {
   linked_account_id?: string | null
 }
 
+export interface SubscriptionMetadata {
+  merchant: string
+  household_id: string
+  cancellation_url: string | null
+  account_email: string | null
+  notes: string | null
+  auto_renews: boolean
+  next_renewal_override: string | null
+  category: string | null
+  created_at: string
+  updated_at: string
+}
+
 export interface NetWorthSnapshot {
   id: string
   household_id: string
