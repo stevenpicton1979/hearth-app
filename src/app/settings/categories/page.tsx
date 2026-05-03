@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { CATEGORIES } from '@/lib/constants'
+import { CATEGORIES } from '@/lib/categories'
 import { PlusIcon, ArrowPathIcon } from '@heroicons/react/24/outline'
 
 interface CategoryPref {

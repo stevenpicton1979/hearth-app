@@ -1,7 +1,8 @@
 'use client'
 
 import React, { useState, useEffect, useCallback } from 'react'
-import { CATEGORIES, CLASSIFICATIONS } from '@/lib/constants'
+import { CATEGORIES } from '@/lib/categories'
+import { CLASSIFICATIONS } from '@/lib/constants'
 import { Transaction } from '@/lib/types'
 import {
   MagnifyingGlassIcon,

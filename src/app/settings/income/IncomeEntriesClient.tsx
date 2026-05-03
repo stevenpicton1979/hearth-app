@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { PlusIcon, TrashIcon, PencilIcon } from '@heroicons/react/24/outline'
-import { CATEGORIES } from '@/lib/constants'
+import { CATEGORIES } from '@/lib/categories'
 
 interface Entry {
   id: string

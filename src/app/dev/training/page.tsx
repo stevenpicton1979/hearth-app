@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { CATEGORIES } from '@/lib/constants'
+import { CATEGORIES } from '@/lib/categories'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 

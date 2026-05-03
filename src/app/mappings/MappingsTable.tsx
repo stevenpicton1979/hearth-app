@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { CATEGORIES, CLASSIFICATIONS } from '@/lib/constants'
+import { CATEGORIES } from '@/lib/categories'
+import { CLASSIFICATIONS } from '@/lib/constants'
 import { MerchantMapping } from '@/lib/types'
 import { MagnifyingGlassIcon, TrashIcon, ArrowPathIcon } from '@heroicons/react/24/outline'
 import { CheckCircleIcon } from '@heroicons/react/24/solid'

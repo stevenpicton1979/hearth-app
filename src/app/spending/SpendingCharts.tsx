@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { SpendingSummary } from '@/lib/types'
-import { CATEGORIES } from '@/lib/constants'
+import { CATEGORIES } from '@/lib/categories'
 import {
   PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend,
