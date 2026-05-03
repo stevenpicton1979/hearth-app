@@ -112,7 +112,7 @@ export async function POST(req: NextRequest) {
   const supabase = createServerClient()
   const now = new Date().toISOString()
 
-  // Check that the merchant isn't already linked to a subscription
+  // Check whether the merchant is already linked to a subscription
   const { data: existingLink } = await supabase
     .from('subscription_merchants')
     .select('subscription_id')
@@ -121,10 +121,58 @@ export async function POST(req: NextRequest) {
     .maybeSingle()
 
   if (existingLink) {
-    return NextResponse.json({ error: 'merchant already linked to a subscription' }, { status: 409 })
+    // Fetch the linked subscription to check its status
+    const { data: linkedSub } = await supabase
+      .from('subscriptions')
+      .select('*, subscription_merchants(merchant)')
+      .eq('id', existingLink.subscription_id)
+      .single()
+
+    if (!linkedSub || linkedSub.is_active) {
+      // Linked to an active subscription — legitimate conflict
+      return NextResponse.json({ error: 'merchant already linked to a subscription' }, { status: 409 })
+    }
+
+    // Linked to a cancelled subscription — resolve without creating a new row
+    const merchants = ((linkedSub.subscription_merchants ?? []) as { merchant: string }[]).map(m => m.merchant)
+
+    if (!isActive && cancelledAtInput) {
+      // Update the existing cancelled subscription's cancelled_at date.
+      // Idempotent: if the date already matches, skip the DB write.
+      if (linkedSub.cancelled_at === cancelledAtInput) {
+        return NextResponse.json({
+          subscription: { ...linkedSub, subscription_merchants: undefined, merchants },
+          action: 'updated',
+        }, { status: 200 })
+      }
+      const { data: updatedSub, error: updateErr } = await supabase
+        .from('subscriptions')
+        .update({ cancelled_at: cancelledAtInput, updated_at: now })
+        .eq('id', linkedSub.id)
+        .select()
+        .single()
+      if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 })
+      return NextResponse.json({
+        subscription: { ...updatedSub, merchants },
+        action: 'updated',
+      }, { status: 200 })
+    }
+
+    // Restore the existing cancelled subscription to active
+    const { data: restoredSub, error: restoreErr } = await supabase
+      .from('subscriptions')
+      .update({ is_active: true, cancelled_at: null, auto_cancelled: false, updated_at: now })
+      .eq('id', linkedSub.id)
+      .select()
+      .single()
+    if (restoreErr) return NextResponse.json({ error: restoreErr.message }, { status: 500 })
+    return NextResponse.json({
+      subscription: { ...restoredSub, merchants },
+      action: 'restored',
+    }, { status: 200 })
   }
 
-  // Create the subscription
+  // No existing link — create a new subscription
   const { data: sub, error: subErr } = await supabase
     .from('subscriptions')
     .insert({
@@ -157,5 +205,5 @@ export async function POST(req: NextRequest) {
       { onConflict: 'household_id,merchant' }
     )
 
-  return NextResponse.json({ subscription: { ...sub, merchants: [initial_merchant] } }, { status: 201 })
+  return NextResponse.json({ subscription: { ...sub, merchants: [initial_merchant] }, action: 'created' }, { status: 201 })
 }

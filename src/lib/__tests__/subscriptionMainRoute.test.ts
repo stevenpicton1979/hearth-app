@@ -15,6 +15,18 @@ const db = vi.hoisted(() => ({
   }>,
   transactions: [] as Array<{ merchant: string; amount: number }>,
   existingLink: null as null | { subscription_id: string },
+  existingLinkedSub: null as null | {
+    id: string
+    name: string
+    is_active: boolean
+    cancelled_at: string | null
+    auto_cancelled: boolean
+    subscription_merchants: { merchant: string }[]
+    [key: string]: unknown
+  },
+  updatedSub: null as null | Record<string, unknown>,
+  updateError: null as string | null,
+  updateCalled: false,
   insertedSub: null as null | Record<string, unknown>,
   insertedMerchant: null as null | Record<string, unknown>,
   insertError: null as string | null,
@@ -28,9 +40,17 @@ vi.mock('@/lib/supabase/server', () => ({
         if (table === 'subscriptions') {
           return {
             select: () => ({
-              eq: () => ({
-                order: () => Promise.resolve({ data: db.subscriptions, error: null }),
-              }),
+              eq: (col: string) => {
+                if (col === 'id') {
+                  return {
+                    single: () => Promise.resolve({ data: db.existingLinkedSub, error: null }),
+                  }
+                }
+                // household_id — GET list
+                return {
+                  order: () => Promise.resolve({ data: db.subscriptions, error: null }),
+                }
+              },
             }),
             insert: (row: Record<string, unknown>) => {
               db.insertedSub = row
@@ -39,6 +59,21 @@ vi.mock('@/lib/supabase/server', () => ({
                   single: () => Promise.resolve({
                     data: db.insertError ? null : { ...row, id: 'new-sub-id' },
                     error: db.insertError ? { message: db.insertError } : null,
+                  }),
+                }),
+              }
+            },
+            update: (changes: Record<string, unknown>) => {
+              db.updateCalled = true
+              return {
+                eq: () => ({
+                  select: () => ({
+                    single: () => Promise.resolve({
+                      data: db.updateError
+                        ? null
+                        : (db.updatedSub ?? { ...db.existingLinkedSub, ...changes }),
+                      error: db.updateError ? { message: db.updateError } : null,
+                    }),
                   }),
                 }),
               }
@@ -100,6 +135,10 @@ beforeEach(() => {
   db.subscriptions = []
   db.transactions = []
   db.existingLink = null
+  db.existingLinkedSub = null
+  db.updatedSub = null
+  db.updateError = null
+  db.updateCalled = false
   db.insertedSub = null
   db.insertedMerchant = null
   db.insertError = null
@@ -250,8 +289,12 @@ describe('POST /api/subscriptions', () => {
     expect(body.error).toMatch(/future/i)
   })
 
-  it('returns 409 when merchant already linked', async () => {
+  it('returns 409 when merchant already linked to active subscription', async () => {
     db.existingLink = { subscription_id: 'existing-sub' }
+    db.existingLinkedSub = {
+      id: 'existing-sub', name: 'Acme', is_active: true, cancelled_at: null,
+      auto_cancelled: false, subscription_merchants: [{ merchant: 'ACME' }],
+    }
     const res = await POST(postReq({ name: 'Acme', initial_merchant: 'ACME' }))
     expect(res.status).toBe(409)
   })
@@ -288,5 +331,75 @@ describe('POST /api/subscriptions', () => {
     })
     const res = await POST(badReq)
     expect(res.status).toBe(400)
+  })
+
+  it('returns action=created on new merchant creation', async () => {
+    const res = await POST(postReq({ name: 'Spotify', initial_merchant: 'SPOTIFY' }))
+    expect(res.status).toBe(201)
+    const body = await res.json()
+    expect(body.action).toBe('created')
+  })
+})
+
+// ── POST /api/subscriptions — relink behaviour ────────────────────────────────
+
+describe('POST /api/subscriptions — relink', () => {
+  const cancelledSub = {
+    id: 'old-sub-id',
+    name: 'HUBBL',
+    is_active: false,
+    cancelled_at: '2025-03-01',
+    auto_cancelled: false,
+    subscription_merchants: [{ merchant: 'HUBBL' }],
+  }
+
+  it('restores a cancelled sub when is_active=true — returns 200 + action=restored, no new row', async () => {
+    db.existingLink = { subscription_id: 'old-sub-id' }
+    db.existingLinkedSub = { ...cancelledSub }
+
+    const res = await POST(postReq({ name: 'HUBBL', initial_merchant: 'HUBBL', is_active: true }))
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.action).toBe('restored')
+    expect(body.subscription.is_active).toBe(true)
+    expect(db.insertedSub).toBeNull()
+    expect(db.insertedMerchant).toBeNull()
+    expect(db.updateCalled).toBe(true)
+  })
+
+  it('updates cancelled_at when is_active=false + new date — returns 200 + action=updated, no new row', async () => {
+    db.existingLink = { subscription_id: 'old-sub-id' }
+    db.existingLinkedSub = { ...cancelledSub }
+
+    const res = await POST(postReq({
+      name: 'HUBBL',
+      initial_merchant: 'HUBBL',
+      is_active: false,
+      cancelled_at: '2025-06-01',
+    }))
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.action).toBe('updated')
+    expect(db.insertedSub).toBeNull()
+    expect(db.insertedMerchant).toBeNull()
+    expect(db.updateCalled).toBe(true)
+  })
+
+  it('idempotent: same cancelled_at twice skips DB update — returns 200 + action=updated', async () => {
+    db.existingLink = { subscription_id: 'old-sub-id' }
+    db.existingLinkedSub = { ...cancelledSub, cancelled_at: '2025-03-01' }
+
+    const res = await POST(postReq({
+      name: 'HUBBL',
+      initial_merchant: 'HUBBL',
+      is_active: false,
+      cancelled_at: '2025-03-01', // same as existingLinkedSub.cancelled_at
+    }))
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.action).toBe('updated')
+    expect(db.updateCalled).toBe(false) // no DB write
+    expect(db.insertedSub).toBeNull()
+    expect(db.insertedMerchant).toBeNull()
   })
 })

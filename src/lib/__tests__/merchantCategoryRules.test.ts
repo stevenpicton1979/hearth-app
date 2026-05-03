@@ -1913,6 +1913,50 @@ describe('notion_subscription', () => {
   })
 })
 
+// ─── Batch 6: Internet & Phone, Transfers ────────────────────────────────────
+
+describe('aldimobile_business', () => {
+  it('matches "MED*ALDIMOBILE CHATSWOOD AUS" — full fingerprint', () => {
+    const result = applyMerchantCategoryRules('MED*ALDIMOBILE CHATSWOOD AUS', expense)
+    expect(result?.category).toBe('Internet & Phone')
+    expect(result?.isIncome).toBeNull()
+    expect(result?.isTransfer).toBe(false)
+    expect(result?.isSubscription).toBe(true)
+    expect(result?.owner).toBe('Business')
+    expect(result?.ruleName).toBe('aldimobile_business')
+  })
+
+  it('matches bare "ALDIMOBILE 12345"', () => {
+    expect(applyMerchantCategoryRules('ALDIMOBILE 12345', expense)?.ruleName).toBe('aldimobile_business')
+  })
+
+  it('does NOT match "ALDI 1234" — aldi grocery rule wins instead', () => {
+    const result = applyMerchantCategoryRules('ALDI 1234', expense)
+    expect(result?.ruleName).toBe('aldi')
+    expect(result?.ruleName).not.toBe('aldimobile_business')
+  })
+})
+
+describe('bank_transfer_to_mastercard', () => {
+  it('matches "Bank Transfer to Mastercard Bus. Plat." — full fingerprint', () => {
+    const result = applyMerchantCategoryRules('Bank Transfer to Mastercard Bus. Plat.', expense)
+    expect(result?.category).toBeNull()
+    expect(result?.isIncome).toBeNull()
+    expect(result?.isTransfer).toBe(true)
+    expect(result?.isSubscription).toBe(false)
+    expect(result?.owner).toBeNull()
+    expect(result?.ruleName).toBe('bank_transfer_to_mastercard')
+  })
+
+  it('matches "BANK TRANSFER TO MASTERCARD BUSINESS PLATINUM"', () => {
+    expect(applyMerchantCategoryRules('BANK TRANSFER TO MASTERCARD BUSINESS PLATINUM', expense)?.ruleName).toBe('bank_transfer_to_mastercard')
+  })
+
+  it('does NOT match "Mastercard payment received" (does not start with "bank transfer to")', () => {
+    expect(applyMerchantCategoryRules('Mastercard payment received', expense)?.ruleName).not.toBe('bank_transfer_to_mastercard')
+  })
+})
+
 // ─── no match ─────────────────────────────────────────────────────────────────
 
 describe('no match', () => {

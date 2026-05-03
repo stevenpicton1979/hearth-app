@@ -285,6 +285,15 @@ export const MERCHANT_CATEGORY_RULES: MerchantCategoryRule[] = [
     output: { category: 'Technology', isIncome: null, isTransfer: false, isSubscription: true, owner: 'Business' },
   },
 
+  // ─── Batch 6: Internet & Phone (Business card) ───────────────────────────────
+
+  {
+    name: 'aldimobile_business',
+    description: 'AldiMobile prepaid mobile plan on business card → Internet & Phone. Covers "MED*ALDIMOBILE CHATSWOOD AUS" and prefix variants.',
+    match: (m) => /aldimobile/i.test(m),
+    output: { category: 'Internet & Phone', isIncome: null, isTransfer: false, isSubscription: true, owner: 'Business' },
+  },
+
   // ─── Personal Income ─────────────────────────────────────────────────────────
 
   {
@@ -1091,6 +1100,13 @@ export const MERCHANT_CATEGORY_RULES: MerchantCategoryRule[] = [
       'Covers all suffix variants: COMMBANK APP, NETBANK WAGE, COMMBANK APP FUEL, etc. ' +
       'These are inter-account movements, not income or expenses.',
     match: (m) => /^transfer from\s+xx\d{4}/i.test(m),
+    output: { category: null, isIncome: null, isTransfer: true, isSubscription: false, owner: null },
+  },
+
+  {
+    name: 'bank_transfer_to_mastercard',
+    description: 'BHT bank → Mastercard Bus. Plat. payoff (internal transfer between BHT bank account and BHT credit card).',
+    match: (m) => /^bank transfer to mastercard/i.test(m),
     output: { category: null, isIncome: null, isTransfer: true, isSubscription: false, owner: null },
   },
 

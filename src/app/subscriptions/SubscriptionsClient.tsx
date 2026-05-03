@@ -790,6 +790,8 @@ function CandidateRow({
   onConfirmed,
   onDismiss,
   onAddedAsCancelled,
+  onRestored,
+  onUpdated,
   accounts,
 }: {
   sub: DetectedSubscription
@@ -798,6 +800,8 @@ function CandidateRow({
   onConfirmed: (newSub: Subscription) => void
   onDismiss: () => void
   onAddedAsCancelled: (newSub: Subscription) => void
+  onRestored?: (newSub: Subscription) => void
+  onUpdated?: (newSub: Subscription, cancelDate: string) => void
   accounts: { id: string; display_name: string }[]
 }) {
   const today = new Date().toISOString().slice(0, 10)
@@ -827,7 +831,11 @@ function CandidateRow({
         return
       }
       setDone(true)
-      onConfirmed(data.subscription)
+      if (data.action === 'restored') {
+        onRestored?.(data.subscription)
+      } else {
+        onConfirmed(data.subscription)
+      }
     } catch {
       setSaveError('Network error')
     } finally {
@@ -852,7 +860,13 @@ function CandidateRow({
         return
       }
       setDone(true)
-      onAddedAsCancelled(data.subscription)
+      if (data.action === 'updated') {
+        onUpdated?.(data.subscription, cancelDate)
+      } else if (data.action === 'restored') {
+        onRestored?.(data.subscription)
+      } else {
+        onAddedAsCancelled(data.subscription)
+      }
     } catch {
       setSaveError('Network error')
     } finally {
@@ -1272,6 +1286,23 @@ export function SubscriptionsClient({
     showToast(`${newSub.name} added to cancelled history`)
   }
 
+  function handleCandidateRestored(merchant: string, sub: Subscription) {
+    setCandidates(prev => prev.filter(c => c.merchant !== merchant))
+    setCancelledSubs(prev => prev.filter(s => s.id !== sub.id))
+    setActiveSubs(prev => [...prev.filter(s => s.id !== sub.id), sub])
+    showToast(`Restored cancelled subscription '${sub.name}'`)
+  }
+
+  function handleCandidateUpdated(merchant: string, sub: Subscription, cancelDate: string) {
+    setCandidates(prev => prev.filter(c => c.merchant !== merchant))
+    setCancelledSubs(prev => {
+      const exists = prev.some(s => s.id === sub.id)
+      if (exists) return prev.map(s => s.id === sub.id ? sub : s)
+      return [sub, ...prev]
+    })
+    showToast(`Updated existing cancelled subscription '${sub.name}' to ${cancelDate}`)
+  }
+
   function handleCandidateDismissed(merchant: string) {
     setCandidates(prev => prev.filter(c => c.merchant !== merchant))
     setDismissedMerchantList(prev => [...prev, merchant])
@@ -1398,6 +1429,8 @@ export function SubscriptionsClient({
                 onConfirmed={newSub => handleCandidateConfirmed(sub.merchant, newSub)}
                 onDismiss={() => handleCandidateDismissed(sub.merchant)}
                 onAddedAsCancelled={newSub => handleCandidateAddedAsCancelled(sub.merchant, newSub)}
+                onRestored={newSub => handleCandidateRestored(sub.merchant, newSub)}
+                onUpdated={(newSub, cancelDate) => handleCandidateUpdated(sub.merchant, newSub, cancelDate)}
                 accounts={accounts}
               />
             ))}

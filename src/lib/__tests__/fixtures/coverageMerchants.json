@@ -244,6 +244,18 @@
       "isIncome": false,
       "count": 1,
       "totalAmount": 16.99
+    },
+    {
+      "merchant": "MED*ALDIMOBILE CHATSWOOD AUS",
+      "isIncome": false,
+      "count": 1,
+      "totalAmount": 30.0
+    },
+    {
+      "merchant": "Bank Transfer to Mastercard Bus. Plat.",
+      "isIncome": false,
+      "count": 1,
+      "totalAmount": 500.0
     }
   ]
 }
