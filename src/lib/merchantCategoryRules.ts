@@ -924,6 +924,70 @@ export const MERCHANT_CATEGORY_RULES: MerchantCategoryRule[] = [
   },
 
 
+  // ─── Batch 4: Bank fees, utilities, remaining named merchants ────────────────
+
+  // Bank Fees (CBA credit card)
+  {
+    name: 'cba_annual_fee',
+    description:
+      'Credit card annual fee, raw description simply "ANNUAL FEE" → Bank Fees. ' +
+      'Match is anchored to avoid catching apple/SaaS "annual fee" line items.',
+    match: (m) => /^annual fee$/i.test(m),
+    output: { category: 'Bank Fees', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'cba_interest_cash_adv',
+    description: 'CBA "INTEREST ON CASH ADV" — interest charged on cash advances → Bank Fees',
+    match: (m) => /^interest on cash adv/i.test(m),
+    output: { category: 'Bank Fees', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'cba_cash_adv_fee',
+    description: 'CBA "CBA OTHER CASH ADV FEE" / cash advance fees → Bank Fees',
+    match: (m) => /cash adv fee/i.test(m),
+    output: { category: 'Bank Fees', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+
+  // Utilities — Momentum Energy (electricity retailer)
+  {
+    name: 'momentum_energy',
+    description: 'Momentum Energy electricity retailer → Utilities',
+    match: (m) => /^momentum$/i.test(m) || /^momentum energy/i.test(m),
+    output: { category: 'Utilities', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+
+  // Eating Out — confirmed local PTY LTD merchants
+  {
+    name: 'crisp_on_creek',
+    description: 'Crisp on Creek cafe (CRISPONCREEK) → Eating Out',
+    match: (m) => /^crisponcreek/i.test(m),
+    output: { category: 'Eating Out', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'north_burleigh_surf_club',
+    description: 'North Burleigh Surf Life Saving Club (food/drink venue) → Eating Out',
+    match: (m) => /^north burleigh surf/i.test(m),
+    output: { category: 'Eating Out', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'hanaichi_sushi',
+    description: 'Hanaichi Japanese cafe / sushi chain → Eating Out',
+    match: (m) => /^hanaichi/i.test(m),
+    output: { category: 'Eating Out', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'hira_bhana_sons',
+    description: 'Hira Bhana & Sons (fresh produce / market vendor) → Eating Out per user mapping',
+    match: (m) => /^hira bhana/i.test(m),
+    output: { category: 'Eating Out', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'river_city_corporation',
+    description: 'River City Corporation venue/eatery → Eating Out',
+    match: (m) => /^river city corporati/i.test(m),
+    output: { category: 'Eating Out', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+
   // ─── Transfers (CommBank internal) ───────────────────────────────────────────
 
   {

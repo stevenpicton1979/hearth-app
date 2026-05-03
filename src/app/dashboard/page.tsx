@@ -11,6 +11,8 @@ import {
   ArrowRightIcon,
 } from '@heroicons/react/24/outline'
 import { BusinessSummaryWidget } from './BusinessSummaryWidget'
+import { OutcomeBucketsCard } from './OutcomeBucketsCard'
+import { aggregateBuckets, summariseByRealm, BucketTransaction } from '@/lib/bucketAggregation'
 
 const aud = (n: number) =>
   new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(n)
@@ -90,6 +92,14 @@ export default async function DashboardPage() {
     .select('amount')
     .eq('household_id', DEFAULT_HOUSEHOLD_ID)
     .gte('date', thisMonthStart)
+
+  // Outcome bucket aggregation across ALL accounts (business + household) for this month
+  const { data: bucketTxns } = await supabase
+    .from('transactions')
+    .select('owner, is_income, is_subscription, is_transfer, category, amount')
+    .eq('household_id', DEFAULT_HOUSEHOLD_ID)
+    .gte('date', thisMonthStart)
+  const bucketSummary = summariseByRealm(aggregateBuckets((bucketTxns || []) as BucketTransaction[]))
 
   // Business accounts data (only if any business-scoped accounts exist)
   const businessAccounts = (allAccounts || []).filter(a => (a as { scope: string | null }).scope === 'business')
@@ -364,6 +374,11 @@ export default async function DashboardPage() {
               })}
             </div>
           )}
+        </div>
+
+        {/* Outcome buckets */}
+        <div className="md:col-span-2">
+          <OutcomeBucketsCard summary={bucketSummary} />
         </div>
 
         {/* Recent transactions */}

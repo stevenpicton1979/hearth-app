@@ -2,6 +2,8 @@ import { createServerClient } from '@/lib/supabase/server'
 import { DEFAULT_HOUSEHOLD_ID } from '@/lib/constants'
 import { SpendingCharts } from './SpendingCharts'
 import { SpendingSummary } from '@/lib/types'
+import { SpendingBuckets } from './SpendingBuckets'
+import { aggregateBuckets, BucketTransaction } from '@/lib/bucketAggregation'
 
 function getMonthRange(month: string): { from: string; to: string } {
   const [year, m] = month.split('-').map(Number)
@@ -86,8 +88,9 @@ export default async function SpendingPage({
   const qIncome = supabase.from('transactions').select('amount').eq('household_id', DEFAULT_HOUSEHOLD_ID).eq('is_transfer', false).gt('amount', 0).gte('date', from).lte('date', to)
   const qLastSameDay = supabase.from('transactions').select('category, amount').eq('household_id', DEFAULT_HOUSEHOLD_ID).eq('is_transfer', false).lt('amount', 0).gte('date', lmFrom).lte('date', sameDayLastMonthTo)
   const qUncategorised = supabase.from('transactions').select('merchant, amount').eq('household_id', DEFAULT_HOUSEHOLD_ID).eq('is_transfer', false).is('category', null).lt('amount', 0).gte('date', from).lte('date', to)
+  const qBucketTxns = supabase.from('transactions').select('owner, is_income, is_subscription, is_transfer, category, amount').eq('household_id', DEFAULT_HOUSEHOLD_ID).gte('date', from).lte('date', to)
 
-  const [{ data: current }, { data: last }, { data: threeBack }, { data: budgets }, { data: income }, { data: lastSameDay }, { data: uncategorised }] = await Promise.all([
+  const [{ data: current }, { data: last }, { data: threeBack }, { data: budgets }, { data: income }, { data: lastSameDay }, { data: uncategorised }, { data: bucketTxns }] = await Promise.all([
     hh.length > 0 ? qCurrent.in('account_id', hh) : qCurrent,
     hh.length > 0 ? qLast.in('account_id', hh) : qLast,
     hh.length > 0 ? qThreeBack.in('account_id', hh) : qThreeBack,
@@ -95,7 +98,10 @@ export default async function SpendingPage({
     hh.length > 0 ? qIncome.in('account_id', hh) : qIncome,
     hh.length > 0 ? qLastSameDay.in('account_id', hh) : qLastSameDay,
     hh.length > 0 ? qUncategorised.in('account_id', hh) : qUncategorised,
+    hh.length > 0 ? qBucketTxns.in('account_id', hh) : qBucketTxns,
   ])
+
+  const bucketRows = aggregateBuckets((bucketTxns || []) as BucketTransaction[])
 
   const currentSummary = computeSummary(current || [])
   const lastSummary = computeSummary(last || [])
@@ -152,6 +158,7 @@ export default async function SpendingPage({
         budgets={budgets || []}
         uncategorisedMerchants={uncategorisedMerchants}
       />
+      <SpendingBuckets buckets={bucketRows} />
     </div>
   )
 }

@@ -239,3 +239,6 @@ describe('GET /api/admin/reconcile', () => {
     expect(data.accounts[0].xeroCount).toBeNull()
   })
 })
+s[0].xeroCount).toBeNull()
+  })
+})

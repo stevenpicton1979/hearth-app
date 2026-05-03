@@ -48,6 +48,7 @@ export const CATEGORIES = [
   'Childcare',
   'Pets',
   'Personal Care',  // hair salons, beauty therapists, grooming
+  'Bank Fees',      // credit card annual fees, cash advance fees, interest charges
 ] as const
 
 export type Category = typeof CATEGORIES[number]

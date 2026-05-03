@@ -1524,6 +1524,121 @@ describe('ls_eating_out', () => {
 })
 
 
+// ─── Batch 4: Bank fees, utilities, remaining named merchants ────────────────
+
+describe('cba_annual_fee', () => {
+  it('matches "ANNUAL FEE" → Bank Fees', () => {
+    const result = applyMerchantCategoryRules('ANNUAL FEE', expense)
+    expect(result?.category).toBe('Bank Fees')
+    expect(result?.isIncome).toBe(false)
+    expect(result?.isTransfer).toBe(false)
+    expect(result?.isSubscription).toBe(false)
+    expect(result?.owner).toBe('Joint')
+    expect(result?.ruleName).toBe('cba_annual_fee')
+  })
+
+  it('does NOT match "APPLE ANNUAL FEE" or other pre/suffixed variants', () => {
+    expect(applyMerchantCategoryRules('APPLE ANNUAL FEE', expense)).toBeNull()
+    expect(applyMerchantCategoryRules('ANNUAL FEE PROMO', expense)).toBeNull()
+  })
+})
+
+describe('cba_interest_cash_adv', () => {
+  it('matches "INTEREST ON CASH ADV" → Bank Fees', () => {
+    const result = applyMerchantCategoryRules('INTEREST ON CASH ADV', expense)
+    expect(result?.category).toBe('Bank Fees')
+    expect(result?.ruleName).toBe('cba_interest_cash_adv')
+  })
+
+  it('matches with trailing context "INTEREST ON CASH ADVANCES"', () => {
+    const result = applyMerchantCategoryRules('INTEREST ON CASH ADVANCES', expense)
+    expect(result?.ruleName).toBe('cba_interest_cash_adv')
+  })
+})
+
+describe('cba_cash_adv_fee', () => {
+  it('matches "CBA OTHER CASH ADV FEE" → Bank Fees', () => {
+    const result = applyMerchantCategoryRules('CBA OTHER CASH ADV FEE', expense)
+    expect(result?.category).toBe('Bank Fees')
+    expect(result?.ruleName).toBe('cba_cash_adv_fee')
+  })
+
+  it('matches generic "CASH ADV FEE"', () => {
+    const result = applyMerchantCategoryRules('CASH ADV FEE', expense)
+    expect(result?.ruleName).toBe('cba_cash_adv_fee')
+  })
+})
+
+describe('momentum_energy', () => {
+  it('matches "MOMENTUM" → Utilities', () => {
+    const result = applyMerchantCategoryRules('MOMENTUM', expense)
+    expect(result?.category).toBe('Utilities')
+    expect(result?.owner).toBe('Joint')
+    expect(result?.isSubscription).toBe(false)
+    expect(result?.ruleName).toBe('momentum_energy')
+  })
+
+  it('matches "MOMENTUM ENERGY"', () => {
+    const result = applyMerchantCategoryRules('MOMENTUM ENERGY', expense)
+    expect(result?.ruleName).toBe('momentum_energy')
+  })
+
+  it('does NOT match "MOMENTUM WEALTH" or similar', () => {
+    expect(applyMerchantCategoryRules('MOMENTUM WEALTH MGMT', expense)).toBeNull()
+  })
+})
+
+describe('crisp_on_creek', () => {
+  it('matches "CRISPONCREEK" → Eating Out', () => {
+    const result = applyMerchantCategoryRules('CRISPONCREEK', expense)
+    expect(result?.category).toBe('Eating Out')
+    expect(result?.ruleName).toBe('crisp_on_creek')
+  })
+})
+
+describe('north_burleigh_surf_club', () => {
+  it('matches "NORTH BURLEIGH SURF LI" → Eating Out', () => {
+    const result = applyMerchantCategoryRules('NORTH BURLEIGH SURF LI', expense)
+    expect(result?.category).toBe('Eating Out')
+    expect(result?.ruleName).toBe('north_burleigh_surf_club')
+  })
+})
+
+describe('hanaichi_sushi', () => {
+  it('matches "HANAICHI PTY LTD" → Eating Out', () => {
+    const result = applyMerchantCategoryRules('HANAICHI PTY LTD', expense)
+    expect(result?.category).toBe('Eating Out')
+    expect(result?.ruleName).toBe('hanaichi_sushi')
+  })
+
+  it('matches plain "HANAICHI"', () => {
+    const result = applyMerchantCategoryRules('HANAICHI', expense)
+    expect(result?.ruleName).toBe('hanaichi_sushi')
+  })
+})
+
+describe('hira_bhana_sons', () => {
+  it('matches "HIRA BHANA & SONS" → Eating Out', () => {
+    const result = applyMerchantCategoryRules('HIRA BHANA & SONS', expense)
+    expect(result?.category).toBe('Eating Out')
+    expect(result?.ruleName).toBe('hira_bhana_sons')
+  })
+})
+
+describe('river_city_corporation', () => {
+  it('matches "RIVER CITY CORPORATI" (truncated) → Eating Out', () => {
+    const result = applyMerchantCategoryRules('RIVER CITY CORPORATI', expense)
+    expect(result?.category).toBe('Eating Out')
+    expect(result?.ruleName).toBe('river_city_corporation')
+  })
+
+  it('matches full "RIVER CITY CORPORATION"', () => {
+    const result = applyMerchantCategoryRules('RIVER CITY CORPORATION', expense)
+    expect(result?.ruleName).toBe('river_city_corporation')
+  })
+})
+
+
 // ─── no match ─────────────────────────────────────────────────────────────────
 
 describe('no match', () => {
@@ -1568,6 +1683,10 @@ describe('fingerprint integrity', () => {
       JSON.stringify({ category: 'Healthcare', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' }),
       // gold_coast_aquatics, diving_queensland — Joint Health & Fitness non-subscription
       JSON.stringify({ category: 'Health & Fitness', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' }),
+      // cba_annual_fee, cba_interest_cash_adv, cba_cash_adv_fee — all Joint Bank Fees
+      JSON.stringify({ category: 'Bank Fees', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' }),
+      // qld_urban_utilities, momentum_energy — Joint Utilities
+      JSON.stringify({ category: 'Utilities', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' }),
     ])
 
     const seen = new Map<string, string>()

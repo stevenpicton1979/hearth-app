@@ -104,7 +104,7 @@ This is purely a UI change — no API or DB changes needed.
 
 ---
 
-## [ ] 10. Xero data reconciliation report
+## [x] 10. Xero data reconciliation report
 
 **Problem:** There's no way to verify that the DB contains exactly what Xero contains — no check for truncation, gaps, or duplicates.
 
@@ -127,7 +127,7 @@ This is purely a UI change — no API or DB changes needed.
 
 ---
 
-## [ ] 11. Expand rule output to a full classification fingerprint
+## [x] 11. Expand rule output to a full classification fingerprint
 
 **Problem:** `MerchantCategoryRule` only outputs `category` and `isTransfer`. But the training labels have five dimensions: category, owner, isIncome, isTransfer, isSubscription. Rules can't express "this is Nicola's income" or "this is a subscription" — those fields exist in training but nowhere in the rules engine. This means training mismatches can never be fully resolved by rules alone.
 
@@ -168,7 +168,7 @@ Additionally, `RuleContext` has unused fields (`amount`, `accountScope`, `accoun
 
 ---
 
-## [ ] 12. Transaction coverage inspector (/dev/coverage)
+## [x] 12. Transaction coverage inspector (/dev/coverage)
 
 **Problem:** There's no fast way to see which transactions are uncovered by rules, or to understand what context a transaction has when the rules engine evaluates it. The training UI gets you there eventually but requires labelling work to reveal context.
 
@@ -196,7 +196,7 @@ Additionally, `RuleContext` has unused fields (`amount`, `accountScope`, `accoun
 
 ---
 
-## [ ] 13. Category taxonomy review — eliminate 'Business' as a catch-all
+## [x] 13. Category taxonomy review — eliminate 'Business' as a catch-all
 
 **Problem:** The collision test from Task 11 will expose that several rules produce identical fingerprints because 'Business' is used for genuinely different transaction types:
 - Legitimate BHT operating expenses (Bell Partners accounting fees)
@@ -227,7 +227,7 @@ When multiple rules share the same fingerprint, it means the category taxonomy c
 
 ---
 
-## [ ] 14. Fix reconciliation page — DB count = 0 for most accounts
+## [x] 14. Fix reconciliation page — DB count = 0 for most accounts
 
 **Problem:** `/dev/reconcile` shows DB COUNT = 0 for BHT, AmEx, and NAB CC accounts. Only Mastercard Bus. Plat returns a real count (497). The Xero API count is also wrong (shows 0 for most accounts).
 
@@ -244,7 +244,7 @@ When multiple rules share the same fingerprint, it means the category taxonomy c
 
 ---
 
-## [ ] 15. Coverage inspector — three-state match status + merchant search
+## [x] 15. Coverage inspector — three-state match status + merchant search
 
 **Problem 1 — false noise in "Unmatched only" view:**
 The coverage inspector currently has two states: "matched" (named rule fired) and "unmatched" (no named rule). But "unmatched" conflates two genuinely different situations:
@@ -289,7 +289,7 @@ type MatchStatus = 'rule' | 'gl' | 'unmatched'
 
 ---
 
-## [ ] 16. Fix merchant_mappings priority — named rules must beat auto-generated entries
+## [x] 16. Fix merchant_mappings priority — named rules must beat auto-generated entries
 
 **Problem:** The pipeline checks `merchant_mappings` before named rules. Because the pipeline also auto-writes keyword guesses (and previously wrote named rule results) into `merchant_mappings`, stale auto-generated entries permanently silence the correct named rule. For example, Spotify was auto-written as `Technology` and that entry now overrides the `spotify` named rule that correctly says `Entertainment`.
 
@@ -342,7 +342,7 @@ curl -s -X POST "https://app.hearth.money/api/xero/sync?full=true"
 
 ---
 
-## [ ] 17. Category taxonomy — define canonical leaf categories and update all rules
+## [x] 17. Category taxonomy — define canonical leaf categories and update all rules
 
 **Problem:** The `category` field is used inconsistently. Some rules output `'Business'` when they mean "BHT operating expense" — but `owner: 'Business'` already encodes the entity. The `category` field should always be the **leaf node** (the specific type of income or expense), never the realm. Without a canonical list, every new rule invents its own string and the reporting layer can never group reliably.
 
