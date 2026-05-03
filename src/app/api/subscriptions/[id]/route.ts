@@ -5,7 +5,9 @@ import { DEFAULT_HOUSEHOLD_ID } from '@/lib/constants'
 // ---------------------------------------------------------------------------
 // GET  /api/subscriptions/:id  — single subscription with merchant aliases
 // PUT  /api/subscriptions/:id  — update metadata fields (name, cancellation_url, …)
-// DELETE /api/subscriptions/:id — soft-delete (is_active=false) + detach merchants
+// DELETE /api/subscriptions/:id — cancel as of today (is_active=false,
+//   cancelled_at=today). Merchant aliases are kept so lifetime_spend stays
+//   computable and can be re-linked if the subscription is restored.
 // ---------------------------------------------------------------------------
 
 export async function GET(
@@ -104,23 +106,25 @@ export async function DELETE(
 
   const { data: existing } = await supabase
     .from('subscriptions')
-    .select('id')
+    .select('id, cancelled_at')
     .eq('id', params.id)
     .eq('household_id', DEFAULT_HOUSEHOLD_ID)
     .maybeSingle()
 
   if (!existing) return NextResponse.json({ error: 'not found' }, { status: 404 })
 
-  // Detach all merchant links first so the merchants become available as candidates again
-  await supabase
-    .from('subscription_merchants')
-    .delete()
-    .eq('subscription_id', params.id)
+  const today = new Date().toISOString().slice(0, 10)
 
-  // Soft-delete the subscription
+  // Cancel as of today. Merchant aliases are kept so lifetime_spend
+  // remains computable. Use restore to re-activate.
   const { error } = await supabase
     .from('subscriptions')
-    .update({ is_active: false, updated_at: new Date().toISOString() })
+    .update({
+      is_active: false,
+      cancelled_at: today,
+      auto_cancelled: false,
+      updated_at: new Date().toISOString(),
+    })
     .eq('id', params.id)
     .eq('household_id', DEFAULT_HOUSEHOLD_ID)
 

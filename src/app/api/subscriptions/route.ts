@@ -1,15 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
 import { DEFAULT_HOUSEHOLD_ID } from '@/lib/constants'
+import { computeMonthsSince } from '@/lib/subscriptionUtils'
 
 // ---------------------------------------------------------------------------
 // GET /api/subscriptions
-// Returns all subscriptions (active + dismissed) with their merchant aliases.
-// Does NOT include detection data — that is computed server-side in page.tsx.
+// Returns all subscriptions (active + cancelled) with merchant aliases, plus
+// computed fields: lifetime_spend, months_since_cancelled.
+// Detection data (possibly_cancelled, last_charged, etc.) is computed
+// server-side in page.tsx from transaction history.
 //
 // POST /api/subscriptions
 // Create a new subscription from a detected candidate.
-// Body: { name: string, initial_merchant: string }
+// Body: { name: string, initial_merchant: string,
+//         is_active?: boolean, cancelled_at?: string }
+// Default is_active = true. If is_active = false, cancelled_at is required.
 // ---------------------------------------------------------------------------
 
 export async function GET() {
@@ -29,7 +34,32 @@ export async function GET() {
     subscription_merchants: undefined,
   }))
 
-  return NextResponse.json({ subscriptions })
+  // Gather all merchants across all subscriptions to compute lifetime_spend
+  const allMerchants = Array.from(new Set(subscriptions.flatMap(s => s.merchants)))
+
+  const merchantSpend: Record<string, number> = {}
+  if (allMerchants.length > 0) {
+    const { data: txRows } = await supabase
+      .from('transactions')
+      .select('merchant, amount')
+      .eq('household_id', DEFAULT_HOUSEHOLD_ID)
+      .eq('is_transfer', false)
+      .lt('amount', 0)
+      .in('merchant', allMerchants)
+
+    for (const tx of txRows ?? []) {
+      const m = tx.merchant as string
+      merchantSpend[m] = (merchantSpend[m] ?? 0) + Math.abs(tx.amount as number)
+    }
+  }
+
+  const enriched = subscriptions.map(s => ({
+    ...s,
+    lifetime_spend: s.merchants.reduce((sum: number, m: string) => sum + (merchantSpend[m] ?? 0), 0),
+    months_since_cancelled: s.cancelled_at ? computeMonthsSince(s.cancelled_at as string) : null,
+  }))
+
+  return NextResponse.json({ subscriptions: enriched })
 }
 
 export async function POST(req: NextRequest) {
@@ -40,7 +70,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'invalid JSON' }, { status: 400 })
   }
 
-  const { name, initial_merchant } = body as { name?: string; initial_merchant?: string }
+  const {
+    name,
+    initial_merchant,
+    is_active: isActiveInput,
+    cancelled_at: cancelledAtInput,
+  } = body as {
+    name?: string
+    initial_merchant?: string
+    is_active?: boolean
+    cancelled_at?: string
+  }
 
   if (!name || typeof name !== 'string' || !name.trim()) {
     return NextResponse.json({ error: 'name is required' }, { status: 400 })
@@ -49,10 +89,30 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'initial_merchant is required' }, { status: 400 })
   }
 
+  const isActive = isActiveInput ?? true
+  const today = new Date().toISOString().slice(0, 10)
+
+  // Cancelled subscriptions must supply a cancelled_at date
+  if (!isActive && !cancelledAtInput) {
+    return NextResponse.json(
+      { error: 'cancelled_at is required when is_active is false' },
+      { status: 400 }
+    )
+  }
+
+  if (cancelledAtInput) {
+    if (isNaN(Date.parse(cancelledAtInput))) {
+      return NextResponse.json({ error: 'cancelled_at must be a valid date' }, { status: 400 })
+    }
+    if (cancelledAtInput > today) {
+      return NextResponse.json({ error: 'cancelled_at cannot be in the future' }, { status: 400 })
+    }
+  }
+
   const supabase = createServerClient()
   const now = new Date().toISOString()
 
-  // Check that the merchant isn't already linked to an active subscription
+  // Check that the merchant isn't already linked to a subscription
   const { data: existingLink } = await supabase
     .from('subscription_merchants')
     .select('subscription_id')
@@ -71,7 +131,9 @@ export async function POST(req: NextRequest) {
       household_id: DEFAULT_HOUSEHOLD_ID,
       name: name.trim(),
       auto_renews: true,
-      is_active: true,
+      is_active: isActive,
+      cancelled_at: cancelledAtInput ?? null,
+      auto_cancelled: false,
       created_at: now,
       updated_at: now,
     })
@@ -87,8 +149,7 @@ export async function POST(req: NextRequest) {
 
   if (linkErr) return NextResponse.json({ error: linkErr.message }, { status: 500 })
 
-  // Mark the merchant as a subscription in merchant_mappings so the old
-  // classification flow stays consistent
+  // Mark the merchant as a subscription in merchant_mappings
   await supabase
     .from('merchant_mappings')
     .upsert(

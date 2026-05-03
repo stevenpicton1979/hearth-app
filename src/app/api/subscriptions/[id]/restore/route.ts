@@ -4,10 +4,10 @@ import { DEFAULT_HOUSEHOLD_ID } from '@/lib/constants'
 
 // ---------------------------------------------------------------------------
 // POST /api/subscriptions/:id/restore
-// Restore a soft-deleted subscription (is_active = true).
-// Note: merchant links were removed on soft-delete, so merchants are NOT
-// automatically re-attached. Use POST /api/subscriptions/:id/merchants to
-// re-link merchants after restoring.
+// Restore a cancelled subscription: is_active = true, cancelled_at = null,
+// auto_cancelled = false. Merchant aliases are kept (they were preserved on
+// cancel), so the subscription is immediately active with its aliases intact.
+// Idempotent: restoring an already-active subscription is a no-op.
 // ---------------------------------------------------------------------------
 
 export async function POST(
@@ -27,7 +27,12 @@ export async function POST(
 
   const { error } = await supabase
     .from('subscriptions')
-    .update({ is_active: true, updated_at: new Date().toISOString() })
+    .update({
+      is_active: true,
+      cancelled_at: null,
+      auto_cancelled: false,
+      updated_at: new Date().toISOString(),
+    })
     .eq('id', params.id)
     .eq('household_id', DEFAULT_HOUSEHOLD_ID)
 

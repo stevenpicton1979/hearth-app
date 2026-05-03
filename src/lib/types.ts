@@ -94,9 +94,15 @@ export interface Subscription {
   next_renewal_override: string | null
   category: string | null
   is_active: boolean
+  cancelled_at: string | null
+  auto_cancelled: boolean
   merchants: string[]  // derived from subscription_merchants join
   created_at: string
   updated_at: string
+  // Computed fields (present on API responses that include enrichment)
+  lifetime_spend?: number
+  months_since_cancelled?: number | null
+  possibly_cancelled?: boolean
 }
 
 export interface Asset {

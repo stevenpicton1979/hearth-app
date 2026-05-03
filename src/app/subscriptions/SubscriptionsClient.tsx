@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { DetectedSubscription, Subscription } from '@/lib/types'
-import { CalendarIcon, CheckCircleIcon, ChevronDownIcon, ChevronRightIcon, XMarkIcon, PlusIcon } from '@heroicons/react/24/outline'
+import { CalendarIcon, CheckCircleIcon, ChevronDownIcon, ChevronRightIcon, XMarkIcon, PlusIcon, ArchiveBoxIcon } from '@heroicons/react/24/outline'
 
 // ── Public exports (used by page.tsx) ────────────────────────────────────────
 
@@ -23,7 +23,7 @@ export interface TimelineItem {
 
 interface Props {
   activeSubscriptions: Subscription[]
-  dismissedSubscriptions: Subscription[]
+  cancelledSubscriptions: Subscription[]
   candidateList: DetectedSubscription[]
   detectedBySubId: Record<string, DetectedSubscription>
   dismissedMerchants: string[]
@@ -323,7 +323,6 @@ function MerchantAliasManager({
         setMerchants(updated)
         onMerchantsChanged(updated)
         setAddInput('')
-        // Remove from available list so it doesn't show again in the picker
         setAvailable(prev => prev ? prev.filter(x => x !== m) : null)
       } else {
         const d = await res.json()
@@ -350,12 +349,10 @@ function MerchantAliasManager({
       const updated = merchants.filter(m => m !== merchant)
       setMerchants(updated)
       onMerchantsChanged(updated)
-      // Return merchant to available list
       setAvailable(prev => prev ? [...prev, merchant].sort() : null)
     }
   }
 
-  // Filtered available list — exclude merchants already on this subscription
   const filteredAvailable = (available ?? []).filter(m => !merchants.includes(m))
 
   return (
@@ -495,6 +492,76 @@ function MergeModal({
   )
 }
 
+// ── Cancel panel ──────────────────────────────────────────────────────────────
+
+function CancelPanel({
+  subId,
+  defaultDate,
+  onCancelled,
+  onClose,
+}: {
+  subId: string
+  defaultDate?: string
+  onCancelled: (updated: Subscription) => void
+  onClose: () => void
+}) {
+  const today = new Date().toISOString().slice(0, 10)
+  const [cancelDate, setCancelDate] = useState(defaultDate ?? today)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleSave() {
+    setSaving(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/subscriptions/${subId}/cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cancelled_at: cancelDate }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error ?? 'Cancel failed')
+        return
+      }
+      onCancelled(data.subscription)
+    } catch {
+      setError('Network error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="mt-2 space-y-2">
+      <div className="flex items-center gap-2 flex-wrap">
+        <label className="text-xs text-gray-500">Cancelled on:</label>
+        <input
+          type="date"
+          className="text-sm border border-gray-200 rounded px-2 py-1"
+          value={cancelDate}
+          max={today}
+          onChange={e => setCancelDate(e.target.value)}
+        />
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="text-xs bg-red-600 text-white rounded px-3 py-1.5 hover:bg-red-700 disabled:opacity-50"
+        >
+          {saving ? 'Saving…' : 'Mark as cancelled'}
+        </button>
+        <button
+          onClick={onClose}
+          className="text-xs text-gray-500 border border-gray-200 rounded px-3 py-1.5 hover:bg-gray-50"
+        >
+          Close
+        </button>
+      </div>
+      {error && <p className="text-xs text-red-600">{error}</p>}
+    </div>
+  )
+}
+
 // ── Row: active subscription ──────────────────────────────────────────────────
 
 function SubscriptionRow({
@@ -502,7 +569,7 @@ function SubscriptionRow({
   detected,
   expanded,
   onToggle,
-  onDismiss,
+  onCancelled,
   onSubUpdated,
   onMerged,
   otherSubs,
@@ -512,13 +579,14 @@ function SubscriptionRow({
   detected: DetectedSubscription | null
   expanded: boolean
   onToggle: () => void
-  onDismiss: () => void
+  onCancelled: (updated: Subscription) => void
   onSubUpdated: (updated: Subscription) => void
   onMerged: (targetName: string) => void
   otherSubs: Subscription[]
   accounts: { id: string; display_name: string }[]
 }) {
   const [mergeOpen, setMergeOpen] = useState(false)
+  const [showCancelPanel, setShowCancelPanel] = useState(false)
 
   return (
     <>
@@ -530,7 +598,14 @@ function SubscriptionRow({
           <div className="flex-1 min-w-0 cursor-pointer" onClick={onToggle}>
             <div className="flex items-start justify-between gap-2 flex-wrap">
               <div className="flex-1 min-w-0">
-                <div className="font-semibold text-gray-900 text-sm">{sub.name}</div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-semibold text-gray-900 text-sm">{sub.name}</span>
+                  {sub.possibly_cancelled && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+                      Possibly cancelled
+                    </span>
+                  )}
+                </div>
                 {sub.merchants.length > 0 && (
                   <div className="flex flex-wrap gap-1 mt-1">
                     {sub.merchants.map(m => (
@@ -559,25 +634,12 @@ function SubscriptionRow({
               <div className="flex items-center gap-3 mt-2 flex-wrap text-xs text-gray-500">
                 <span><span className="text-gray-400">Last:</span> {fmtDate(detected.last_charged)}</span>
                 <span><span className="text-gray-400">Next:</span> {fmtDate(detected.next_expected)}</span>
-                {detected.is_lapsed && (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
-                    Possibly cancelled
-                  </span>
-                )}
               </div>
             )}
           </div>
-          <div className="flex items-center gap-1 flex-shrink-0 mt-0.5">
-            <button
-              onClick={e => { e.stopPropagation(); onDismiss() }}
-              className="text-xs text-gray-400 hover:text-red-500 px-1.5 py-0.5 rounded hover:bg-gray-100 transition-colors"
-            >
-              Dismiss
-            </button>
-            <button onClick={onToggle} className="text-gray-400 p-0.5">
-              {expanded ? <ChevronDownIcon className="h-4 w-4" /> : <ChevronRightIcon className="h-4 w-4" />}
-            </button>
-          </div>
+          <button onClick={onToggle} className="text-gray-400 p-0.5 flex-shrink-0 mt-0.5">
+            {expanded ? <ChevronDownIcon className="h-4 w-4" /> : <ChevronRightIcon className="h-4 w-4" />}
+          </button>
         </div>
         {expanded && (
           <div className="px-4 pb-4 pt-3 space-y-4 border-t border-gray-100 bg-gray-50 rounded-b-xl">
@@ -593,16 +655,34 @@ function SubscriptionRow({
               <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Recent Transactions</h4>
               <TransactionsDrillDown subscriptionId={sub.id} />
             </div>
-            {otherSubs.length > 0 && (
-              <div className="border-t border-gray-200 pt-3">
+            <div className="border-t border-gray-200 pt-3 space-y-2">
+              {otherSubs.length > 0 && (
                 <button
                   onClick={() => setMergeOpen(true)}
-                  className="text-xs text-gray-400 hover:text-red-600 underline underline-offset-2"
+                  className="text-xs text-gray-400 hover:text-red-600 underline underline-offset-2 block"
                 >
                   Merge with another subscription…
                 </button>
-              </div>
-            )}
+              )}
+              {showCancelPanel ? (
+                <CancelPanel
+                  subId={sub.id}
+                  defaultDate={detected?.last_charged}
+                  onCancelled={updated => {
+                    setShowCancelPanel(false)
+                    onCancelled({ ...sub, ...updated, merchants: sub.merchants } as Subscription)
+                  }}
+                  onClose={() => setShowCancelPanel(false)}
+                />
+              ) : (
+                <button
+                  onClick={() => setShowCancelPanel(true)}
+                  className="text-xs text-red-500 hover:underline block"
+                >
+                  Mark as cancelled…
+                </button>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -618,7 +698,90 @@ function SubscriptionRow({
   )
 }
 
+// ── Row: cancelled subscription ───────────────────────────────────────────────
+
+function CancelledSubRow({
+  sub,
+  expanded,
+  onToggle,
+  onRestored,
+}: {
+  sub: Subscription
+  expanded: boolean
+  onToggle: () => void
+  onRestored: (updated: Subscription) => void
+}) {
+  const [restoring, setRestoring] = useState(false)
+
+  async function handleRestore() {
+    setRestoring(true)
+    try {
+      const res = await fetch(`/api/subscriptions/${sub.id}/restore`, { method: 'POST' })
+      if (res.ok) {
+        onRestored({ ...sub, is_active: true, cancelled_at: null, auto_cancelled: false })
+      }
+    } catch {
+      // ignore
+    } finally {
+      setRestoring(false)
+    }
+  }
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden opacity-80">
+      <div className="p-4 flex items-start gap-3">
+        <div className="flex-shrink-0 w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center mt-0.5">
+          <ArchiveBoxIcon className="h-5 w-5 text-gray-400" />
+        </div>
+        <div className="flex-1 min-w-0 cursor-pointer" onClick={onToggle}>
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex-1 min-w-0">
+              <div className="font-semibold text-gray-700 text-sm">{sub.name}</div>
+              {sub.merchants.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {sub.merchants.map(m => (
+                    <span key={m} className="text-xs bg-gray-100 text-gray-400 rounded px-1.5 py-0.5">{m}</span>
+                  ))}
+                </div>
+              )}
+              <div className="text-xs text-gray-400 mt-1">
+                {sub.cancelled_at ? `Cancelled ${fmtDate(sub.cancelled_at)}` : 'Cancelled'}
+                {sub.auto_cancelled && <span className="ml-2">(auto-detected)</span>}
+              </div>
+            </div>
+            <div className="text-right flex-shrink-0">
+              {sub.lifetime_spend ? (
+                <>
+                  <div className="text-sm font-semibold text-gray-600">{fmtRounded(sub.lifetime_spend)}</div>
+                  <div className="text-xs text-gray-400">lifetime</div>
+                </>
+              ) : (
+                <span className="text-xs text-gray-400">—</span>
+              )}
+            </div>
+          </div>
+        </div>
+        <button
+          onClick={handleRestore}
+          disabled={restoring}
+          className="text-xs text-blue-600 hover:underline flex-shrink-0 mt-1 disabled:opacity-50"
+        >
+          {restoring ? 'Restoring…' : 'Restore'}
+        </button>
+      </div>
+      {expanded && (
+        <div className="px-4 pb-4 pt-3 border-t border-gray-100 bg-gray-50 rounded-b-xl">
+          <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Transaction History</h4>
+          <TransactionsDrillDown subscriptionId={sub.id} />
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Row: candidate ────────────────────────────────────────────────────────────
+
+type CandidateMode = 'idle' | 'confirming' | 'cancelling'
 
 function CandidateRow({
   sub,
@@ -626,6 +789,7 @@ function CandidateRow({
   onToggle,
   onConfirmed,
   onDismiss,
+  onAddedAsCancelled,
   accounts,
 }: {
   sub: DetectedSubscription
@@ -633,10 +797,13 @@ function CandidateRow({
   onToggle: () => void
   onConfirmed: (newSub: Subscription) => void
   onDismiss: () => void
+  onAddedAsCancelled: (newSub: Subscription) => void
   accounts: { id: string; display_name: string }[]
 }) {
-  const [confirming, setConfirming] = useState(false)
+  const today = new Date().toISOString().slice(0, 10)
+  const [mode, setMode] = useState<CandidateMode>('idle')
   const [nameInput, setNameInput] = useState(sub.display_name)
+  const [cancelDate, setCancelDate] = useState(sub.last_charged <= today ? sub.last_charged : today)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [done, setDone] = useState(false)
@@ -661,6 +828,31 @@ function CandidateRow({
       }
       setDone(true)
       onConfirmed(data.subscription)
+    } catch {
+      setSaveError('Network error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleAddAsCancelled() {
+    const name = nameInput.trim()
+    if (!name) return
+    setSaving(true)
+    setSaveError(null)
+    try {
+      const res = await fetch('/api/subscriptions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, initial_merchant: sub.merchant, is_active: false, cancelled_at: cancelDate }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setSaveError(data.error ?? 'Failed to add')
+        return
+      }
+      setDone(true)
+      onAddedAsCancelled(data.subscription)
     } catch {
       setSaveError('Network error')
     } finally {
@@ -703,7 +895,7 @@ function CandidateRow({
             </div>
           </div>
 
-          {confirming ? (
+          {mode === 'confirming' && (
             <div className="mt-3 flex items-center gap-2 flex-wrap">
               <input
                 type="text"
@@ -712,7 +904,7 @@ function CandidateRow({
                 onChange={e => setNameInput(e.target.value)}
                 onKeyDown={e => {
                   if (e.key === 'Enter') handleConfirm()
-                  if (e.key === 'Escape') { setConfirming(false); setSaveError(null) }
+                  if (e.key === 'Escape') { setMode('idle'); setSaveError(null) }
                 }}
                 autoFocus
                 placeholder="Subscription name…"
@@ -725,20 +917,67 @@ function CandidateRow({
                 {saving ? 'Adding…' : 'Add'}
               </button>
               <button
-                onClick={() => { setConfirming(false); setSaveError(null) }}
+                onClick={() => { setMode('idle'); setSaveError(null) }}
                 className="text-xs text-gray-500 border border-gray-200 rounded-full px-3 py-1 hover:bg-gray-50"
               >
                 Cancel
               </button>
               {saveError && <span className="text-xs text-red-600 w-full mt-1">{saveError}</span>}
             </div>
-          ) : (
+          )}
+
+          {mode === 'cancelling' && (
+            <div className="mt-3 space-y-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <input
+                  type="text"
+                  className="text-sm border border-gray-200 rounded px-2 py-1 flex-1 min-w-[140px]"
+                  value={nameInput}
+                  onChange={e => setNameInput(e.target.value)}
+                  autoFocus
+                  placeholder="Subscription name…"
+                />
+                <label className="text-xs text-gray-500">Cancelled:</label>
+                <input
+                  type="date"
+                  className="text-sm border border-gray-200 rounded px-2 py-1"
+                  value={cancelDate}
+                  max={today}
+                  onChange={e => setCancelDate(e.target.value)}
+                />
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  onClick={handleAddAsCancelled}
+                  disabled={saving || !nameInput.trim()}
+                  className="text-xs bg-gray-700 text-white rounded-full px-3 py-1 hover:bg-gray-800 disabled:opacity-50"
+                >
+                  {saving ? 'Adding…' : 'Add as cancelled'}
+                </button>
+                <button
+                  onClick={() => { setMode('idle'); setSaveError(null) }}
+                  className="text-xs text-gray-500 border border-gray-200 rounded-full px-3 py-1 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                {saveError && <span className="text-xs text-red-600">{saveError}</span>}
+              </div>
+            </div>
+          )}
+
+          {mode === 'idle' && (
             <div className="flex items-center gap-2 mt-3 flex-wrap">
               <button
-                onClick={() => { setConfirming(true); setNameInput(sub.display_name) }}
+                onClick={() => { setMode('confirming'); setNameInput(sub.display_name) }}
                 className="text-xs bg-emerald-700 text-white rounded-full px-3 py-1 hover:bg-emerald-800 transition-colors"
               >
                 Add to my subscriptions
+              </button>
+              <button
+                onClick={() => { setMode('cancelling'); setNameInput(sub.display_name) }}
+                className="text-xs text-gray-600 border border-gray-300 rounded-full px-3 py-1 hover:bg-gray-50 transition-colors"
+              >
+                Add as cancelled
               </button>
               <button
                 onClick={handleDismiss}
@@ -759,35 +998,6 @@ function CandidateRow({
           <TransactionsDrillDown merchant={sub.merchant} />
         </div>
       )}
-    </div>
-  )
-}
-
-// ── Row: dismissed subscription ───────────────────────────────────────────────
-
-function DismissedSubRow({
-  sub,
-  onRestored,
-}: {
-  sub: Subscription
-  onRestored: () => void
-}) {
-  async function handleRestore() {
-    onRestored()
-    await fetch(`/api/subscriptions/${sub.id}/restore`, { method: 'POST' }).catch(() => {})
-  }
-
-  return (
-    <div className="bg-white border border-gray-100 rounded-xl opacity-70">
-      <div className="p-3 flex items-center justify-between gap-3">
-        <div className="flex-1 min-w-0">
-          <div className="text-sm font-medium text-gray-700">{sub.name}</div>
-          <div className="text-xs text-gray-400 mt-0.5">Dismissed subscription · re-link merchants after restoring</div>
-        </div>
-        <button onClick={handleRestore} className="text-xs text-blue-600 hover:underline flex-shrink-0">
-          Restore
-        </button>
-      </div>
     </div>
   )
 }
@@ -997,11 +1207,11 @@ function SecondarySection({
 
 // ── Main client component ─────────────────────────────────────────────────────
 
-type PrimaryTab = 'confirmed' | 'candidates' | 'dismissed'
+type PrimaryTab = 'confirmed' | 'candidates' | 'cancelled' | 'dismissed'
 
 export function SubscriptionsClient({
   activeSubscriptions,
-  dismissedSubscriptions,
+  cancelledSubscriptions,
   candidateList: initialCandidates,
   detectedBySubId,
   dismissedMerchants,
@@ -1011,7 +1221,7 @@ export function SubscriptionsClient({
 }: Props) {
   const [primaryTab, setPrimaryTab] = useState<PrimaryTab>('confirmed')
   const [activeSubs, setActiveSubs] = useState(activeSubscriptions)
-  const [dismissedSubs, setDismissedSubs] = useState(dismissedSubscriptions)
+  const [cancelledSubs, setCancelledSubs] = useState(cancelledSubscriptions)
   const [candidates, setCandidates] = useState(initialCandidates)
   const [dismissedMerchantList, setDismissedMerchantList] = useState(dismissedMerchants)
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -1032,20 +1242,17 @@ export function SubscriptionsClient({
     setActiveSubs(prev => prev.map(s => s.id === updated.id ? updated : s))
   }
 
-  function handleSubDismissed(id: string) {
-    const sub = activeSubs.find(s => s.id === id)
-    if (!sub) return
-    setActiveSubs(prev => prev.filter(s => s.id !== id))
-    setDismissedSubs(prev => [{ ...sub, is_active: false, merchants: [] }, ...prev])
-    if (expandedId === id) setExpandedId(null)
-    fetch(`/api/subscriptions/${id}`, { method: 'DELETE' }).catch(() => {})
+  function handleSubCancelled(updated: Subscription) {
+    setActiveSubs(prev => prev.filter(s => s.id !== updated.id))
+    setCancelledSubs(prev => [updated, ...prev])
+    if (expandedId === updated.id) setExpandedId(null)
+    showToast(`${updated.name} marked as cancelled`)
   }
 
-  function handleSubRestored(id: string) {
-    const sub = dismissedSubs.find(s => s.id === id)
-    if (!sub) return
-    setDismissedSubs(prev => prev.filter(s => s.id !== id))
-    setActiveSubs(prev => [{ ...sub, is_active: true }, ...prev])
+  function handleSubRestored(updated: Subscription) {
+    setCancelledSubs(prev => prev.filter(s => s.id !== updated.id))
+    setActiveSubs(prev => [...prev, updated])
+    showToast(`${updated.name} restored`)
   }
 
   function handleMerged(sourceId: string, targetName: string) {
@@ -1057,6 +1264,12 @@ export function SubscriptionsClient({
   function handleCandidateConfirmed(merchant: string, newSub: Subscription) {
     setCandidates(prev => prev.filter(c => c.merchant !== merchant))
     setActiveSubs(prev => [...prev, newSub])
+  }
+
+  function handleCandidateAddedAsCancelled(merchant: string, newSub: Subscription) {
+    setCandidates(prev => prev.filter(c => c.merchant !== merchant))
+    setCancelledSubs(prev => [newSub, ...prev])
+    showToast(`${newSub.name} added to cancelled history`)
   }
 
   function handleCandidateDismissed(merchant: string) {
@@ -1082,17 +1295,17 @@ export function SubscriptionsClient({
     return s + (d && !d.is_lapsed ? d.annual_estimate : 0)
   }, 0)
 
+  const cancelledLifetimeSpend = cancelledSubs.reduce((s, sub) => s + (sub.lifetime_spend ?? 0), 0)
+
   const lapsed = [
     ...Object.values(detectedBySubId).filter(d => d.is_lapsed),
     ...candidates.filter(c => c.is_lapsed),
   ]
 
-  const dismissedCount = dismissedSubs.length + dismissedMerchantList.length
-
   return (
     <div className="space-y-6">
       {/* Summary strip */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <div className="bg-white border border-gray-200 rounded-xl p-4">
           <div className="text-sm text-gray-500">My subscriptions</div>
           <div className="text-2xl font-bold text-gray-900 mt-1">{activeSubs.length}</div>
@@ -1109,6 +1322,11 @@ export function SubscriptionsClient({
           <div className="text-sm text-gray-500">Candidates to review</div>
           <div className="text-2xl font-bold text-amber-600 mt-1">{candidates.length}</div>
         </div>
+        <div className="bg-white border border-gray-200 rounded-xl p-4">
+          <div className="text-sm text-gray-500">Cancelled ({cancelledSubs.length})</div>
+          <div className="text-2xl font-bold text-gray-500 mt-1">{fmtRounded(cancelledLifetimeSpend)}</div>
+          <div className="text-xs text-gray-400">lifetime spend</div>
+        </div>
       </div>
 
       {/* Primary tab bar */}
@@ -1116,7 +1334,8 @@ export function SubscriptionsClient({
         {([
           ['confirmed', `My Subscriptions (${activeSubs.length})`],
           ['candidates', `Detected Candidates${candidates.length > 0 ? ` (${candidates.length})` : ''}`],
-          ['dismissed', `Dismissed${dismissedCount > 0 ? ` (${dismissedCount})` : ''}`],
+          ['cancelled', `Cancelled${cancelledSubs.length > 0 ? ` (${cancelledSubs.length})` : ''}`],
+          ['dismissed', `Dismissed merchants${dismissedMerchantList.length > 0 ? ` (${dismissedMerchantList.length})` : ''}`],
         ] as [PrimaryTab, string][]).map(([t, label]) => (
           <button
             key={t}
@@ -1148,7 +1367,7 @@ export function SubscriptionsClient({
                 detected={detectedBySubId[sub.id] ?? null}
                 expanded={expandedId === sub.id}
                 onToggle={() => toggleExpand(sub.id)}
-                onDismiss={() => handleSubDismissed(sub.id)}
+                onCancelled={updated => handleSubCancelled(updated)}
                 onSubUpdated={handleSubUpdated}
                 onMerged={targetName => handleMerged(sub.id, targetName)}
                 otherSubs={activeSubs.filter(s => s.id !== sub.id)}
@@ -1178,6 +1397,7 @@ export function SubscriptionsClient({
                 onToggle={() => toggleExpand(sub.merchant)}
                 onConfirmed={newSub => handleCandidateConfirmed(sub.merchant, newSub)}
                 onDismiss={() => handleCandidateDismissed(sub.merchant)}
+                onAddedAsCancelled={newSub => handleCandidateAddedAsCancelled(sub.merchant, newSub)}
                 accounts={accounts}
               />
             ))}
@@ -1185,19 +1405,36 @@ export function SubscriptionsClient({
         )
       )}
 
-      {/* Dismissed */}
-      {primaryTab === 'dismissed' && (
-        dismissedCount === 0 ? (
-          <p className="text-sm text-gray-400">Nothing dismissed yet.</p>
+      {/* Cancelled */}
+      {primaryTab === 'cancelled' && (
+        cancelledSubs.length === 0 ? (
+          <div className="bg-white border border-gray-200 rounded-xl p-8 text-center">
+            <ArchiveBoxIcon className="h-10 w-10 text-gray-300 mx-auto mb-3" />
+            <p className="text-gray-500 text-sm">
+              No cancelled subscriptions. Use &ldquo;Mark as cancelled&hellip;&rdquo; on an active subscription to track cancellation history.
+            </p>
+          </div>
         ) : (
-          <div className="space-y-1">
-            {dismissedSubs.map(sub => (
-              <DismissedSubRow
+          <div className="space-y-2">
+            {cancelledSubs.map(sub => (
+              <CancelledSubRow
                 key={sub.id}
                 sub={sub}
-                onRestored={() => handleSubRestored(sub.id)}
+                expanded={expandedId === sub.id}
+                onToggle={() => toggleExpand(sub.id)}
+                onRestored={updated => handleSubRestored(updated)}
               />
             ))}
+          </div>
+        )
+      )}
+
+      {/* Dismissed merchants */}
+      {primaryTab === 'dismissed' && (
+        dismissedMerchantList.length === 0 ? (
+          <p className="text-sm text-gray-400">No dismissed merchants yet.</p>
+        ) : (
+          <div className="space-y-1">
             {dismissedMerchantList.map(merchant => (
               <DismissedMerchantRow
                 key={merchant}

@@ -5,9 +5,6 @@ import { Transaction, DetectedSubscription, Subscription } from '@/lib/types'
 import { SubscriptionsClient, DuplicateSubscription, TimelineItem } from './SubscriptionsClient'
 
 function computeDuplicates(detected: DetectedSubscription[]): DuplicateSubscription[] {
-  // Each detected entry is already aggregated across all merchants + accounts for the
-  // group. Duplicates are now rare (same service charged from 2 accounts).
-  // Group by display_name to catch that case.
   const byName: Record<string, DetectedSubscription[]> = {}
   for (const sub of detected) {
     if (sub.is_lapsed) continue
@@ -78,7 +75,7 @@ export default async function SubscriptionsPage() {
   // ── Subscriptions from new tables ──────────────────────────────────────────
   const { data: subRows } = await supabase
     .from('subscriptions')
-    .select('id, name, cancellation_url, account_email, notes, auto_renews, next_renewal_override, category, is_active, created_at, updated_at, subscription_merchants(merchant)')
+    .select('id, name, cancellation_url, account_email, notes, auto_renews, next_renewal_override, category, is_active, cancelled_at, auto_cancelled, created_at, updated_at, subscription_merchants(merchant)')
     .eq('household_id', DEFAULT_HOUSEHOLD_ID)
     .order('name')
 
@@ -104,13 +101,15 @@ export default async function SubscriptionsPage() {
     next_renewal_override: s.next_renewal_override ?? null,
     category: s.category ?? null,
     is_active: s.is_active ?? true,
+    cancelled_at: (s as { cancelled_at?: string | null }).cancelled_at ?? null,
+    auto_cancelled: (s as { auto_cancelled?: boolean }).auto_cancelled ?? false,
     merchants: ((s.subscription_merchants ?? []) as { merchant: string }[]).map(m => m.merchant),
     created_at: s.created_at,
     updated_at: s.updated_at,
   })
 
   const activeSubscriptions: Subscription[] = (subRows ?? []).filter(s => s.is_active).map(toSubscription)
-  const dismissedSubscriptions: Subscription[] = (subRows ?? []).filter(s => !s.is_active).map(toSubscription)
+  const cancelledSubscriptions: Subscription[] = (subRows ?? []).filter(s => !s.is_active).map(toSubscription)
 
   // ── Transactions + detection ───────────────────────────────────────────────
   const { data: transactions } = await supabase
@@ -134,6 +133,29 @@ export default async function SubscriptionsPage() {
     if (d.subscription_id) detectedBySubId[d.subscription_id] = d
   }
 
+  // Compute lifetime_spend per subscription from transaction history
+  const merchantSpend: Record<string, number> = {}
+  for (const t of transactions ?? []) {
+    if ((t as { amount: number }).amount < 0) {
+      const m = (t as { merchant: string }).merchant
+      merchantSpend[m] = (merchantSpend[m] ?? 0) + Math.abs((t as { amount: number }).amount)
+    }
+  }
+
+  // Annotate subscriptions with possibly_cancelled and lifetime_spend
+  function enrichSub(sub: Subscription): Subscription {
+    const detected = detectedBySubId[sub.id]
+    const lifetimeSpend = sub.merchants.reduce((s, m) => s + (merchantSpend[m] ?? 0), 0)
+    return {
+      ...sub,
+      lifetime_spend: lifetimeSpend,
+      possibly_cancelled: sub.is_active ? (detected?.is_lapsed ?? false) : false,
+    }
+  }
+
+  const enrichedActive = activeSubscriptions.map(enrichSub)
+  const enrichedCancelled = cancelledSubscriptions.map(enrichSub)
+
   // ── Dismissed merchant candidates (not-a-subscription dismissals) ──────────
   const { data: dismissedMappings } = await supabase
     .from('merchant_mappings')
@@ -144,7 +166,7 @@ export default async function SubscriptionsPage() {
   const dismissedMerchants = (dismissedMappings ?? []).map(r => r.merchant as string)
   const dismissedSet = new Set(dismissedMerchants)
 
-  // ── Candidate list: detected merchants not linked to any active subscription ─
+  // ── Candidate list: detected merchants not linked to any subscription ──────
   const candidateList = allDetected.filter(
     d => d.subscription_id === null && !dismissedSet.has(d.merchant)
   )
@@ -157,12 +179,12 @@ export default async function SubscriptionsPage() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Subscriptions</h1>
         <p className="text-sm text-gray-500 mt-1">
-          Your recurring charges — confirmed inventory, detection candidates, and dismissed merchants.
+          Your recurring charges — confirmed inventory, detection candidates, and cancelled history.
         </p>
       </div>
       <SubscriptionsClient
-        activeSubscriptions={activeSubscriptions}
-        dismissedSubscriptions={dismissedSubscriptions}
+        activeSubscriptions={enrichedActive}
+        cancelledSubscriptions={enrichedCancelled}
         candidateList={candidateList}
         detectedBySubId={detectedBySubId}
         dismissedMerchants={dismissedMerchants}
