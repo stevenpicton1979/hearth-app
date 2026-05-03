@@ -501,6 +501,309 @@ export const MERCHANT_CATEGORY_RULES: MerchantCategoryRule[] = [
     output: { category: 'Entertainment', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
   },
 
+  // ─── Batch 3: Fuel, Retail, Entertainment, Healthcare, Personal Care ─────────
+
+  // Fuel / Petrol stations
+  {
+    name: 'fuel_freedom_fuels',
+    description: 'Freedom Fuels service stations → Transport (fuel)',
+    match: (m) => /freedom fuels/i.test(m),
+    output: { category: 'Transport', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'fuel_shell_coles_express',
+    description: 'Shell Coles Express service stations → Transport (fuel)',
+    match: (m) => /shell coles express/i.test(m),
+    output: { category: 'Transport', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'fuel_bp',
+    description: 'BP service stations → Transport (fuel). Matches "BP " or "BP (" or "BP EXP".',
+    match: (m) => /^bp[\s(]/i.test(m),
+    output: { category: 'Transport', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'fuel_ampol',
+    description: 'Ampol service stations → Transport (fuel)',
+    match: (m) => /^ampol/i.test(m),
+    output: { category: 'Transport', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+
+  // Retail / Shopping
+  {
+    name: 'kmart',
+    description: 'Kmart stores (store number or suburb suffix) → Shopping',
+    match: (m) => /^kmart[\s\d]/i.test(m),
+    output: { category: 'Shopping', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'bunnings',
+    description: 'Bunnings Warehouse stores → Shopping',
+    match: (m) => /^bunnings[\s(]/i.test(m),
+    output: { category: 'Shopping', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'tk_maxx',
+    description: 'TK Maxx discount fashion stores → Shopping',
+    match: (m) => /^tk maxx/i.test(m),
+    output: { category: 'Shopping', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'spotlight_retail',
+    description: 'Spotlight craft and fabric stores → Shopping',
+    match: (m) => /^spotlight[\s\d(]/i.test(m),
+    output: { category: 'Shopping', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'super_cheap_auto',
+    description: 'Super Cheap Auto automotive parts → Shopping',
+    match: (m) => /super cheap auto/i.test(m),
+    output: { category: 'Shopping', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'the_trail_co',
+    description: 'The Trail Co outdoor and hiking gear → Shopping',
+    match: (m) => /the trail co/i.test(m),
+    output: { category: 'Shopping', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'reebelo_australia',
+    description: 'Reebelo refurbished tech marketplace → Shopping',
+    match: (m) => /^reebelo/i.test(m),
+    output: { category: 'Shopping', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'carindale_mega',
+    description: 'Carindale Mega store (shopping centre tenant) → Shopping',
+    match: (m) => /^carindale mega/i.test(m),
+    output: { category: 'Shopping', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+
+  // Entertainment
+  {
+    name: 'event_cinemas',
+    description: 'Event Cinemas (Event Garden City etc.) → Entertainment',
+    match: (m) => /^event garden city|^event cinemas/i.test(m),
+    output: { category: 'Entertainment', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'birch_carroll_cinemas',
+    description: 'Birch Carroll & Coyle cinemas → Entertainment',
+    match: (m) => /birch carroll/i.test(m),
+    output: { category: 'Entertainment', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'tatts_online',
+    description: 'Tatts Online lottery tickets → Entertainment',
+    match: (m) => /^tatts online/i.test(m),
+    output: { category: 'Entertainment', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'plaster_fun_house',
+    description: 'Plaster Fun House kids craft activity studio → Entertainment',
+    match: (m) => /plaster fun house/i.test(m),
+    output: { category: 'Entertainment', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+
+  // Healthcare
+  {
+    name: 'specsavers_optometrist',
+    description: 'Specsavers optometry and eyewear → Healthcare',
+    match: (m) => /^specsavers/i.test(m),
+    output: { category: 'Healthcare', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'burst_health',
+    description: 'Burst Health dental subscription products → Healthcare',
+    match: (m) => /^burst health/i.test(m),
+    output: { category: 'Healthcare', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'scope_psychology',
+    description: 'Scope Psychology allied health services → Healthcare',
+    match: (m) => /^scope psychology/i.test(m),
+    output: { category: 'Healthcare', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'queensland_xray',
+    description: 'Queensland X-Ray diagnostic imaging → Healthcare',
+    match: (m) => /queensland x-ray/i.test(m),
+    output: { category: 'Healthcare', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'mater_misericordiae_hospital',
+    description: 'Mater Misericordiae hospital services → Healthcare',
+    match: (m) => /^mater misericordiae/i.test(m),
+    output: { category: 'Healthcare', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'mh_carindale_hospital',
+    description: 'MH Carindale (Mater Hospital Carindale) → Healthcare',
+    match: (m) => /^mh carindale/i.test(m),
+    output: { category: 'Healthcare', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+
+  // Personal Care
+  {
+    name: 'zen_hair_skin_body',
+    description: 'Zen Hair Skin & Body salon (Carina QLD) → Personal Care',
+    match: (m) => /zen hair skin/i.test(m),
+    output: { category: 'Personal Care', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+
+  // Health & Fitness
+  {
+    name: 'gold_coast_aquatics',
+    description: 'Gold Coast Aquatic Recreation Centre → Health & Fitness',
+    match: (m) => /gold coast aquati/i.test(m),
+    output: { category: 'Health & Fitness', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'diving_queensland',
+    description: 'Diving Queensland membership / courses → Health & Fitness',
+    match: (m) => /pin\*\s*diving queensland/i.test(m),
+    output: { category: 'Health & Fitness', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+
+  // Transport (non-fuel)
+  {
+    name: 'secure_parking',
+    description: 'Secure Parking car parks → Transport',
+    match: (m) => /^secure parking/i.test(m),
+    output: { category: 'Transport', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+
+  // Travel / Accommodation
+  {
+    name: 'booking_com_hotel',
+    description: 'Hotel bookings via Booking.com → Travel',
+    match: (m) => /hotel at booking\.com/i.test(m),
+    output: { category: 'Travel', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+
+  // Eating Out
+  {
+    name: 'liquorland',
+    description: 'Liquorland bottle shops (store number suffix) → Eating Out',
+    match: (m) => /^liquorland/i.test(m),
+    output: { category: 'Eating Out', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'hurrikane_cafe',
+    description: 'Hurrikane PTY LTD cafe/food outlet at Carindale → Eating Out',
+    match: (m) => /^hurrikane/i.test(m),
+    output: { category: 'Eating Out', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'bloom_salad_cafe',
+    description: 'Bloom Salad cafe → Eating Out',
+    match: (m) => /^bloom salad/i.test(m),
+    output: { category: 'Eating Out', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'bloom_canteen',
+    description: 'Bloom Canteen cafe → Eating Out',
+    match: (m) => /^bloom canteen/i.test(m),
+    output: { category: 'Eating Out', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'bar_merlo',
+    description: 'Bar Merlo coffee chain → Eating Out',
+    match: (m) => /^bar merlo/i.test(m),
+    output: { category: 'Eating Out', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'blackbird_bar',
+    description: 'Blackbird Bar & Restaurant → Eating Out',
+    match: (m) => /^blackbird bar/i.test(m),
+    output: { category: 'Eating Out', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'hana_sushi',
+    description: 'Hana Sushi restaurant → Eating Out',
+    match: (m) => /^hana sushi/i.test(m),
+    output: { category: 'Eating Out', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'curryville_indian',
+    description: 'Curryville Indian Restaurant → Eating Out',
+    match: (m) => /^curryville/i.test(m),
+    output: { category: 'Eating Out', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'red_galanga',
+    description: 'Red Galanga Thai restaurant → Eating Out',
+    match: (m) => /^red galanga/i.test(m),
+    output: { category: 'Eating Out', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'mr_edwards_alehouse',
+    description: 'Mr Edwards Alehouse pub → Eating Out',
+    match: (m) => /^mr edwards alehouse/i.test(m),
+    output: { category: 'Eating Out', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'brooklyn_standard',
+    description: 'Brooklyn Standard bar/restaurant → Eating Out',
+    match: (m) => /^brooklyn standard/i.test(m),
+    output: { category: 'Eating Out', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+
+  // Square (SQ*) and Zeller (ZLR*) terminal catch-alls — must come AFTER specific named rules
+  {
+    name: 'sq_eating_out',
+    description:
+      'Square payment terminal merchants (SQ *MERCHANT NAME). ' +
+      'Covers cafes, restaurants, and small food businesses using Square EFTPOS. ' +
+      'Named merchants with different categories should have their own rule earlier in the list.',
+    match: (m) => /^sq \*/i.test(m),
+    output: { category: 'Eating Out', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'zlr_eating_out',
+    description:
+      'Zeller payment terminal merchants (ZLR*MERCHANT NAME). ' +
+      'Covers bars, restaurants, and hospitality venues using Zeller EFTPOS. ' +
+      'Named merchants with different categories should have their own rule earlier in the list.',
+    match: (m) => /^zlr\*/i.test(m),
+    output: { category: 'Eating Out', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+
+  // Food & Groceries (bakeries / specialty food)
+  {
+    name: 'bakers_delight',
+    description: 'Bakers Delight bakery chain → Food & Groceries',
+    match: (m) => /^bakers delight/i.test(m),
+    output: { category: 'Food & Groceries', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+
+  // Education
+  {
+    name: 'dept_education_qld',
+    description: 'Queensland Department of Education — school fees, excursions → Education',
+    match: (m) => /^department of educatio/i.test(m),
+    output: { category: 'Education', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+
+  // Income — refunds and rebates
+  {
+    name: 'budget_direct_rebate',
+    description:
+      'Budget Direct insurance refund / cash-back credited to account. ' +
+      'Format: "DIRECT CREDIT {ref} BUDGET DIRECT". Treated as Insurance income.',
+    match: (m) => /^direct credit \d+ budget direct/i.test(m),
+    output: { category: 'Insurance', isIncome: true, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'mcare_benefits_income',
+    description:
+      'MCARE (MyHealthcare) health fund benefit payments credited to account. ' +
+      'Format: "DIRECT CREDIT {ref} MCARE BENEFITS {member}". Treated as Healthcare income (claim refund).',
+    match: (m) => /^direct credit \d+ mcare benefits/i.test(m),
+    output: { category: 'Healthcare', isIncome: true, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+
+
   // ─── Transfers (CommBank internal) ───────────────────────────────────────────
 
   {

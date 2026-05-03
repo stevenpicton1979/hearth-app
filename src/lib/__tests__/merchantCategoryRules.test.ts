@@ -1034,6 +1034,355 @@ describe('mater_lotteries', () => {
   })
 })
 
+// ─── Batch 3 rules ───────────────────────────────────────────────────────────
+
+describe('fuel_freedom_fuels', () => {
+  it('matches "FREEDOM FUELS (MT GRAVATT PLAZA)"', () => {
+    const result = applyMerchantCategoryRules('FREEDOM FUELS (MT GRAVATT PLAZA)', expense)
+    expect(result?.category).toBe('Transport')
+    expect(result?.isIncome).toBe(false)
+    expect(result?.owner).toBe('Joint')
+    expect(result?.ruleName).toBe('fuel_freedom_fuels')
+  })
+})
+
+describe('fuel_shell_coles_express', () => {
+  it('matches "SHELL COLES EXPRESS (ROCKLEA)"', () => {
+    const result = applyMerchantCategoryRules('SHELL COLES EXPRESS (ROCKLEA)', expense)
+    expect(result?.category).toBe('Transport')
+    expect(result?.isIncome).toBe(false)
+    expect(result?.owner).toBe('Joint')
+    expect(result?.ruleName).toBe('fuel_shell_coles_express')
+  })
+
+  it('matches "SHELL COLES EXPRESS (ALEXANDRA HILLS)"', () => {
+    const result = applyMerchantCategoryRules('SHELL COLES EXPRESS (ALEXANDRA HILLS)', expense)
+    expect(result?.ruleName).toBe('fuel_shell_coles_express')
+  })
+})
+
+describe('fuel_bp', () => {
+  it('matches "BP (CABOOLTURE)"', () => {
+    const result = applyMerchantCategoryRules('BP (CABOOLTURE)', expense)
+    expect(result?.category).toBe('Transport')
+    expect(result?.ruleName).toBe('fuel_bp')
+  })
+
+  it('matches "BP EXP CARINDALE 1414"', () => {
+    const result = applyMerchantCategoryRules('BP EXP CARINDALE 1414', expense)
+    expect(result?.ruleName).toBe('fuel_bp')
+  })
+})
+
+describe('fuel_ampol', () => {
+  it('matches "AMPOL CAMP HILL"', () => {
+    const result = applyMerchantCategoryRules('AMPOL CAMP HILL', expense)
+    expect(result?.category).toBe('Transport')
+    expect(result?.ruleName).toBe('fuel_ampol')
+  })
+})
+
+describe('kmart', () => {
+  it('matches "KMART 1013"', () => {
+    const result = applyMerchantCategoryRules('KMART 1013', expense)
+    expect(result?.category).toBe('Shopping')
+    expect(result?.isIncome).toBe(false)
+    expect(result?.owner).toBe('Joint')
+    expect(result?.ruleName).toBe('kmart')
+  })
+
+  it('matches "KMART 1067"', () => {
+    const result = applyMerchantCategoryRules('KMART 1067', expense)
+    expect(result?.ruleName).toBe('kmart')
+  })
+
+  it('does not match bare "KMART" without suffix', () => {
+    // Bare KMART without number/space won't match /^kmart[\s\d]/
+    expect(applyMerchantCategoryRules('KMART', expense)?.ruleName).not.toBe('kmart')
+  })
+})
+
+describe('bunnings', () => {
+  it('matches "BUNNINGS (MT GRAVATT)"', () => {
+    const result = applyMerchantCategoryRules('BUNNINGS (MT GRAVATT)', expense)
+    expect(result?.category).toBe('Shopping')
+    expect(result?.ruleName).toBe('bunnings')
+  })
+
+  it('matches "BUNNINGS (LOGAN ROAD MT GRAVATT)"', () => {
+    const result = applyMerchantCategoryRules('BUNNINGS (LOGAN ROAD MT GRAVATT)', expense)
+    expect(result?.ruleName).toBe('bunnings')
+  })
+})
+
+describe('tk_maxx', () => {
+  it('matches "TK MAXX CANNON HILL"', () => {
+    const result = applyMerchantCategoryRules('TK MAXX CANNON HILL', expense)
+    expect(result?.category).toBe('Shopping')
+    expect(result?.ruleName).toBe('tk_maxx')
+  })
+})
+
+describe('spotlight_retail', () => {
+  it('matches "SPOTLIGHT CARINDALE"', () => {
+    const result = applyMerchantCategoryRules('SPOTLIGHT CARINDALE', expense)
+    expect(result?.category).toBe('Shopping')
+    expect(result?.ruleName).toBe('spotlight_retail')
+  })
+})
+
+describe('super_cheap_auto', () => {
+  it('matches "SUPER CHEAP AUTO (MOUNT GRAVATT)"', () => {
+    const result = applyMerchantCategoryRules('SUPER CHEAP AUTO (MOUNT GRAVATT)', expense)
+    expect(result?.category).toBe('Shopping')
+    expect(result?.ruleName).toBe('super_cheap_auto')
+  })
+})
+
+describe('the_trail_co', () => {
+  it('matches "THE TRAIL CO PTY LTD"', () => {
+    const result = applyMerchantCategoryRules('THE TRAIL CO PTY LTD', expense)
+    expect(result?.category).toBe('Shopping')
+    expect(result?.ruleName).toBe('the_trail_co')
+  })
+})
+
+describe('reebelo_australia', () => {
+  it('matches "REEBELO AUSTRALIA"', () => {
+    const result = applyMerchantCategoryRules('REEBELO AUSTRALIA', expense)
+    expect(result?.category).toBe('Shopping')
+    expect(result?.ruleName).toBe('reebelo_australia')
+  })
+})
+
+describe('event_cinemas', () => {
+  it('matches "EVENT GARDEN CITY"', () => {
+    const result = applyMerchantCategoryRules('EVENT GARDEN CITY', expense)
+    expect(result?.category).toBe('Entertainment')
+    expect(result?.isIncome).toBe(false)
+    expect(result?.owner).toBe('Joint')
+    expect(result?.ruleName).toBe('event_cinemas')
+  })
+})
+
+describe('birch_carroll_cinemas', () => {
+  it('matches "BIRCH CARROLL & COYL"', () => {
+    const result = applyMerchantCategoryRules('BIRCH CARROLL & COYL', expense)
+    expect(result?.category).toBe('Entertainment')
+    expect(result?.ruleName).toBe('birch_carroll_cinemas')
+  })
+})
+
+describe('tatts_online', () => {
+  it('matches "TATTS ONLINE PTY LTD"', () => {
+    const result = applyMerchantCategoryRules('TATTS ONLINE PTY LTD', expense)
+    expect(result?.category).toBe('Entertainment')
+    expect(result?.ruleName).toBe('tatts_online')
+  })
+})
+
+describe('plaster_fun_house', () => {
+  it('matches "SQ *PLASTER FUN HOUSE" — before sq_eating_out catch-all', () => {
+    const result = applyMerchantCategoryRules('SQ *PLASTER FUN HOUSE', expense)
+    expect(result?.category).toBe('Entertainment')
+    expect(result?.ruleName).toBe('plaster_fun_house')
+  })
+})
+
+describe('specsavers_optometrist', () => {
+  it('matches "SPECSAVERS OPTOMETRIST"', () => {
+    const result = applyMerchantCategoryRules('SPECSAVERS OPTOMETRIST', expense)
+    expect(result?.category).toBe('Healthcare')
+    expect(result?.isIncome).toBe(false)
+    expect(result?.owner).toBe('Joint')
+    expect(result?.ruleName).toBe('specsavers_optometrist')
+  })
+})
+
+describe('burst_health', () => {
+  it('matches "BURST HEALTH"', () => {
+    const result = applyMerchantCategoryRules('BURST HEALTH', expense)
+    expect(result?.category).toBe('Healthcare')
+    expect(result?.ruleName).toBe('burst_health')
+  })
+})
+
+describe('scope_psychology', () => {
+  it('matches "SCOPE PSYCHOLOGY"', () => {
+    const result = applyMerchantCategoryRules('SCOPE PSYCHOLOGY', expense)
+    expect(result?.category).toBe('Healthcare')
+    expect(result?.ruleName).toBe('scope_psychology')
+  })
+})
+
+describe('queensland_xray', () => {
+  it('matches "QUEENSLAND X-RAY"', () => {
+    const result = applyMerchantCategoryRules('QUEENSLAND X-RAY', expense)
+    expect(result?.category).toBe('Healthcare')
+    expect(result?.ruleName).toBe('queensland_xray')
+  })
+})
+
+describe('mater_misericordiae_hospital', () => {
+  it('matches "MATER MISERICORDIAE"', () => {
+    const result = applyMerchantCategoryRules('MATER MISERICORDIAE', expense)
+    expect(result?.category).toBe('Healthcare')
+    expect(result?.ruleName).toBe('mater_misericordiae_hospital')
+  })
+})
+
+describe('mh_carindale_hospital', () => {
+  it('matches "MH CARINDALE"', () => {
+    const result = applyMerchantCategoryRules('MH CARINDALE', expense)
+    expect(result?.category).toBe('Healthcare')
+    expect(result?.ruleName).toBe('mh_carindale_hospital')
+  })
+})
+
+describe('zen_hair_skin_body', () => {
+  it('matches "ZEN HAIR SKIN & BODY" → Personal Care', () => {
+    const result = applyMerchantCategoryRules('ZEN HAIR SKIN & BODY', expense)
+    expect(result?.category).toBe('Personal Care')
+    expect(result?.isIncome).toBe(false)
+    expect(result?.isTransfer).toBe(false)
+    expect(result?.owner).toBe('Joint')
+    expect(result?.ruleName).toBe('zen_hair_skin_body')
+  })
+})
+
+describe('gold_coast_aquatics', () => {
+  it('matches "GOLD COAST AQUATI REC1"', () => {
+    const result = applyMerchantCategoryRules('GOLD COAST AQUATI REC1', expense)
+    expect(result?.category).toBe('Health & Fitness')
+    expect(result?.isIncome).toBe(false)
+    expect(result?.owner).toBe('Joint')
+    expect(result?.ruleName).toBe('gold_coast_aquatics')
+  })
+})
+
+describe('diving_queensland', () => {
+  it('matches "PIN* DIVING QUEENSLAND"', () => {
+    const result = applyMerchantCategoryRules('PIN* DIVING QUEENSLAND', expense)
+    expect(result?.category).toBe('Health & Fitness')
+    expect(result?.ruleName).toBe('diving_queensland')
+  })
+})
+
+describe('secure_parking', () => {
+  it('matches "SECURE PARKING"', () => {
+    const result = applyMerchantCategoryRules('SECURE PARKING', expense)
+    expect(result?.category).toBe('Transport')
+    expect(result?.ruleName).toBe('secure_parking')
+  })
+})
+
+describe('booking_com_hotel', () => {
+  it('matches "HOTEL AT BOOKING.COM" → Travel', () => {
+    const result = applyMerchantCategoryRules('HOTEL AT BOOKING.COM', expense)
+    expect(result?.category).toBe('Travel')
+    expect(result?.isIncome).toBe(false)
+    expect(result?.owner).toBe('Joint')
+    expect(result?.ruleName).toBe('booking_com_hotel')
+  })
+})
+
+describe('liquorland', () => {
+  it('matches "LIQUORLAND 6684"', () => {
+    const result = applyMerchantCategoryRules('LIQUORLAND 6684', expense)
+    expect(result?.category).toBe('Eating Out')
+    expect(result?.isIncome).toBe(false)
+    expect(result?.owner).toBe('Joint')
+    expect(result?.ruleName).toBe('liquorland')
+  })
+
+  it('matches "LIQUORLAND 6127"', () => {
+    const result = applyMerchantCategoryRules('LIQUORLAND 6127', expense)
+    expect(result?.ruleName).toBe('liquorland')
+  })
+})
+
+describe('hurrikane_cafe', () => {
+  it('matches "HURRIKANE PTY LTD"', () => {
+    const result = applyMerchantCategoryRules('HURRIKANE PTY LTD', expense)
+    expect(result?.category).toBe('Eating Out')
+    expect(result?.isIncome).toBe(false)
+    expect(result?.owner).toBe('Joint')
+    expect(result?.ruleName).toBe('hurrikane_cafe')
+  })
+})
+
+describe('sq_eating_out', () => {
+  it('matches "SQ *THE SANCTUARY CAFE" — Square terminal catch-all', () => {
+    const result = applyMerchantCategoryRules('SQ *THE SANCTUARY CAFE', expense)
+    expect(result?.category).toBe('Eating Out')
+    expect(result?.ruleName).toBe('sq_eating_out')
+  })
+
+  it('matches "SQ *YOON SUSHI"', () => {
+    const result = applyMerchantCategoryRules('SQ *YOON SUSHI', expense)
+    expect(result?.ruleName).toBe('sq_eating_out')
+  })
+
+  it('does not match plaster_fun_house (earlier rule wins)', () => {
+    const result = applyMerchantCategoryRules('SQ *PLASTER FUN HOUSE', expense)
+    expect(result?.ruleName).toBe('plaster_fun_house')
+  })
+})
+
+describe('zlr_eating_out', () => {
+  it('matches "ZLR*THE SHIP INN" — Zeller terminal catch-all', () => {
+    const result = applyMerchantCategoryRules('ZLR*THE SHIP INN', expense)
+    expect(result?.category).toBe('Eating Out')
+    expect(result?.ruleName).toBe('zlr_eating_out')
+  })
+
+  it('matches "ZLR*THE CHEESECAKE SHO"', () => {
+    const result = applyMerchantCategoryRules('ZLR*THE CHEESECAKE SHO', expense)
+    expect(result?.ruleName).toBe('zlr_eating_out')
+  })
+})
+
+describe('bakers_delight', () => {
+  it('matches "BAKERS DELIGHT"', () => {
+    const result = applyMerchantCategoryRules('BAKERS DELIGHT', expense)
+    expect(result?.category).toBe('Food & Groceries')
+    expect(result?.ruleName).toBe('bakers_delight')
+  })
+})
+
+describe('dept_education_qld', () => {
+  it('matches "DEPARTMENT OF EDUCATIO" (truncated CBA description)', () => {
+    const result = applyMerchantCategoryRules('DEPARTMENT OF EDUCATIO', expense)
+    expect(result?.category).toBe('Education')
+    expect(result?.isIncome).toBe(false)
+    expect(result?.owner).toBe('Joint')
+    expect(result?.ruleName).toBe('dept_education_qld')
+  })
+})
+
+describe('budget_direct_rebate', () => {
+  it('matches "DIRECT CREDIT 395135 BUDGET DIRECT" — income', () => {
+    const result = applyMerchantCategoryRules('DIRECT CREDIT 395135 BUDGET DIRECT', income)
+    expect(result?.category).toBe('Insurance')
+    expect(result?.isIncome).toBe(true)
+    expect(result?.isTransfer).toBe(false)
+    expect(result?.owner).toBe('Joint')
+    expect(result?.ruleName).toBe('budget_direct_rebate')
+  })
+})
+
+describe('mcare_benefits_income', () => {
+  it('matches "DIRECT CREDIT 002221 MCARE BENEFITS 263124214 EYWQ" — income', () => {
+    const result = applyMerchantCategoryRules('DIRECT CREDIT 002221 MCARE BENEFITS 263124214 EYWQ', income)
+    expect(result?.category).toBe('Healthcare')
+    expect(result?.isIncome).toBe(true)
+    expect(result?.isTransfer).toBe(false)
+    expect(result?.owner).toBe('Joint')
+    expect(result?.ruleName).toBe('mcare_benefits_income')
+  })
+})
+
+
 // ─── no match ─────────────────────────────────────────────────────────────────
 
 describe('no match', () => {
@@ -1067,8 +1416,17 @@ describe('fingerprint integrity', () => {
       JSON.stringify({ category: 'Eating Out', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' }),
       // carina_med_spec, metropol_pharmacy — all Joint Healthcare
       JSON.stringify({ category: 'Healthcare', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' }),
-      // target, myer, the_reject_shop — all Joint Shopping
+      // target, myer, the_reject_shop, kmart, bunnings, tk_maxx, etc. — all Joint Shopping
       JSON.stringify({ category: 'Shopping', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' }),
+      // fuel rules, secure_parking — all Joint Transport non-subscription expenses
+      JSON.stringify({ category: 'Transport', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' }),
+      // event_cinemas, birch_carroll, tatts_online, plaster_fun_house, mater_lotteries — all Joint Entertainment
+      JSON.stringify({ category: 'Entertainment', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' }),
+      // specsavers, burst_health, scope_psychology, queensland_xray, mater, mh_carindale — all Joint Healthcare
+      // (non-income; mcare_benefits_income has isIncome:true so different fingerprint)
+      JSON.stringify({ category: 'Healthcare', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' }),
+      // gold_coast_aquatics, diving_queensland — Joint Health & Fitness non-subscription
+      JSON.stringify({ category: 'Health & Fitness', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' }),
     ])
 
     const seen = new Map<string, string>()

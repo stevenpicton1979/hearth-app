@@ -47,6 +47,7 @@ export const CATEGORIES = [
   'Shopping',         // general retail, clothing
   'Childcare',
   'Pets',
+  'Personal Care',  // hair salons, beauty therapists, grooming
 ] as const
 
 export type Category = typeof CATEGORIES[number]
