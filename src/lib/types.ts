@@ -66,7 +66,10 @@ export interface SpendingSummary {
 }
 
 export interface DetectedSubscription {
-  merchant: string
+  subscription_id: string | null  // null = unlinked candidate
+  display_name: string             // subscription.name, or merchant string when unlinked
+  merchant: string                 // primary merchant string (most frequent in the group)
+  merchants: string[]              // all merchant strings contributing to this group
   account_id: string
   account_name: string
   amount: number
@@ -78,6 +81,22 @@ export interface DetectedSubscription {
   occurrences: number
   confidence: 'HIGH' | 'MEDIUM' | 'PROBABLE'
   is_lapsed: boolean
+}
+
+export interface Subscription {
+  id: string
+  household_id: string
+  name: string
+  cancellation_url: string | null
+  account_email: string | null
+  notes: string | null
+  auto_renews: boolean
+  next_renewal_override: string | null
+  category: string | null
+  is_active: boolean
+  merchants: string[]  // derived from subscription_merchants join
+  created_at: string
+  updated_at: string
 }
 
 export interface Asset {

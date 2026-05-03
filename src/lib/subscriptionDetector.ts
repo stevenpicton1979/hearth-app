@@ -59,33 +59,40 @@ const EXCLUDED_CATEGORIES = new Set([
 
 export function detectSubscriptions(
   transactions: Transaction[],
-  accounts: { id: string; display_name: string }[]
+  accounts: { id: string; display_name: string }[],
+  options?: {
+    merchantToSubId?: Map<string, string>
+    subNames?: Map<string, string>
+  }
 ): DetectedSubscription[] {
+  const merchantToSubId = options?.merchantToSubId ?? new Map<string, string>()
+  const subNames = options?.subNames ?? new Map<string, string>()
   const accountMap = new Map<string, string>(accounts.map(a => [a.id, a.display_name]))
 
-  // Filter out transfers and group by merchant+account
   const eligible = transactions.filter(t => !t.is_transfer && t.amount < 0)
 
-  // Group by merchant
-  const byMerchant: Record<string, Transaction[]> = {}
+  // Group transactions by subscription_id (if linked) or raw merchant string.
+  // Track which subscription_id was assigned to each group.
+  const byGroup: Record<string, { txns: Transaction[]; merchants: Set<string>; subId: string | null }> = {}
   for (const t of eligible) {
-    if (!byMerchant[t.merchant]) byMerchant[t.merchant] = []
-    byMerchant[t.merchant].push(t)
+    const subId = merchantToSubId.get(t.merchant) ?? null
+    const groupKey = subId ?? t.merchant
+    if (!byGroup[groupKey]) byGroup[groupKey] = { txns: [], merchants: new Set(), subId }
+    byGroup[groupKey].txns.push(t)
+    byGroup[groupKey].merchants.add(t.merchant)
   }
 
   const results: DetectedSubscription[] = []
 
-  for (const [merchant, txns] of Object.entries(byMerchant)) {
-    if (txns.length < 2) continue // Minimum 2 occurrences required
+  for (const [groupKey, { txns, merchants, subId }] of Object.entries(byGroup)) {
+    if (txns.length < 2) continue
 
-    // Check if merchant is in an excluded category (one-off purchases)
+    // Check if merchant is in an excluded category (use first transaction's category)
     const merchantCategory = txns[0].category
     if (merchantCategory && EXCLUDED_CATEGORIES.has(merchantCategory)) continue
 
-    // Sort by date ascending
     const sorted = [...txns].sort((a, b) => a.date.localeCompare(b.date))
 
-    // Compute inter-transaction intervals in days
     const intervals: number[] = []
     for (let i = 1; i < sorted.length; i++) {
       const a = new Date(sorted[i - 1].date)
@@ -102,39 +109,44 @@ export function detectSubscriptions(
 
     const intervalMean = mean(intervals)
     const intervalStd = stddev(intervals, intervalMean)
-
-    // Check interval consistency: std < 0.40 * median
     if (intervalStd > 0.40 * medianInterval) continue
 
-    // Check amount consistency: CV < 0.25
     const amounts = sorted.map(t => Math.abs(t.amount))
     const amtMean = mean(amounts)
     const amtStd = stddev(amounts, amtMean)
     const cv = amtMean > 0 ? amtStd / amtMean : 1
     if (cv >= 0.25) continue
 
-    // Determine confidence
     let confidence: DetectedSubscription['confidence']
     if (sorted.length >= 5) confidence = 'HIGH'
     else if (sorted.length >= 3) confidence = 'MEDIUM'
-    else confidence = 'PROBABLE' // 2 occurrences
+    else confidence = 'PROBABLE'
 
     const lastCharged = sorted[sorted.length - 1].date
     const nextExpected = addDays(lastCharged, medianInterval)
-    const daysSinceLast = daysSince(lastCharged)
-    const isLapsed = daysSinceLast > 1.5 * medianInterval
+    const isLapsed = daysSince(lastCharged) > 1.5 * medianInterval
 
-    // Compute annual estimate
     const annualMultiplier = 365 / freqMatch.bucket
     const annualEstimate = amtMean * annualMultiplier
 
-    // Use the most common account_id for this merchant
     const accountCounts: Record<string, number> = {}
     for (const t of sorted) accountCounts[t.account_id] = (accountCounts[t.account_id] || 0) + 1
     const primaryAccountId = Object.entries(accountCounts).sort((a, b) => b[1] - a[1])[0][0]
 
+    // Primary merchant: most frequent, falling back to sorted-first for ties
+    const merchantCounts: Record<string, number> = {}
+    for (const t of sorted) merchantCounts[t.merchant] = (merchantCounts[t.merchant] || 0) + 1
+    const primaryMerchant = Object.entries(merchantCounts).sort((a, b) => b[1] - a[1])[0][0]
+
+    // For unlinked groups, groupKey IS the merchant string.
+    // For linked groups, groupKey IS the subscription_id (a UUID).
+    const merchantsArr = Array.from(merchants).sort()
+
     results.push({
-      merchant,
+      subscription_id: subId,
+      display_name: subId ? (subNames.get(subId) ?? subId) : groupKey,
+      merchant: subId ? primaryMerchant : groupKey,
+      merchants: merchantsArr,
       account_id: primaryAccountId,
       account_name: accountMap.get(primaryAccountId) || 'Unknown',
       amount: amtMean,
@@ -149,6 +161,5 @@ export function detectSubscriptions(
     })
   }
 
-  // Sort by annual estimate descending
   return results.sort((a, b) => b.annual_estimate - a.annual_estimate)
 }

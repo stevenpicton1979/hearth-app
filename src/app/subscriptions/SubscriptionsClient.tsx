@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { DetectedSubscription, SubscriptionMetadata } from '@/lib/types'
-import { CalendarIcon, CheckCircleIcon, ChevronDownIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
+import { DetectedSubscription, Subscription } from '@/lib/types'
+import { CalendarIcon, CheckCircleIcon, ChevronDownIcon, ChevronRightIcon, XMarkIcon, PlusIcon } from '@heroicons/react/24/outline'
 
 // ── Public exports (used by page.tsx) ────────────────────────────────────────
 
@@ -22,8 +22,10 @@ export interface TimelineItem {
 }
 
 interface Props {
-  allDetected: DetectedSubscription[]
-  confirmedMerchants: string[]
+  activeSubscriptions: Subscription[]
+  dismissedSubscriptions: Subscription[]
+  candidateList: DetectedSubscription[]
+  detectedBySubId: Record<string, DetectedSubscription>
   dismissedMerchants: string[]
   duplicates: DuplicateSubscription[]
   timeline: TimelineItem[]
@@ -41,9 +43,6 @@ interface DrillDownTx {
   account_id: string
   account_name: string | null
   category: string | null
-  classification: string | null
-  gl_account: string | null
-  external_id: string | null
 }
 
 // ── Formatting helpers ────────────────────────────────────────────────────────
@@ -66,30 +65,42 @@ function confidenceBadgeCls(c: DetectedSubscription['confidence']) {
   return 'bg-gray-100 text-gray-600'
 }
 
-// ── Expand panel: lazy-load transactions + metadata ──────────────────────────
+// ── Transactions drill-down ───────────────────────────────────────────────────
 
-function TransactionsDrillDown({ merchant }: { merchant: string }) {
+function TransactionsDrillDown({
+  subscriptionId,
+  merchant,
+}: {
+  subscriptionId?: string | null
+  merchant?: string
+}) {
   const [txns, setTxns] = useState<DrillDownTx[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    fetch(`/api/subscriptions/transactions?merchant=${encodeURIComponent(merchant)}`)
+    const url = subscriptionId
+      ? `/api/subscriptions/transactions?subscription_id=${encodeURIComponent(subscriptionId)}`
+      : merchant
+        ? `/api/subscriptions/transactions?merchant=${encodeURIComponent(merchant)}`
+        : null
+    if (!url) { setLoading(false); return }
+    fetch(url)
       .then(r => r.json())
       .then(d => { setTxns(d.transactions ?? []); setLoading(false) })
       .catch(() => { setError('Failed to load transactions'); setLoading(false) })
-  }, [merchant])
+  }, [subscriptionId, merchant])
 
   if (loading) return <p className="text-xs text-gray-400 py-2">Loading transactions…</p>
   if (error) return <p className="text-xs text-red-500 py-2">{error}</p>
-  if (!txns || txns.length === 0) return <p className="text-xs text-gray-400 py-2">No transactions found for this merchant.</p>
+  if (!txns || txns.length === 0) return <p className="text-xs text-gray-400 py-2">No transactions found.</p>
 
   return (
     <div className="overflow-x-auto rounded border border-gray-100 mt-1">
       <table className="min-w-full text-xs divide-y divide-gray-100">
         <thead className="bg-gray-50">
           <tr>
-            {['Date', 'Amount', 'Raw description', 'Account', 'Category'].map(h => (
+            {['Date', 'Amount', 'Raw description', 'Merchant', 'Account', 'Category'].map(h => (
               <th key={h} className="px-3 py-1.5 text-left font-medium text-gray-500 uppercase tracking-wider">{h}</th>
             ))}
           </tr>
@@ -100,6 +111,7 @@ function TransactionsDrillDown({ merchant }: { merchant: string }) {
               <td className="px-3 py-1.5 tabular-nums text-gray-700 whitespace-nowrap">{tx.date}</td>
               <td className="px-3 py-1.5 tabular-nums text-gray-900 whitespace-nowrap">{fmt(tx.amount)}</td>
               <td className="px-3 py-1.5 text-gray-500 max-w-xs truncate">{tx.raw_description ?? tx.description}</td>
+              <td className="px-3 py-1.5 text-gray-500 whitespace-nowrap">{tx.merchant}</td>
               <td className="px-3 py-1.5 text-gray-500 whitespace-nowrap">{tx.account_name ?? '—'}</td>
               <td className="px-3 py-1.5 text-gray-500">{tx.category ?? '—'}</td>
             </tr>
@@ -110,7 +122,10 @@ function TransactionsDrillDown({ merchant }: { merchant: string }) {
   )
 }
 
+// ── Metadata form ─────────────────────────────────────────────────────────────
+
 interface MetaFormState {
+  name: string
   cancellation_url: string
   account_email: string
   notes: string
@@ -119,40 +134,35 @@ interface MetaFormState {
   category: string
 }
 
-function defaultFormState(meta?: SubscriptionMetadata | null): MetaFormState {
-  return {
-    cancellation_url: meta?.cancellation_url ?? '',
-    account_email: meta?.account_email ?? '',
-    notes: meta?.notes ?? '',
-    auto_renews: meta?.auto_renews ?? true,
-    next_renewal_override: meta?.next_renewal_override ?? '',
-    category: meta?.category ?? '',
-  }
-}
-
-function MetadataForm({ merchant }: { merchant: string }) {
-  const [loading, setLoading] = useState(true)
-  const [savedAt, setSavedAt] = useState<string | null>(null)
+function MetadataForm({
+  sub,
+  onSaved,
+}: {
+  sub: Subscription
+  onSaved: (row: Record<string, unknown>) => void
+}) {
+  const [form, setForm] = useState<MetaFormState>({
+    name: sub.name,
+    cancellation_url: sub.cancellation_url ?? '',
+    account_email: sub.account_email ?? '',
+    notes: sub.notes ?? '',
+    auto_renews: sub.auto_renews,
+    next_renewal_override: sub.next_renewal_override ?? '',
+    category: sub.category ?? '',
+  })
   const [saving, setSaving] = useState(false)
+  const [savedAt, setSavedAt] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
-  const [form, setForm] = useState<MetaFormState>(defaultFormState())
-
-  useEffect(() => {
-    fetch(`/api/subscriptions/metadata?merchant=${encodeURIComponent(merchant)}`)
-      .then(r => r.ok ? r.json() : null)
-      .then(data => { setForm(defaultFormState(data)); setLoading(false) })
-      .catch(() => setLoading(false))
-  }, [merchant])
 
   async function handleSave() {
     setSaving(true)
     setSaveError(null)
     try {
-      const res = await fetch('/api/subscriptions/metadata', {
+      const res = await fetch(`/api/subscriptions/${sub.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          merchant,
+          name: form.name.trim() || sub.name,
           cancellation_url: form.cancellation_url || null,
           account_email: form.account_email || null,
           notes: form.notes || null,
@@ -165,7 +175,9 @@ function MetadataForm({ merchant }: { merchant: string }) {
         const err = await res.json()
         setSaveError(err.error ?? 'Save failed')
       } else {
+        const updated = await res.json()
         setSavedAt(new Date().toLocaleTimeString('en-AU'))
+        onSaved(updated)
       }
     } catch {
       setSaveError('Network error')
@@ -174,33 +186,19 @@ function MetadataForm({ merchant }: { merchant: string }) {
     }
   }
 
-  if (loading) return <p className="text-xs text-gray-400 py-2">Loading metadata…</p>
-
-  const field = (label: string, name: keyof MetaFormState, type = 'text') => (
-    <div>
-      <label className="block text-xs font-medium text-gray-500 mb-0.5">{label}</label>
-      {type === 'textarea' ? (
-        <textarea
-          className="w-full text-sm border border-gray-200 rounded px-2 py-1 resize-none"
-          rows={2}
-          value={form[name] as string}
-          onChange={e => setForm(f => ({ ...f, [name]: e.target.value }))}
-        />
-      ) : (
-        <input
-          type={type}
-          className="w-full text-sm border border-gray-200 rounded px-2 py-1"
-          value={form[name] as string}
-          onChange={e => setForm(f => ({ ...f, [name]: e.target.value }))}
-        />
-      )}
-    </div>
-  )
-
   return (
     <div className="space-y-3">
-      <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Metadata</h4>
+      <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Details</h4>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="sm:col-span-2">
+          <label className="block text-xs font-medium text-gray-500 mb-0.5">Name</label>
+          <input
+            type="text"
+            className="w-full text-sm border border-gray-200 rounded px-2 py-1"
+            value={form.name}
+            onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+          />
+        </div>
         <div>
           <label className="block text-xs font-medium text-gray-500 mb-0.5">Cancellation URL</label>
           <div className="flex items-center gap-1">
@@ -209,25 +207,62 @@ function MetadataForm({ merchant }: { merchant: string }) {
               className="flex-1 text-sm border border-gray-200 rounded px-2 py-1"
               value={form.cancellation_url}
               onChange={e => setForm(f => ({ ...f, cancellation_url: e.target.value }))}
-              placeholder="https://..."
+              placeholder="https://…"
             />
             {form.cancellation_url && (
-              <a href={form.cancellation_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline whitespace-nowrap">Open ↗</a>
+              <a href={form.cancellation_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline whitespace-nowrap">
+                Open ↗
+              </a>
             )}
           </div>
         </div>
-        {field('Account email', 'account_email', 'email')}
-        {field('Category', 'category')}
+        <div>
+          <label className="block text-xs font-medium text-gray-500 mb-0.5">Account email</label>
+          <input
+            type="email"
+            className="w-full text-sm border border-gray-200 rounded px-2 py-1"
+            value={form.account_email}
+            onChange={e => setForm(f => ({ ...f, account_email: e.target.value }))}
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-500 mb-0.5">Category</label>
+          <input
+            type="text"
+            className="w-full text-sm border border-gray-200 rounded px-2 py-1"
+            value={form.category}
+            onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
+          />
+        </div>
         <div>
           <label className="block text-xs font-medium text-gray-500 mb-0.5">Next renewal override</label>
-          <input type="date" className="w-full text-sm border border-gray-200 rounded px-2 py-1" value={form.next_renewal_override} onChange={e => setForm(f => ({ ...f, next_renewal_override: e.target.value }))} />
+          <input
+            type="date"
+            className="w-full text-sm border border-gray-200 rounded px-2 py-1"
+            value={form.next_renewal_override}
+            onChange={e => setForm(f => ({ ...f, next_renewal_override: e.target.value }))}
+          />
         </div>
         <div className="flex items-center gap-2 pt-4">
-          <input type="checkbox" id={`ar-${merchant}`} checked={form.auto_renews} onChange={e => setForm(f => ({ ...f, auto_renews: e.target.checked }))} className="rounded" />
-          <label htmlFor={`ar-${merchant}`} className="text-sm text-gray-700">Auto-renews</label>
+          <input
+            type="checkbox"
+            id={`ar-${sub.id}`}
+            checked={form.auto_renews}
+            onChange={e => setForm(f => ({ ...f, auto_renews: e.target.checked }))}
+            className="rounded"
+          />
+          <label htmlFor={`ar-${sub.id}`} className="text-sm text-gray-700">Auto-renews</label>
         </div>
       </div>
-      <div className="col-span-2">{field('Notes', 'notes', 'textarea')}</div>
+      <div>
+        <label className="block text-xs font-medium text-gray-500 mb-0.5">Notes</label>
+        <textarea
+          className="w-full text-sm border border-gray-200 rounded px-2 py-1 resize-none"
+          rows={2}
+          value={form.notes}
+          onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+        />
+      </div>
       <div className="flex items-center gap-3">
         <button
           onClick={handleSave}
@@ -243,46 +278,141 @@ function MetadataForm({ merchant }: { merchant: string }) {
   )
 }
 
-function ExpandPanel({ merchant, showMetadata }: { merchant: string; showMetadata: boolean }) {
+// ── Merchant alias manager ────────────────────────────────────────────────────
+
+function MerchantAliasManager({
+  sub,
+  onMerchantsChanged,
+}: {
+  sub: Subscription
+  onMerchantsChanged: (merchants: string[]) => void
+}) {
+  const [merchants, setMerchants] = useState(sub.merchants)
+  const [addInput, setAddInput] = useState('')
+  const [addError, setAddError] = useState<string | null>(null)
+  const [adding, setAdding] = useState(false)
+
+  async function handleAdd() {
+    const m = addInput.trim()
+    if (!m) return
+    setAdding(true)
+    setAddError(null)
+    try {
+      const res = await fetch(`/api/subscriptions/${sub.id}/merchants`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ merchant: m }),
+      })
+      if (res.ok || res.status === 201) {
+        const updated = [...merchants, m]
+        setMerchants(updated)
+        onMerchantsChanged(updated)
+        setAddInput('')
+      } else {
+        const d = await res.json()
+        setAddError(d.error ?? 'Failed to add')
+      }
+    } catch {
+      setAddError('Network error')
+    } finally {
+      setAdding(false)
+    }
+  }
+
+  async function handleRemove(merchant: string) {
+    const res = await fetch(
+      `/api/subscriptions/${sub.id}/merchants/${encodeURIComponent(merchant)}`,
+      { method: 'DELETE' }
+    )
+    if (res.ok) {
+      const updated = merchants.filter(m => m !== merchant)
+      setMerchants(updated)
+      onMerchantsChanged(updated)
+    }
+  }
+
   return (
-    <div className="px-4 pb-4 pt-2 space-y-4 border-t border-gray-100 bg-gray-50 rounded-b-xl">
-      {showMetadata && <MetadataForm merchant={merchant} />}
-      <div>
-        <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Recent Transactions</h4>
-        <TransactionsDrillDown merchant={merchant} />
+    <div>
+      <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Merchant Aliases</h4>
+      <div className="flex flex-wrap gap-1 mb-2">
+        {merchants.length === 0 && (
+          <span className="text-xs text-gray-400">No merchants linked — add one below to enable detection.</span>
+        )}
+        {merchants.map(m => (
+          <span key={m} className="inline-flex items-center gap-1 bg-gray-100 text-gray-700 text-xs rounded px-2 py-0.5">
+            {m}
+            {merchants.length > 1 && (
+              <button
+                onClick={() => handleRemove(m)}
+                className="text-gray-400 hover:text-red-500 leading-none"
+                title="Remove alias"
+              >
+                <XMarkIcon className="h-3 w-3" />
+              </button>
+            )}
+          </span>
+        ))}
       </div>
+      <div className="flex items-center gap-2">
+        <input
+          type="text"
+          className="text-sm border border-gray-200 rounded px-2 py-1 flex-1"
+          placeholder="Add merchant alias…"
+          value={addInput}
+          onChange={e => setAddInput(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && handleAdd()}
+        />
+        <button
+          onClick={handleAdd}
+          disabled={adding || !addInput.trim()}
+          className="text-xs bg-gray-900 text-white rounded px-2 py-1.5 hover:bg-gray-700 disabled:opacity-50 flex items-center"
+          title="Add alias"
+        >
+          <PlusIcon className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      {addError && <p className="text-xs text-red-600 mt-1">{addError}</p>}
     </div>
   )
 }
 
-// ── Row: confirmed subscription ───────────────────────────────────────────────
+// ── Row: active subscription ──────────────────────────────────────────────────
 
-function ConfirmedRow({
-  merchant,
+function SubscriptionRow({
+  sub,
   detected,
   expanded,
   onToggle,
+  onDismiss,
+  onSubUpdated,
   accounts,
 }: {
-  merchant: string
+  sub: Subscription
   detected: DetectedSubscription | null
   expanded: boolean
   onToggle: () => void
+  onDismiss: () => void
+  onSubUpdated: (updated: Subscription) => void
   accounts: { id: string; display_name: string }[]
 }) {
-  const noActivity = !detected
-
   return (
-    <div className={`bg-white border rounded-xl overflow-hidden ${noActivity ? 'border-gray-200 opacity-75' : 'border-gray-200'}`}>
-      <div className="p-4 flex items-start gap-3 cursor-pointer hover:bg-gray-50" onClick={onToggle}>
+    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+      <div className="p-4 flex items-start gap-3">
         <div className="flex-shrink-0 w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center mt-0.5">
           <CheckCircleIcon className="h-5 w-5 text-emerald-600" />
         </div>
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 cursor-pointer" onClick={onToggle}>
           <div className="flex items-start justify-between gap-2 flex-wrap">
-            <div>
-              <div className="font-semibold text-gray-900 text-sm">{merchant}</div>
-              <div className="text-xs text-gray-500 mt-0.5">
+            <div className="flex-1 min-w-0">
+              <div className="font-semibold text-gray-900 text-sm">{sub.name}</div>
+              {sub.merchants.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {sub.merchants.map(m => (
+                    <span key={m} className="text-xs bg-gray-100 text-gray-500 rounded px-1.5 py-0.5">{m}</span>
+                  ))}
+                </div>
+              )}
+              <div className="text-xs text-gray-500 mt-1">
                 {detected
                   ? `${accounts.find(a => a.id === detected.account_id)?.display_name ?? 'Unknown'} · ${frequencyLabel(detected.frequency)}`
                   : <span className="text-amber-600">No recent transactions</span>}
@@ -304,16 +434,41 @@ function ConfirmedRow({
               <span><span className="text-gray-400">Last:</span> {fmtDate(detected.last_charged)}</span>
               <span><span className="text-gray-400">Next:</span> {fmtDate(detected.next_expected)}</span>
               {detected.is_lapsed && (
-                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">Possibly cancelled</span>
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+                  Possibly cancelled
+                </span>
               )}
             </div>
           )}
         </div>
-        <div className="flex-shrink-0 text-gray-400 mt-1">
-          {expanded ? <ChevronDownIcon className="h-4 w-4" /> : <ChevronRightIcon className="h-4 w-4" />}
+        <div className="flex items-center gap-1 flex-shrink-0 mt-0.5">
+          <button
+            onClick={e => { e.stopPropagation(); onDismiss() }}
+            className="text-xs text-gray-400 hover:text-red-500 px-1.5 py-0.5 rounded hover:bg-gray-100 transition-colors"
+          >
+            Dismiss
+          </button>
+          <button onClick={onToggle} className="text-gray-400 p-0.5">
+            {expanded ? <ChevronDownIcon className="h-4 w-4" /> : <ChevronRightIcon className="h-4 w-4" />}
+          </button>
         </div>
       </div>
-      {expanded && <ExpandPanel merchant={merchant} showMetadata={true} />}
+      {expanded && (
+        <div className="px-4 pb-4 pt-3 space-y-4 border-t border-gray-100 bg-gray-50 rounded-b-xl">
+          <MetadataForm
+            sub={sub}
+            onSaved={row => onSubUpdated({ ...sub, ...(row as Partial<Subscription>), merchants: sub.merchants })}
+          />
+          <MerchantAliasManager
+            sub={sub}
+            onMerchantsChanged={merchants => onSubUpdated({ ...sub, merchants })}
+          />
+          <div>
+            <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Recent Transactions</h4>
+            <TransactionsDrillDown subscriptionId={sub.id} />
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -324,32 +479,62 @@ function CandidateRow({
   sub,
   expanded,
   onToggle,
-  onConfirm,
+  onConfirmed,
   onDismiss,
   accounts,
 }: {
   sub: DetectedSubscription
   expanded: boolean
   onToggle: () => void
-  onConfirm: () => void
+  onConfirmed: (newSub: Subscription) => void
   onDismiss: () => void
   accounts: { id: string; display_name: string }[]
 }) {
-  const [actionDone, setActionDone] = useState<'confirmed' | 'dismissed' | null>(null)
+  const [confirming, setConfirming] = useState(false)
+  const [nameInput, setNameInput] = useState(sub.display_name)
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [done, setDone] = useState(false)
 
-  function handleConfirm() {
-    setActionDone('confirmed')
-    onConfirm()
+  if (done) return null
+
+  async function handleConfirm() {
+    const name = nameInput.trim()
+    if (!name) return
+    setSaving(true)
+    setSaveError(null)
+    try {
+      const res = await fetch('/api/subscriptions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, initial_merchant: sub.merchant }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setSaveError(data.error ?? 'Failed to add')
+        return
+      }
+      setDone(true)
+      onConfirmed(data.subscription)
+    } catch {
+      setSaveError('Network error')
+    } finally {
+      setSaving(false)
+    }
   }
-  function handleDismiss() {
-    setActionDone('dismissed')
+
+  async function handleDismiss() {
+    setDone(true)
     onDismiss()
+    await fetch('/api/mappings', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ merchant: sub.merchant, classification: 'Not a subscription' }),
+    }).catch(() => {})
   }
-
-  if (actionDone === 'dismissed') return null
 
   return (
-    <div className={`bg-white border border-gray-200 rounded-xl overflow-hidden ${actionDone === 'confirmed' ? 'opacity-50 pointer-events-none' : ''}`}>
+    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
       <div className="p-4 flex items-start gap-3">
         <div className="flex-shrink-0 w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center mt-0.5">
           <CalendarIcon className="h-5 w-5 text-gray-400" />
@@ -358,7 +543,7 @@ function CandidateRow({
           <div className="flex items-start justify-between gap-2 flex-wrap">
             <div>
               <div className="font-semibold text-gray-900 text-sm flex items-center gap-2">
-                <button onClick={onToggle} className="hover:underline text-left">{sub.merchant}</button>
+                <button onClick={onToggle} className="hover:underline text-left">{sub.display_name}</button>
                 <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium ${confidenceBadgeCls(sub.confidence)}`}>
                   {sub.confidence}
                 </span>
@@ -372,85 +557,136 @@ function CandidateRow({
               <div className="text-xs text-gray-400">{fmtRounded(sub.annual_estimate)}/yr</div>
             </div>
           </div>
-          <div className="flex items-center gap-2 mt-3 flex-wrap">
-            {actionDone === 'confirmed' ? (
-              <span className="text-xs text-emerald-700 font-medium bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-0.5">✓ Added</span>
-            ) : (
-              <>
-                <button
-                  onClick={handleConfirm}
-                  className="text-xs bg-emerald-700 text-white rounded-full px-3 py-1 hover:bg-emerald-800 transition-colors"
-                >
-                  Add to my subscriptions
-                </button>
-                <button
-                  onClick={handleDismiss}
-                  className="text-xs text-gray-500 border border-gray-200 rounded-full px-3 py-1 hover:bg-gray-50 hover:text-gray-700 transition-colors"
-                >
-                  Not a subscription
-                </button>
-              </>
-            )}
-            <button
-              onClick={onToggle}
-              className="text-xs text-blue-600 hover:underline ml-auto"
-            >
-              {expanded ? 'Hide transactions ↑' : 'View transactions ↓'}
-            </button>
-          </div>
-        </div>
-      </div>
-      {expanded && <ExpandPanel merchant={sub.merchant} showMetadata={false} />}
-    </div>
-  )
-}
 
-// ── Row: dismissed ────────────────────────────────────────────────────────────
-
-function DismissedRow({
-  merchant,
-  expanded,
-  onToggle,
-  onBringBack,
-}: {
-  merchant: string
-  expanded: boolean
-  onToggle: () => void
-  onBringBack: () => void
-}) {
-  return (
-    <div className="bg-white border border-gray-100 rounded-xl overflow-hidden opacity-70">
-      <div className="p-3 flex items-center gap-3">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between gap-2">
-            <button onClick={onToggle} className="text-sm font-medium text-gray-600 hover:underline text-left">{merchant}</button>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <button onClick={onBringBack} className="text-xs text-blue-600 hover:underline">Bring back</button>
-              <button onClick={onToggle} className="text-gray-400">
-                {expanded ? <ChevronDownIcon className="h-4 w-4" /> : <ChevronRightIcon className="h-4 w-4" />}
+          {confirming ? (
+            <div className="mt-3 flex items-center gap-2 flex-wrap">
+              <input
+                type="text"
+                className="text-sm border border-gray-200 rounded px-2 py-1 flex-1 min-w-[140px]"
+                value={nameInput}
+                onChange={e => setNameInput(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') handleConfirm()
+                  if (e.key === 'Escape') { setConfirming(false); setSaveError(null) }
+                }}
+                autoFocus
+                placeholder="Subscription name…"
+              />
+              <button
+                onClick={handleConfirm}
+                disabled={saving || !nameInput.trim()}
+                className="text-xs bg-emerald-700 text-white rounded-full px-3 py-1 hover:bg-emerald-800 disabled:opacity-50"
+              >
+                {saving ? 'Adding…' : 'Add'}
+              </button>
+              <button
+                onClick={() => { setConfirming(false); setSaveError(null) }}
+                className="text-xs text-gray-500 border border-gray-200 rounded-full px-3 py-1 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              {saveError && <span className="text-xs text-red-600 w-full mt-1">{saveError}</span>}
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 mt-3 flex-wrap">
+              <button
+                onClick={() => { setConfirming(true); setNameInput(sub.display_name) }}
+                className="text-xs bg-emerald-700 text-white rounded-full px-3 py-1 hover:bg-emerald-800 transition-colors"
+              >
+                Add to my subscriptions
+              </button>
+              <button
+                onClick={handleDismiss}
+                className="text-xs text-gray-500 border border-gray-200 rounded-full px-3 py-1 hover:bg-gray-50 hover:text-gray-700 transition-colors"
+              >
+                Not a subscription
+              </button>
+              <button onClick={onToggle} className="text-xs text-blue-600 hover:underline ml-auto">
+                {expanded ? 'Hide transactions ↑' : 'View transactions ↓'}
               </button>
             </div>
-          </div>
+          )}
         </div>
       </div>
-      {expanded && <ExpandPanel merchant={merchant} showMetadata={false} />}
+      {expanded && (
+        <div className="px-4 pb-4 pt-2 border-t border-gray-100 bg-gray-50 rounded-b-xl">
+          <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Recent Transactions</h4>
+          <TransactionsDrillDown merchant={sub.merchant} />
+        </div>
+      )}
     </div>
   )
 }
 
-// ── Secondary tabs (Lapsed / Duplicates / Timeline) ──────────────────────────
+// ── Row: dismissed subscription ───────────────────────────────────────────────
+
+function DismissedSubRow({
+  sub,
+  onRestored,
+}: {
+  sub: Subscription
+  onRestored: () => void
+}) {
+  async function handleRestore() {
+    onRestored()
+    await fetch(`/api/subscriptions/${sub.id}/restore`, { method: 'POST' }).catch(() => {})
+  }
+
+  return (
+    <div className="bg-white border border-gray-100 rounded-xl opacity-70">
+      <div className="p-3 flex items-center justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-medium text-gray-700">{sub.name}</div>
+          <div className="text-xs text-gray-400 mt-0.5">Dismissed subscription · re-link merchants after restoring</div>
+        </div>
+        <button onClick={handleRestore} className="text-xs text-blue-600 hover:underline flex-shrink-0">
+          Restore
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ── Row: dismissed merchant ───────────────────────────────────────────────────
+
+function DismissedMerchantRow({
+  merchant,
+  onBroughtBack,
+}: {
+  merchant: string
+  onBroughtBack: () => void
+}) {
+  async function handleBringBack() {
+    onBroughtBack()
+    await fetch(`/api/mappings?merchant=${encodeURIComponent(merchant)}`, { method: 'DELETE' }).catch(() => {})
+  }
+
+  return (
+    <div className="bg-white border border-gray-100 rounded-xl opacity-70">
+      <div className="p-3 flex items-center justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-medium text-gray-600">{merchant}</div>
+          <div className="text-xs text-gray-400 mt-0.5">Dismissed merchant</div>
+        </div>
+        <button onClick={handleBringBack} className="text-xs text-blue-600 hover:underline flex-shrink-0">
+          Bring back
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ── Secondary section (Lapsed / Duplicates / Timeline) ───────────────────────
 
 type SecondaryTab = 'lapsed' | 'duplicates' | 'timeline'
 
 function SecondarySection({
-  allDetected,
-  dismissedSet,
+  lapsed,
   duplicates,
   timeline,
   accounts,
 }: {
-  allDetected: DetectedSubscription[]
-  dismissedSet: Set<string>
+  lapsed: DetectedSubscription[]
   duplicates: DuplicateSubscription[]
   timeline: TimelineItem[]
   accounts: { id: string; display_name: string }[]
@@ -459,14 +695,15 @@ function SecondarySection({
   const [tab, setTab] = useState<SecondaryTab>('lapsed')
   const [dismissedDuplicates, setDismissedDuplicates] = useState<Set<string>>(new Set())
 
-  const lapsed = allDetected.filter(s => s.is_lapsed && !dismissedSet.has(s.merchant))
   const visibleDuplicates = duplicates.filter(d => !dismissedDuplicates.has(d.merchant))
   const totalMonthlyWaste = visibleDuplicates.reduce((s, d) => s + d.monthly_waste, 0)
 
   const now = new Date()
   const in7 = new Date()
   in7.setDate(in7.getDate() + 7)
-  const next7Total = timeline.filter(item => new Date(item.expected_date + 'T00:00:00') <= in7).reduce((s, item) => s + item.amount, 0)
+  const next7Total = timeline
+    .filter(item => new Date(item.expected_date + 'T00:00:00') <= in7)
+    .reduce((s, item) => s + item.amount, 0)
   const next30Total = timeline.reduce((s, item) => s + item.amount, 0)
 
   const weekLabel = (d: string) => {
@@ -496,7 +733,6 @@ function SecondarySection({
       </button>
       {open && (
         <div className="border-t border-gray-100 p-4 space-y-4">
-          {/* Tab bar */}
           <div className="flex gap-1 bg-gray-100 rounded-lg p-1 w-fit">
             {([
               ['lapsed', `Lapsed (${lapsed.length})`],
@@ -513,16 +749,20 @@ function SecondarySection({
             ))}
           </div>
 
-          {/* Lapsed */}
           {tab === 'lapsed' && (
             lapsed.length === 0
               ? <p className="text-sm text-gray-400">No lapsed subscriptions.</p>
               : <div className="space-y-2">
                   {lapsed.map(sub => (
-                    <div key={sub.merchant} className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-center justify-between gap-3">
+                    <div
+                      key={sub.subscription_id ?? sub.merchant}
+                      className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-center justify-between gap-3"
+                    >
                       <div>
-                        <div className="text-sm font-medium text-gray-900">{sub.merchant}</div>
-                        <div className="text-xs text-gray-500 mt-0.5">{frequencyLabel(sub.frequency)} · Last {fmtDate(sub.last_charged)}</div>
+                        <div className="text-sm font-medium text-gray-900">{sub.display_name}</div>
+                        <div className="text-xs text-gray-500 mt-0.5">
+                          {frequencyLabel(sub.frequency)} · Last {fmtDate(sub.last_charged)}
+                        </div>
                       </div>
                       <div className="text-right flex-shrink-0">
                         <div className="text-sm font-semibold text-gray-900">{fmt(sub.amount)}</div>
@@ -533,18 +773,21 @@ function SecondarySection({
                 </div>
           )}
 
-          {/* Duplicates */}
           {tab === 'duplicates' && (
             visibleDuplicates.length === 0
               ? <p className="text-sm text-gray-400">No duplicate subscriptions detected.</p>
               : <div className="space-y-3">
-                  <p className="text-sm text-amber-700">Total monthly waste: <strong>{fmtRounded(totalMonthlyWaste)}/mo</strong></p>
+                  <p className="text-sm text-amber-700">
+                    Total monthly waste: <strong>{fmtRounded(totalMonthlyWaste)}/mo</strong>
+                  </p>
                   {visibleDuplicates.map(dup => (
                     <div key={dup.merchant} className="bg-white border border-amber-200 rounded-xl p-3">
                       <div className="font-semibold text-gray-900 text-sm mb-2">{dup.merchant}</div>
                       {dup.accounts.map(acc => (
                         <div key={acc.account_id} className="flex justify-between text-sm mb-1">
-                          <span className="text-gray-600">{accounts.find(a => a.id === acc.account_id)?.display_name ?? 'Unknown'}</span>
+                          <span className="text-gray-600">
+                            {accounts.find(a => a.id === acc.account_id)?.display_name ?? 'Unknown'}
+                          </span>
                           <span className="font-medium">{fmt(acc.amount)}</span>
                         </div>
                       ))}
@@ -553,14 +796,15 @@ function SecondarySection({
                         <button
                           onClick={() => setDismissedDuplicates(p => { const n = new Set(p); n.add(dup.merchant); return n })}
                           className="text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded px-2 py-0.5"
-                        >Not a duplicate</button>
+                        >
+                          Not a duplicate
+                        </button>
                       </div>
                     </div>
                   ))}
                 </div>
           )}
 
-          {/* Timeline */}
           {tab === 'timeline' && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
@@ -580,7 +824,10 @@ function SecondarySection({
                       <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">{week}</h3>
                       <div className="space-y-2">
                         {timelineGroups[week].map((item, i) => (
-                          <div key={`${item.merchant}-${i}`} className={`bg-white border rounded-xl p-3 flex items-center justify-between ${item.is_overdue ? 'border-red-200 bg-red-50' : 'border-gray-200'}`}>
+                          <div
+                            key={`${item.merchant}-${i}`}
+                            className={`bg-white border rounded-xl p-3 flex items-center justify-between ${item.is_overdue ? 'border-red-200 bg-red-50' : 'border-gray-200'}`}
+                          >
                             <div>
                               <div className="text-sm font-medium text-gray-900">{item.merchant}</div>
                               <div className="text-xs text-gray-400 mt-0.5">
@@ -608,70 +855,80 @@ function SecondarySection({
 type PrimaryTab = 'confirmed' | 'candidates' | 'dismissed'
 
 export function SubscriptionsClient({
-  allDetected,
-  confirmedMerchants,
+  activeSubscriptions,
+  dismissedSubscriptions,
+  candidateList: initialCandidates,
+  detectedBySubId,
   dismissedMerchants,
   duplicates,
   timeline,
   accounts,
 }: Props) {
   const [primaryTab, setPrimaryTab] = useState<PrimaryTab>('confirmed')
-  const [confirmedSet, setConfirmedSet] = useState(() => new Set(confirmedMerchants))
-  const [dismissedSet, setDismissedSet] = useState(() => new Set(dismissedMerchants))
-  const [expandedMerchant, setExpandedMerchant] = useState<string | null>(null)
+  const [activeSubs, setActiveSubs] = useState(activeSubscriptions)
+  const [dismissedSubs, setDismissedSubs] = useState(dismissedSubscriptions)
+  const [candidates, setCandidates] = useState(initialCandidates)
+  const [dismissedMerchantList, setDismissedMerchantList] = useState(dismissedMerchants)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
 
-  function toggleExpand(merchant: string) {
-    setExpandedMerchant(prev => prev === merchant ? null : merchant)
+  function toggleExpand(id: string) {
+    setExpandedId(prev => prev === id ? null : id)
   }
 
-  async function handleConfirm(merchant: string) {
-    setConfirmedSet(prev => { const n = new Set(prev); n.add(merchant); return n })
-    setDismissedSet(prev => { const n = new Set(prev); n.delete(merchant); return n })
-    await fetch('/api/mappings', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ merchant, classification: 'Subscription' }),
-    }).catch(() => {})
+  function handleSubUpdated(updated: Subscription) {
+    setActiveSubs(prev => prev.map(s => s.id === updated.id ? updated : s))
   }
 
-  async function handleDismiss(merchant: string) {
-    setDismissedSet(prev => { const n = new Set(prev); n.add(merchant); return n })
-    setConfirmedSet(prev => { const n = new Set(prev); n.delete(merchant); return n })
-    if (expandedMerchant === merchant) setExpandedMerchant(null)
-    await fetch('/api/mappings', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ merchant, classification: 'Not a subscription' }),
-    }).catch(() => {})
+  function handleSubDismissed(id: string) {
+    const sub = activeSubs.find(s => s.id === id)
+    if (!sub) return
+    setActiveSubs(prev => prev.filter(s => s.id !== id))
+    setDismissedSubs(prev => [{ ...sub, is_active: false, merchants: [] }, ...prev])
+    if (expandedId === id) setExpandedId(null)
+    fetch(`/api/subscriptions/${id}`, { method: 'DELETE' }).catch(() => {})
   }
 
-  async function handleBringBack(merchant: string) {
-    setDismissedSet(prev => { const n = new Set(prev); n.delete(merchant); return n })
-    await fetch(`/api/mappings?merchant=${encodeURIComponent(merchant)}`, {
-      method: 'DELETE',
-    }).catch(() => {})
+  function handleSubRestored(id: string) {
+    const sub = dismissedSubs.find(s => s.id === id)
+    if (!sub) return
+    setDismissedSubs(prev => prev.filter(s => s.id !== id))
+    setActiveSubs(prev => [{ ...sub, is_active: true }, ...prev])
   }
 
-  // Derived lists
-  const detectedMap = new Map(allDetected.map(d => [d.merchant, d]))
+  function handleCandidateConfirmed(merchant: string, newSub: Subscription) {
+    setCandidates(prev => prev.filter(c => c.merchant !== merchant))
+    setActiveSubs(prev => [...prev, newSub])
+  }
 
-  const confirmedList = Array.from(confirmedSet)
-  const confirmedWithDetection = confirmedList.map(m => ({ merchant: m, detected: detectedMap.get(m) ?? null }))
-  const candidateList = allDetected.filter(d => !confirmedSet.has(d.merchant) && !dismissedSet.has(d.merchant))
-  const dismissedList = Array.from(dismissedSet)
+  function handleCandidateDismissed(merchant: string) {
+    setCandidates(prev => prev.filter(c => c.merchant !== merchant))
+    setDismissedMerchantList(prev => [...prev, merchant])
+  }
 
-  // Sort confirmed: detected (by annual est desc) first, then undetected alphabetically
-  confirmedWithDetection.sort((a, b) => {
-    if (a.detected && b.detected) return b.detected.annual_estimate - a.detected.annual_estimate
-    if (a.detected) return -1
-    if (b.detected) return 1
-    return a.merchant.localeCompare(b.merchant)
+  function handleMerchantBroughtBack(merchant: string) {
+    setDismissedMerchantList(prev => prev.filter(m => m !== merchant))
+  }
+
+  const sortedActiveSubs = [...activeSubs].sort((a, b) => {
+    const da = detectedBySubId[a.id]
+    const db = detectedBySubId[b.id]
+    if (da && db) return db.annual_estimate - da.annual_estimate
+    if (da) return -1
+    if (db) return 1
+    return a.name.localeCompare(b.name)
   })
 
-  const activeAnnual = confirmedList.reduce((s, m) => {
-    const d = detectedMap.get(m)
+  const activeAnnual = activeSubs.reduce((s, sub) => {
+    const d = detectedBySubId[sub.id]
     return s + (d && !d.is_lapsed ? d.annual_estimate : 0)
   }, 0)
+
+  const lapsed = [
+    ...Object.values(detectedBySubId).filter(d => d.is_lapsed),
+    ...candidates.filter(c => c.is_lapsed),
+  ]
+
+  const dismissedCount = dismissedSubs.length + dismissedMerchantList.length
 
   return (
     <div className="space-y-6">
@@ -679,7 +936,7 @@ export function SubscriptionsClient({
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-white border border-gray-200 rounded-xl p-4">
           <div className="text-sm text-gray-500">My subscriptions</div>
-          <div className="text-2xl font-bold text-gray-900 mt-1">{confirmedList.length}</div>
+          <div className="text-2xl font-bold text-gray-900 mt-1">{activeSubs.length}</div>
         </div>
         <div className="bg-white border border-gray-200 rounded-xl p-4">
           <div className="text-sm text-gray-500">Annual cost</div>
@@ -691,16 +948,16 @@ export function SubscriptionsClient({
         </div>
         <div className="bg-white border border-gray-200 rounded-xl p-4">
           <div className="text-sm text-gray-500">Candidates to review</div>
-          <div className="text-2xl font-bold text-amber-600 mt-1">{candidateList.length}</div>
+          <div className="text-2xl font-bold text-amber-600 mt-1">{candidates.length}</div>
         </div>
       </div>
 
       {/* Primary tab bar */}
       <div className="flex gap-1 bg-gray-100 rounded-lg p-1 w-fit overflow-x-auto">
         {([
-          ['confirmed', `My Subscriptions (${confirmedList.length})`],
-          ['candidates', `Detected Candidates${candidateList.length > 0 ? ` (${candidateList.length})` : ''}`],
-          ['dismissed', `Dismissed${dismissedList.length > 0 ? ` (${dismissedList.length})` : ''}`],
+          ['confirmed', `My Subscriptions (${activeSubs.length})`],
+          ['candidates', `Detected Candidates${candidates.length > 0 ? ` (${candidates.length})` : ''}`],
+          ['dismissed', `Dismissed${dismissedCount > 0 ? ` (${dismissedCount})` : ''}`],
         ] as [PrimaryTab, string][]).map(([t, label]) => (
           <button
             key={t}
@@ -716,20 +973,24 @@ export function SubscriptionsClient({
 
       {/* My Subscriptions */}
       {primaryTab === 'confirmed' && (
-        confirmedWithDetection.length === 0 ? (
+        sortedActiveSubs.length === 0 ? (
           <div className="bg-white border border-gray-200 rounded-xl p-8 text-center">
             <CheckCircleIcon className="h-10 w-10 text-gray-300 mx-auto mb-3" />
-            <p className="text-gray-500 text-sm">No confirmed subscriptions yet. Review the Detected Candidates tab and add the ones you want to track.</p>
+            <p className="text-gray-500 text-sm">
+              No confirmed subscriptions yet. Review the Detected Candidates tab and add the ones you want to track.
+            </p>
           </div>
         ) : (
           <div className="space-y-2">
-            {confirmedWithDetection.map(({ merchant, detected }) => (
-              <ConfirmedRow
-                key={merchant}
-                merchant={merchant}
-                detected={detected}
-                expanded={expandedMerchant === merchant}
-                onToggle={() => toggleExpand(merchant)}
+            {sortedActiveSubs.map(sub => (
+              <SubscriptionRow
+                key={sub.id}
+                sub={sub}
+                detected={detectedBySubId[sub.id] ?? null}
+                expanded={expandedId === sub.id}
+                onToggle={() => toggleExpand(sub.id)}
+                onDismiss={() => handleSubDismissed(sub.id)}
+                onSubUpdated={handleSubUpdated}
                 accounts={accounts}
               />
             ))}
@@ -739,21 +1000,23 @@ export function SubscriptionsClient({
 
       {/* Detected Candidates */}
       {primaryTab === 'candidates' && (
-        candidateList.length === 0 ? (
+        candidates.length === 0 ? (
           <div className="bg-white border border-gray-200 rounded-xl p-8 text-center">
             <CalendarIcon className="h-10 w-10 text-gray-300 mx-auto mb-3" />
-            <p className="text-gray-500 text-sm">No unreviewed candidates. Import at least 2+ months of transactions to enable detection, or all detected merchants have been reviewed.</p>
+            <p className="text-gray-500 text-sm">
+              No unreviewed candidates. Import at least 2+ months of transactions to enable detection, or all detected merchants have been reviewed.
+            </p>
           </div>
         ) : (
           <div className="space-y-2">
-            {candidateList.map(sub => (
+            {candidates.map(sub => (
               <CandidateRow
                 key={sub.merchant}
                 sub={sub}
-                expanded={expandedMerchant === sub.merchant}
+                expanded={expandedId === sub.merchant}
                 onToggle={() => toggleExpand(sub.merchant)}
-                onConfirm={() => handleConfirm(sub.merchant)}
-                onDismiss={() => handleDismiss(sub.merchant)}
+                onConfirmed={newSub => handleCandidateConfirmed(sub.merchant, newSub)}
+                onDismiss={() => handleCandidateDismissed(sub.merchant)}
                 accounts={accounts}
               />
             ))}
@@ -763,27 +1026,31 @@ export function SubscriptionsClient({
 
       {/* Dismissed */}
       {primaryTab === 'dismissed' && (
-        dismissedList.length === 0 ? (
-          <p className="text-sm text-gray-400">No dismissed merchants.</p>
+        dismissedCount === 0 ? (
+          <p className="text-sm text-gray-400">Nothing dismissed yet.</p>
         ) : (
           <div className="space-y-1">
-            {dismissedList.map(merchant => (
-              <DismissedRow
+            {dismissedSubs.map(sub => (
+              <DismissedSubRow
+                key={sub.id}
+                sub={sub}
+                onRestored={() => handleSubRestored(sub.id)}
+              />
+            ))}
+            {dismissedMerchantList.map(merchant => (
+              <DismissedMerchantRow
                 key={merchant}
                 merchant={merchant}
-                expanded={expandedMerchant === merchant}
-                onToggle={() => toggleExpand(merchant)}
-                onBringBack={() => handleBringBack(merchant)}
+                onBroughtBack={() => handleMerchantBroughtBack(merchant)}
               />
             ))}
           </div>
         )
       )}
 
-      {/* More analysis (Lapsed / Duplicates / Timeline) */}
+      {/* More analysis */}
       <SecondarySection
-        allDetected={allDetected}
-        dismissedSet={dismissedSet}
+        lapsed={lapsed}
         duplicates={duplicates}
         timeline={timeline}
         accounts={accounts}
