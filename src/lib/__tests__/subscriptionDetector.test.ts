@@ -396,6 +396,67 @@ describe('subscriptionDetector - Subscription Detection Algorithm', () => {
     })
   })
 
+  describe('Business-account subscription detection', () => {
+    const businessAccount = { id: 'acc-biz', display_name: 'BHT Business Account' }
+    const allAccounts = [...mockAccounts, businessAccount]
+
+    it('detects Spotify charged to a business account', () => {
+      const transactions: Transaction[] = [
+        createTransaction('SPOTIFY', -12.99, '2026-04-01', 'Entertainment', 'acc-biz'),
+        createTransaction('SPOTIFY', -12.99, '2026-03-01', 'Entertainment', 'acc-biz'),
+        createTransaction('SPOTIFY', -12.99, '2026-02-01', 'Entertainment', 'acc-biz'),
+      ]
+      const result = detectSubscriptions(transactions, allAccounts)
+      const sub = result.find(s => s.merchant === 'SPOTIFY')
+      expect(sub).toBeDefined()
+      expect(sub?.account_id).toBe('acc-biz')
+      expect(sub?.account_name).toBe('BHT Business Account')
+      expect(sub?.frequency).toBe('monthly')
+    })
+
+    it('detects Xbox charged to a business account', () => {
+      const transactions: Transaction[] = [
+        createTransaction('XBOX GAME PASS', -14.95, '2026-04-05', 'Entertainment', 'acc-biz'),
+        createTransaction('XBOX GAME PASS', -14.95, '2026-03-05', 'Entertainment', 'acc-biz'),
+        createTransaction('XBOX GAME PASS', -14.95, '2026-02-05', 'Entertainment', 'acc-biz'),
+      ]
+      const result = detectSubscriptions(transactions, allAccounts)
+      const sub = result.find(s => s.merchant === 'XBOX GAME PASS')
+      expect(sub).toBeDefined()
+      expect(sub?.account_id).toBe('acc-biz')
+    })
+
+    it('detects Google One charged to a business account', () => {
+      const transactions: Transaction[] = [
+        createTransaction('GOOGLE ONE', -3.49, '2026-04-10', 'Technology', 'acc-biz'),
+        createTransaction('GOOGLE ONE', -3.49, '2026-03-10', 'Technology', 'acc-biz'),
+        createTransaction('GOOGLE ONE', -3.49, '2026-02-10', 'Technology', 'acc-biz'),
+      ]
+      const result = detectSubscriptions(transactions, allAccounts)
+      const sub = result.find(s => s.merchant === 'GOOGLE ONE')
+      expect(sub).toBeDefined()
+      expect(sub?.account_id).toBe('acc-biz')
+    })
+
+    it('detects subscriptions across both household and business accounts simultaneously', () => {
+      const transactions: Transaction[] = [
+        createTransaction('NETFLIX', -22.99, '2026-04-01', 'Entertainment', 'acc-1'),
+        createTransaction('NETFLIX', -22.99, '2026-03-01', 'Entertainment', 'acc-1'),
+        createTransaction('NETFLIX', -22.99, '2026-02-01', 'Entertainment', 'acc-1'),
+        createTransaction('SPOTIFY', -12.99, '2026-04-01', 'Entertainment', 'acc-biz'),
+        createTransaction('SPOTIFY', -12.99, '2026-03-01', 'Entertainment', 'acc-biz'),
+        createTransaction('SPOTIFY', -12.99, '2026-02-01', 'Entertainment', 'acc-biz'),
+      ]
+      const result = detectSubscriptions(transactions, allAccounts)
+      const netflix = result.find(s => s.merchant === 'NETFLIX')
+      const spotify = result.find(s => s.merchant === 'SPOTIFY')
+      expect(netflix).toBeDefined()
+      expect(netflix?.account_id).toBe('acc-1')
+      expect(spotify).toBeDefined()
+      expect(spotify?.account_id).toBe('acc-biz')
+    })
+  })
+
   describe('The Myer bug - exact scenario', () => {
     it('should NOT flag two Myer purchases ($413 on 14 Apr, $300 on 12 Mar) as subscription', () => {
       const transactions: Transaction[] = [

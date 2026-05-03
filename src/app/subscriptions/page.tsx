@@ -64,18 +64,14 @@ export default async function SubscriptionsPage() {
   // ── Accounts ───────────────────────────────────────────────────────────────
   const { data: allAccounts } = await supabase
     .from('accounts')
-    .select('id, display_name, scope')
+    .select('id, display_name')
     .eq('household_id', DEFAULT_HOUSEHOLD_ID)
     .eq('is_active', true)
 
-  const householdAccounts = (allAccounts || []).filter(
-    a => !(a as { scope: string | null }).scope || (a as { scope: string | null }).scope === 'household'
-  )
-  const householdIds = householdAccounts.map(a => a.id)
   const accounts = (allAccounts || []).map(a => ({ id: a.id, display_name: (a as { display_name: string }).display_name }))
 
   // ── Transactions (for detection) ───────────────────────────────────────────
-  const txQuery = supabase
+  const { data: transactions } = await supabase
     .from('transactions')
     .select('*')
     .eq('household_id', DEFAULT_HOUSEHOLD_ID)
@@ -83,8 +79,6 @@ export default async function SubscriptionsPage() {
     .lt('amount', 0)
     .order('date', { ascending: false })
     .limit(2000)
-
-  const { data: transactions } = await (householdIds.length > 0 ? txQuery.in('account_id', householdIds) : txQuery)
 
   const allDetected = detectSubscriptions(
     (transactions || []) as Transaction[],
