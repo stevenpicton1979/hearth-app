@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { DetectedSubscription, Subscription } from '@/lib/types'
 import { CalendarIcon, CheckCircleIcon, ChevronDownIcon, ChevronRightIcon, XMarkIcon, PlusIcon } from '@heroicons/react/24/outline'
 
@@ -290,7 +290,22 @@ function MerchantAliasManager({
   const [merchants, setMerchants] = useState(sub.merchants)
   const [addInput, setAddInput] = useState('')
   const [addError, setAddError] = useState<string | null>(null)
+  const [removeWarning, setRemoveWarning] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
+  const [available, setAvailable] = useState<string[] | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const listId = `merchants-list-${sub.id}`
+
+  async function loadAvailable() {
+    if (available !== null) return
+    try {
+      const res = await fetch('/api/subscriptions/available-merchants')
+      const data = await res.json()
+      setAvailable(data.merchants ?? [])
+    } catch {
+      setAvailable([])
+    }
+  }
 
   async function handleAdd() {
     const m = addInput.trim()
@@ -308,6 +323,8 @@ function MerchantAliasManager({
         setMerchants(updated)
         onMerchantsChanged(updated)
         setAddInput('')
+        // Remove from available list so it doesn't show again in the picker
+        setAvailable(prev => prev ? prev.filter(x => x !== m) : null)
       } else {
         const d = await res.json()
         setAddError(d.error ?? 'Failed to add')
@@ -320,6 +337,11 @@ function MerchantAliasManager({
   }
 
   async function handleRemove(merchant: string) {
+    setRemoveWarning(null)
+    if (merchants.length === 1) {
+      setRemoveWarning('Cannot remove the last alias — dismiss the subscription instead.')
+      return
+    }
     const res = await fetch(
       `/api/subscriptions/${sub.id}/merchants/${encodeURIComponent(merchant)}`,
       { method: 'DELETE' }
@@ -328,8 +350,13 @@ function MerchantAliasManager({
       const updated = merchants.filter(m => m !== merchant)
       setMerchants(updated)
       onMerchantsChanged(updated)
+      // Return merchant to available list
+      setAvailable(prev => prev ? [...prev, merchant].sort() : null)
     }
   }
+
+  // Filtered available list — exclude merchants already on this subscription
+  const filteredAvailable = (available ?? []).filter(m => !merchants.includes(m))
 
   return (
     <div>
@@ -341,27 +368,33 @@ function MerchantAliasManager({
         {merchants.map(m => (
           <span key={m} className="inline-flex items-center gap-1 bg-gray-100 text-gray-700 text-xs rounded px-2 py-0.5">
             {m}
-            {merchants.length > 1 && (
-              <button
-                onClick={() => handleRemove(m)}
-                className="text-gray-400 hover:text-red-500 leading-none"
-                title="Remove alias"
-              >
-                <XMarkIcon className="h-3 w-3" />
-              </button>
-            )}
+            <button
+              onClick={() => handleRemove(m)}
+              className="text-gray-400 hover:text-red-500 leading-none"
+              title={merchants.length === 1 ? 'Cannot remove last alias' : 'Remove alias'}
+            >
+              <XMarkIcon className="h-3 w-3" />
+            </button>
           </span>
         ))}
       </div>
+      {removeWarning && <p className="text-xs text-amber-600 mb-2">{removeWarning}</p>}
       <div className="flex items-center gap-2">
         <input
+          ref={inputRef}
+          id="add-merchant-input"
+          list={listId}
           type="text"
           className="text-sm border border-gray-200 rounded px-2 py-1 flex-1"
           placeholder="Add merchant alias…"
           value={addInput}
           onChange={e => setAddInput(e.target.value)}
+          onFocus={loadAvailable}
           onKeyDown={e => e.key === 'Enter' && handleAdd()}
         />
+        <datalist id={listId}>
+          {filteredAvailable.map(m => <option key={m} value={m} />)}
+        </datalist>
         <button
           onClick={handleAdd}
           disabled={adding || !addInput.trim()}
@@ -376,6 +409,92 @@ function MerchantAliasManager({
   )
 }
 
+// ── Merge modal ───────────────────────────────────────────────────────────────
+
+function MergeModal({
+  sub,
+  otherSubs,
+  onClose,
+  onMerged,
+}: {
+  sub: Subscription
+  otherSubs: Subscription[]
+  onClose: () => void
+  onMerged: (targetName: string) => void
+}) {
+  const [targetId, setTargetId] = useState('')
+  const [merging, setMerging] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleMerge() {
+    if (!targetId) return
+    setMerging(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/subscriptions/merge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source_id: sub.id, target_id: targetId }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error ?? 'Merge failed')
+        return
+      }
+      const target = otherSubs.find(s => s.id === targetId)
+      onMerged(target?.name ?? 'another subscription')
+    } catch {
+      setError('Network error')
+    } finally {
+      setMerging(false)
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-xl shadow-xl p-6 max-w-sm w-full mx-4"
+        onClick={e => e.stopPropagation()}
+      >
+        <h3 className="font-semibold text-gray-900 mb-1">Merge into another subscription</h3>
+        <p className="text-sm text-gray-500 mb-4">
+          All merchant aliases from <strong>{sub.name}</strong> will move to the target subscription.
+          This subscription will be deleted.
+        </p>
+        <select
+          className="w-full text-sm border border-gray-200 rounded px-2 py-1.5 mb-4"
+          value={targetId}
+          onChange={e => setTargetId(e.target.value)}
+        >
+          <option value="">Select subscription…</option>
+          {otherSubs.map(s => (
+            <option key={s.id} value={s.id}>{s.name}</option>
+          ))}
+        </select>
+        {error && <p className="text-xs text-red-600 mb-3">{error}</p>}
+        <div className="flex gap-2 justify-end">
+          <button
+            onClick={onClose}
+            className="text-sm text-gray-600 px-3 py-1.5 border border-gray-200 rounded hover:bg-gray-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleMerge}
+            disabled={!targetId || merging}
+            className="text-sm bg-red-600 text-white px-3 py-1.5 rounded hover:bg-red-700 disabled:opacity-50"
+          >
+            {merging ? 'Merging…' : 'Merge'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Row: active subscription ──────────────────────────────────────────────────
 
 function SubscriptionRow({
@@ -385,6 +504,8 @@ function SubscriptionRow({
   onToggle,
   onDismiss,
   onSubUpdated,
+  onMerged,
+  otherSubs,
   accounts,
 }: {
   sub: Subscription
@@ -393,83 +514,107 @@ function SubscriptionRow({
   onToggle: () => void
   onDismiss: () => void
   onSubUpdated: (updated: Subscription) => void
+  onMerged: (targetName: string) => void
+  otherSubs: Subscription[]
   accounts: { id: string; display_name: string }[]
 }) {
+  const [mergeOpen, setMergeOpen] = useState(false)
+
   return (
-    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-      <div className="p-4 flex items-start gap-3">
-        <div className="flex-shrink-0 w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center mt-0.5">
-          <CheckCircleIcon className="h-5 w-5 text-emerald-600" />
-        </div>
-        <div className="flex-1 min-w-0 cursor-pointer" onClick={onToggle}>
-          <div className="flex items-start justify-between gap-2 flex-wrap">
-            <div className="flex-1 min-w-0">
-              <div className="font-semibold text-gray-900 text-sm">{sub.name}</div>
-              {sub.merchants.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-1">
-                  {sub.merchants.map(m => (
-                    <span key={m} className="text-xs bg-gray-100 text-gray-500 rounded px-1.5 py-0.5">{m}</span>
-                  ))}
+    <>
+      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+        <div className="p-4 flex items-start gap-3">
+          <div className="flex-shrink-0 w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center mt-0.5">
+            <CheckCircleIcon className="h-5 w-5 text-emerald-600" />
+          </div>
+          <div className="flex-1 min-w-0 cursor-pointer" onClick={onToggle}>
+            <div className="flex items-start justify-between gap-2 flex-wrap">
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold text-gray-900 text-sm">{sub.name}</div>
+                {sub.merchants.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {sub.merchants.map(m => (
+                      <span key={m} className="text-xs bg-gray-100 text-gray-500 rounded px-1.5 py-0.5">{m}</span>
+                    ))}
+                  </div>
+                )}
+                <div className="text-xs text-gray-500 mt-1">
+                  {detected
+                    ? `${accounts.find(a => a.id === detected.account_id)?.display_name ?? 'Unknown'} · ${frequencyLabel(detected.frequency)}`
+                    : <span className="text-amber-600">No recent transactions</span>}
                 </div>
-              )}
-              <div className="text-xs text-gray-500 mt-1">
-                {detected
-                  ? `${accounts.find(a => a.id === detected.account_id)?.display_name ?? 'Unknown'} · ${frequencyLabel(detected.frequency)}`
-                  : <span className="text-amber-600">No recent transactions</span>}
+              </div>
+              <div className="text-right flex-shrink-0">
+                {detected ? (
+                  <>
+                    <div className="font-bold text-gray-900 text-sm">{fmt(detected.amount)}</div>
+                    <div className="text-xs text-gray-400">{fmtRounded(detected.annual_estimate)}/yr</div>
+                  </>
+                ) : (
+                  <span className="text-xs text-gray-400">—</span>
+                )}
               </div>
             </div>
-            <div className="text-right flex-shrink-0">
-              {detected ? (
-                <>
-                  <div className="font-bold text-gray-900 text-sm">{fmt(detected.amount)}</div>
-                  <div className="text-xs text-gray-400">{fmtRounded(detected.annual_estimate)}/yr</div>
-                </>
-              ) : (
-                <span className="text-xs text-gray-400">—</span>
-              )}
-            </div>
+            {detected && (
+              <div className="flex items-center gap-3 mt-2 flex-wrap text-xs text-gray-500">
+                <span><span className="text-gray-400">Last:</span> {fmtDate(detected.last_charged)}</span>
+                <span><span className="text-gray-400">Next:</span> {fmtDate(detected.next_expected)}</span>
+                {detected.is_lapsed && (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+                    Possibly cancelled
+                  </span>
+                )}
+              </div>
+            )}
           </div>
-          {detected && (
-            <div className="flex items-center gap-3 mt-2 flex-wrap text-xs text-gray-500">
-              <span><span className="text-gray-400">Last:</span> {fmtDate(detected.last_charged)}</span>
-              <span><span className="text-gray-400">Next:</span> {fmtDate(detected.next_expected)}</span>
-              {detected.is_lapsed && (
-                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
-                  Possibly cancelled
-                </span>
-              )}
+          <div className="flex items-center gap-1 flex-shrink-0 mt-0.5">
+            <button
+              onClick={e => { e.stopPropagation(); onDismiss() }}
+              className="text-xs text-gray-400 hover:text-red-500 px-1.5 py-0.5 rounded hover:bg-gray-100 transition-colors"
+            >
+              Dismiss
+            </button>
+            <button onClick={onToggle} className="text-gray-400 p-0.5">
+              {expanded ? <ChevronDownIcon className="h-4 w-4" /> : <ChevronRightIcon className="h-4 w-4" />}
+            </button>
+          </div>
+        </div>
+        {expanded && (
+          <div className="px-4 pb-4 pt-3 space-y-4 border-t border-gray-100 bg-gray-50 rounded-b-xl">
+            <MetadataForm
+              sub={sub}
+              onSaved={row => onSubUpdated({ ...sub, ...(row as Partial<Subscription>), merchants: sub.merchants })}
+            />
+            <MerchantAliasManager
+              sub={sub}
+              onMerchantsChanged={merchants => onSubUpdated({ ...sub, merchants })}
+            />
+            <div>
+              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Recent Transactions</h4>
+              <TransactionsDrillDown subscriptionId={sub.id} />
             </div>
-          )}
-        </div>
-        <div className="flex items-center gap-1 flex-shrink-0 mt-0.5">
-          <button
-            onClick={e => { e.stopPropagation(); onDismiss() }}
-            className="text-xs text-gray-400 hover:text-red-500 px-1.5 py-0.5 rounded hover:bg-gray-100 transition-colors"
-          >
-            Dismiss
-          </button>
-          <button onClick={onToggle} className="text-gray-400 p-0.5">
-            {expanded ? <ChevronDownIcon className="h-4 w-4" /> : <ChevronRightIcon className="h-4 w-4" />}
-          </button>
-        </div>
+            {otherSubs.length > 0 && (
+              <div className="border-t border-gray-200 pt-3">
+                <button
+                  onClick={() => setMergeOpen(true)}
+                  className="text-xs text-gray-400 hover:text-red-600 underline underline-offset-2"
+                >
+                  Merge with another subscription…
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
-      {expanded && (
-        <div className="px-4 pb-4 pt-3 space-y-4 border-t border-gray-100 bg-gray-50 rounded-b-xl">
-          <MetadataForm
-            sub={sub}
-            onSaved={row => onSubUpdated({ ...sub, ...(row as Partial<Subscription>), merchants: sub.merchants })}
-          />
-          <MerchantAliasManager
-            sub={sub}
-            onMerchantsChanged={merchants => onSubUpdated({ ...sub, merchants })}
-          />
-          <div>
-            <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Recent Transactions</h4>
-            <TransactionsDrillDown subscriptionId={sub.id} />
-          </div>
-        </div>
+      {mergeOpen && (
+        <MergeModal
+          sub={sub}
+          otherSubs={otherSubs}
+          onClose={() => setMergeOpen(false)}
+          onMerged={targetName => { setMergeOpen(false); onMerged(targetName) }}
+        />
       )}
-    </div>
+    </>
   )
 }
 
@@ -870,6 +1015,14 @@ export function SubscriptionsClient({
   const [candidates, setCandidates] = useState(initialCandidates)
   const [dismissedMerchantList, setDismissedMerchantList] = useState(dismissedMerchants)
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [toast, setToast] = useState<string | null>(null)
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  function showToast(msg: string) {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
+    setToast(msg)
+    toastTimerRef.current = setTimeout(() => setToast(null), 3500)
+  }
 
   function toggleExpand(id: string) {
     setExpandedId(prev => prev === id ? null : id)
@@ -893,6 +1046,12 @@ export function SubscriptionsClient({
     if (!sub) return
     setDismissedSubs(prev => prev.filter(s => s.id !== id))
     setActiveSubs(prev => [{ ...sub, is_active: true }, ...prev])
+  }
+
+  function handleMerged(sourceId: string, targetName: string) {
+    setActiveSubs(prev => prev.filter(s => s.id !== sourceId))
+    if (expandedId === sourceId) setExpandedId(null)
+    showToast(`Merged into ${targetName}`)
   }
 
   function handleCandidateConfirmed(merchant: string, newSub: Subscription) {
@@ -991,6 +1150,8 @@ export function SubscriptionsClient({
                 onToggle={() => toggleExpand(sub.id)}
                 onDismiss={() => handleSubDismissed(sub.id)}
                 onSubUpdated={handleSubUpdated}
+                onMerged={targetName => handleMerged(sub.id, targetName)}
+                otherSubs={activeSubs.filter(s => s.id !== sub.id)}
                 accounts={accounts}
               />
             ))}
@@ -1055,6 +1216,13 @@ export function SubscriptionsClient({
         timeline={timeline}
         accounts={accounts}
       />
+
+      {/* Toast */}
+      {toast && (
+        <div className="fixed bottom-6 right-6 bg-gray-900 text-white text-sm px-4 py-2.5 rounded-lg shadow-lg z-50">
+          {toast}
+        </div>
+      )}
     </div>
   )
 }
