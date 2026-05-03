@@ -2,6 +2,7 @@ import { createServerClient } from '@/lib/supabase/server'
 import { DEFAULT_HOUSEHOLD_ID } from '@/lib/constants'
 import { detectSubscriptions } from '@/lib/subscriptionDetector'
 import { Transaction, DetectedSubscription, Subscription } from '@/lib/types'
+import { applySubscriptionFilters, SubscriptionFilterContext } from '@/lib/subscriptionFilters'
 import { SubscriptionsClient, DuplicateSubscription, TimelineItem } from './SubscriptionsClient'
 
 function computeDuplicates(detected: DetectedSubscription[]): DuplicateSubscription[] {
@@ -79,13 +80,15 @@ export default async function SubscriptionsPage() {
     .eq('household_id', DEFAULT_HOUSEHOLD_ID)
     .order('name')
 
-  // Build lookup maps for detection
-  const merchantToSubId = new Map<string, string>()
+  // Build lookup maps for detection — active subs only so cancelled sub
+  // merchants surface as candidates rather than staying "confirmed".
+  const activeMerchantToSubId = new Map<string, string>()
   const subNames = new Map<string, string>()
   for (const sub of subRows ?? []) {
+    if (!sub.is_active) continue
     subNames.set(sub.id, sub.name)
     for (const link of (sub.subscription_merchants ?? []) as { merchant: string }[]) {
-      merchantToSubId.set(link.merchant, sub.id)
+      activeMerchantToSubId.set(link.merchant, sub.id)
     }
   }
 
@@ -124,7 +127,7 @@ export default async function SubscriptionsPage() {
   const allDetected = detectSubscriptions(
     (transactions || []) as Transaction[],
     accounts,
-    { merchantToSubId, subNames }
+    { merchantToSubId: activeMerchantToSubId, subNames }
   )
 
   // Detection data keyed by subscription_id for enriching confirmed rows
@@ -166,10 +169,14 @@ export default async function SubscriptionsPage() {
   const dismissedMerchants = (dismissedMappings ?? []).map(r => r.merchant as string)
   const dismissedSet = new Set(dismissedMerchants)
 
-  // ── Candidate list: detected merchants not linked to any subscription ──────
-  const candidateList = allDetected.filter(
-    d => d.subscription_id === null && !dismissedSet.has(d.merchant)
-  )
+  // ── Candidate list: detected merchants not linked to any active subscription
+  const filterCtx: SubscriptionFilterContext = {
+    dismissedMerchants: dismissedSet,
+    activeMerchantToSubId,
+    subscriptionNames: subNames,
+  }
+  const filteredDetected = applySubscriptionFilters(allDetected, filterCtx)
+  const candidateList = filteredDetected.filter(d => d.subscription_id === null)
 
   const duplicates = computeDuplicates(allDetected)
   const timeline = computeTimeline(allDetected)

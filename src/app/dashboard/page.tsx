@@ -1,6 +1,7 @@
 import { createServerClient } from '@/lib/supabase/server'
 import { DEFAULT_HOUSEHOLD_ID } from '@/lib/constants'
 import { detectSubscriptions } from '@/lib/subscriptionDetector'
+import { applySubscriptionFilters, SubscriptionFilterContext } from '@/lib/subscriptionFilters'
 import Link from 'next/link'
 import { Transaction } from '@/lib/types'
 import {
@@ -161,10 +162,46 @@ export default async function DashboardPage() {
     .slice(0, 3)
 
   // Subscriptions — upcoming in next 7 days
-  const detected = detectSubscriptions((subTxns || []) as Transaction[], accounts || [])
+  // Fetch active subscription merchants and dismissed merchants so the widget
+  // matches the relational model used by /subscriptions.
+  const [{ data: activeSubRows }, { data: dashDismissedMappings }] = await Promise.all([
+    supabase
+      .from('subscriptions')
+      .select('id, name, subscription_merchants(merchant)')
+      .eq('household_id', DEFAULT_HOUSEHOLD_ID)
+      .eq('is_active', true),
+    supabase
+      .from('merchant_mappings')
+      .select('merchant')
+      .eq('household_id', DEFAULT_HOUSEHOLD_ID)
+      .eq('classification', 'Not a subscription'),
+  ])
+
+  const activeMerchantToSubId = new Map<string, string>()
+  const subscriptionNames = new Map<string, string>()
+  for (const sub of activeSubRows ?? []) {
+    subscriptionNames.set(sub.id, sub.name)
+    for (const link of (sub.subscription_merchants ?? []) as { merchant: string }[]) {
+      activeMerchantToSubId.set(link.merchant, sub.id)
+    }
+  }
+  const dashDismissedSet = new Set((dashDismissedMappings ?? []).map(r => r.merchant as string))
+  const dashFilterCtx: SubscriptionFilterContext = {
+    dismissedMerchants: dashDismissedSet,
+    activeMerchantToSubId,
+    subscriptionNames,
+  }
+
+  const detected = detectSubscriptions(
+    (subTxns || []) as Transaction[],
+    accounts || [],
+    { merchantToSubId: activeMerchantToSubId, subNames: subscriptionNames }
+  )
+  const filteredDetected = applySubscriptionFilters(detected, dashFilterCtx)
+
   const sevenDaysFromNow = new Date()
   sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7)
-  const upcoming = detected
+  const upcoming = filteredDetected
     .filter(s => !s.is_lapsed && new Date(s.next_expected) <= sevenDaysFromNow)
     .sort((a, b) => a.next_expected.localeCompare(b.next_expected))
   const upcomingTotal = upcoming.reduce((s, sub) => s + sub.amount, 0)
@@ -316,9 +353,9 @@ export default async function DashboardPage() {
             <>
               <div className="space-y-2">
                 {upcoming.map(sub => (
-                  <div key={sub.merchant} className="flex items-center justify-between py-1">
+                  <div key={sub.subscription_id ?? sub.merchant} className="flex items-center justify-between py-1">
                     <div>
-                      <span className="text-sm font-medium text-gray-800">{sub.merchant}</span>
+                      <span className="text-sm font-medium text-gray-800">{sub.display_name}</span>
                       <span className="text-xs text-gray-400 ml-2">{formatDate(sub.next_expected)}</span>
                     </div>
                     <span className="text-sm font-medium text-gray-900">{audFull(sub.amount)}</span>
