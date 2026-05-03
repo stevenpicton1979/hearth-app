@@ -804,6 +804,126 @@ export const MERCHANT_CATEGORY_RULES: MerchantCategoryRule[] = [
   },
 
 
+  // ─── Batch 3 supplement: remaining eating-out, bakeries, retail ──────────────
+
+  {
+    name: 'etsy_shopping',
+    description: 'Etsy online marketplace (ETSY.COM* prefix) → Shopping',
+    match: (m) => /^etsy\.com\*/i.test(m),
+    output: { category: 'Shopping', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'two_xu_apparel',
+    description: '2XU performance apparel → Shopping',
+    match: (m) => /^2xu /i.test(m),
+    output: { category: 'Shopping', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'fast_times_clothing',
+    description: 'Fast Times clothing and accessories store → Shopping',
+    match: (m) => /^fast times/i.test(m),
+    output: { category: 'Shopping', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'the_lush_lily',
+    description: 'The Lush Lily florist → Shopping',
+    match: (m) => /^the lush lily/i.test(m),
+    output: { category: 'Shopping', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'ls_link_vision',
+    description: 'LS Link Vision Ltd — optician / eyewear → Healthcare',
+    match: (m) => /^ls link vision/i.test(m),
+    output: { category: 'Healthcare', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'andys_bakery',
+    description: "Andy's Bakery Wishart → Food & Groceries",
+    match: (m) => /^andy's bakery/i.test(m),
+    output: { category: 'Food & Groceries', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'kenrose_bakery',
+    description: 'Kenrose Street Bakery → Food & Groceries',
+    match: (m) => /^kenrose/i.test(m),
+    output: { category: 'Food & Groceries', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'just_bun',
+    description: 'Just Bun bakery → Food & Groceries',
+    match: (m) => /^just bun/i.test(m),
+    output: { category: 'Food & Groceries', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'nextra_newsagency',
+    description: 'Nextra newsagency (convenience, food, drinks) → Food & Groceries',
+    match: (m) => /^nextra /i.test(m),
+    output: { category: 'Food & Groceries', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'punch_espresso',
+    description: 'Punch Espresso coffee shop → Eating Out',
+    match: (m) => /^punch espresso/i.test(m),
+    output: { category: 'Eating Out', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'jimmys_cafe',
+    description: "Jimmy's cafe/restaurant → Eating Out",
+    match: (m) => /^jimmys$/i.test(m),
+    output: { category: 'Eating Out', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'tomcat_bar',
+    description: 'Tomcat Bar → Eating Out',
+    match: (m) => /^tomcat bar/i.test(m),
+    output: { category: 'Eating Out', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'satay_boss',
+    description: 'Satay Boss restaurant → Eating Out',
+    match: (m) => /^satay boss/i.test(m),
+    output: { category: 'Eating Out', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'thai_antique',
+    description: 'Thai Antique Restaurant → Eating Out',
+    match: (m) => /^thai antique/i.test(m),
+    output: { category: 'Eating Out', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'sitar_restaurant',
+    description: 'Sitar Indian restaurant → Eating Out',
+    match: (m) => /^sitar$/i.test(m),
+    output: { category: 'Eating Out', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'the_archive_bar',
+    description: 'The Archive bar/restaurant → Eating Out',
+    match: (m) => /^the archive$/i.test(m),
+    output: { category: 'Eating Out', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'bellissimo_coffee',
+    description: 'Bellissimo Coffee → Eating Out',
+    match: (m) => /^bellissimo coffee/i.test(m),
+    output: { category: 'Eating Out', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'food_odyssey',
+    description: 'Food Odyssey food court operator → Eating Out',
+    match: (m) => /^food odyssey/i.test(m),
+    output: { category: 'Eating Out', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+  {
+    name: 'ls_eating_out',
+    description:
+      'Lightspeed POS terminal merchants (LS MERCHANT NAME) not caught by named rules. ' +
+      'Covers cafes and food venues using Lightspeed EFTPOS.',
+    match: (m) => /^ls (between the flags|supernumerary)/i.test(m),
+    output: { category: 'Eating Out', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+
+
   // ─── Transfers (CommBank internal) ───────────────────────────────────────────
 
   {

@@ -1383,6 +1383,147 @@ describe('mcare_benefits_income', () => {
 })
 
 
+// ─── Batch 3 supplement rules ─────────────────────────────────────────────────
+
+describe('etsy_shopping', () => {
+  it('matches "ETSY.COM*ARBITRARYGIFT"', () => {
+    const result = applyMerchantCategoryRules('ETSY.COM*ARBITRARYGIFT', expense)
+    expect(result?.category).toBe('Shopping')
+    expect(result?.ruleName).toBe('etsy_shopping')
+  })
+})
+
+describe('two_xu_apparel', () => {
+  it('matches "2XU PTY LTD"', () => {
+    const result = applyMerchantCategoryRules('2XU PTY LTD', expense)
+    expect(result?.category).toBe('Shopping')
+    expect(result?.ruleName).toBe('two_xu_apparel')
+  })
+})
+
+describe('fast_times_clothing', () => {
+  it('matches "FAST TIMES"', () => {
+    const result = applyMerchantCategoryRules('FAST TIMES', expense)
+    expect(result?.category).toBe('Shopping')
+    expect(result?.ruleName).toBe('fast_times_clothing')
+  })
+})
+
+describe('ls_link_vision', () => {
+  it('matches "LS LINK VISION LTD" → Healthcare', () => {
+    const result = applyMerchantCategoryRules('LS LINK VISION LTD', expense)
+    expect(result?.category).toBe('Healthcare')
+    expect(result?.ruleName).toBe('ls_link_vision')
+  })
+})
+
+describe('andys_bakery', () => {
+  it("matches \"ANDY'S BAKERY WISHART\"", () => {
+    const result = applyMerchantCategoryRules("ANDY'S BAKERY WISHART", expense)
+    expect(result?.category).toBe('Food & Groceries')
+    expect(result?.ruleName).toBe('andys_bakery')
+  })
+})
+
+describe('kenrose_bakery', () => {
+  it('matches "KENROSE STREET BAKERY"', () => {
+    const result = applyMerchantCategoryRules('KENROSE STREET BAKERY', expense)
+    expect(result?.category).toBe('Food & Groceries')
+    expect(result?.ruleName).toBe('kenrose_bakery')
+  })
+})
+
+describe('just_bun', () => {
+  it('matches "JUST BUN"', () => {
+    const result = applyMerchantCategoryRules('JUST BUN', expense)
+    expect(result?.category).toBe('Food & Groceries')
+    expect(result?.ruleName).toBe('just_bun')
+  })
+})
+
+describe('nextra_newsagency', () => {
+  it('matches "NEXTRA CARINDALE NEWS"', () => {
+    const result = applyMerchantCategoryRules('NEXTRA CARINDALE NEWS', expense)
+    expect(result?.category).toBe('Food & Groceries')
+    expect(result?.ruleName).toBe('nextra_newsagency')
+  })
+})
+
+describe('tomcat_bar', () => {
+  it('matches "TOMCAT BAR"', () => {
+    const result = applyMerchantCategoryRules('TOMCAT BAR', expense)
+    expect(result?.category).toBe('Eating Out')
+    expect(result?.ruleName).toBe('tomcat_bar')
+  })
+})
+
+describe('satay_boss', () => {
+  it('matches "SATAY BOSS"', () => {
+    const result = applyMerchantCategoryRules('SATAY BOSS', expense)
+    expect(result?.category).toBe('Eating Out')
+    expect(result?.ruleName).toBe('satay_boss')
+  })
+})
+
+describe('thai_antique', () => {
+  it('matches "THAI ANTIQUE RESTAURA"', () => {
+    const result = applyMerchantCategoryRules('THAI ANTIQUE RESTAURA', expense)
+    expect(result?.category).toBe('Eating Out')
+    expect(result?.ruleName).toBe('thai_antique')
+  })
+})
+
+describe('sitar_restaurant', () => {
+  it('matches "SITAR"', () => {
+    const result = applyMerchantCategoryRules('SITAR', expense)
+    expect(result?.category).toBe('Eating Out')
+    expect(result?.ruleName).toBe('sitar_restaurant')
+  })
+})
+
+describe('the_archive_bar', () => {
+  it('matches "THE ARCHIVE"', () => {
+    const result = applyMerchantCategoryRules('THE ARCHIVE', expense)
+    expect(result?.category).toBe('Eating Out')
+    expect(result?.ruleName).toBe('the_archive_bar')
+  })
+})
+
+describe('bellissimo_coffee', () => {
+  it('matches "BELLISSIMO COFFEE - CO"', () => {
+    const result = applyMerchantCategoryRules('BELLISSIMO COFFEE - CO', expense)
+    expect(result?.category).toBe('Eating Out')
+    expect(result?.ruleName).toBe('bellissimo_coffee')
+  })
+})
+
+describe('food_odyssey', () => {
+  it('matches "FOOD ODYSSEY OPERATQPS"', () => {
+    const result = applyMerchantCategoryRules('FOOD ODYSSEY OPERATQPS', expense)
+    expect(result?.category).toBe('Eating Out')
+    expect(result?.ruleName).toBe('food_odyssey')
+  })
+})
+
+describe('ls_eating_out', () => {
+  it('matches "LS BETWEEN THE FLAGS C" — Lightspeed cafe', () => {
+    const result = applyMerchantCategoryRules('LS BETWEEN THE FLAGS C', expense)
+    expect(result?.category).toBe('Eating Out')
+    expect(result?.ruleName).toBe('ls_eating_out')
+  })
+
+  it('matches "LS SUPERNUMERARY COFFE"', () => {
+    const result = applyMerchantCategoryRules('LS SUPERNUMERARY COFFE', expense)
+    expect(result?.ruleName).toBe('ls_eating_out')
+  })
+
+  it('does NOT catch "LS LINK VISION LTD" (earlier named rule wins)', () => {
+    const result = applyMerchantCategoryRules('LS LINK VISION LTD', expense)
+    expect(result?.ruleName).toBe('ls_link_vision')
+  })
+})
+
+
 // ─── no match ─────────────────────────────────────────────────────────────────
 
 describe('no match', () => {
