@@ -488,4 +488,100 @@ describe('subscriptionDetector - Subscription Detection Algorithm', () => {
       expect(result.find(s => s.merchant === 'MYER')).toBeUndefined()
     })
   })
+
+  describe('merchantToSubId option — linked subscription detection', () => {
+    it('detects subscription when merchant alias differs from subscription name', () => {
+      const merchantToSubId = new Map([['HCFHEALTH', 'sub-hcf']])
+      const subNames = new Map([['sub-hcf', 'HCF Health Insurance']])
+      const transactions: Transaction[] = [
+        createTransaction('HCFHEALTH', -189.95, '2026-04-01', 'Insurance'),
+        createTransaction('HCFHEALTH', -189.95, '2026-03-01', 'Insurance'),
+        createTransaction('HCFHEALTH', -189.95, '2026-02-01', 'Insurance'),
+      ]
+      const result = detectSubscriptions(transactions, mockAccounts, { merchantToSubId, subNames })
+      const sub = result.find(s => s.subscription_id === 'sub-hcf')
+      expect(sub).toBeDefined()
+      expect(sub?.display_name).toBe('HCF Health Insurance')
+      expect(sub?.merchant).toBe('HCFHEALTH')
+      expect(sub?.subscription_id).toBe('sub-hcf')
+    })
+
+    it('groups two merchants linked to the same subscription into one entry', () => {
+      // Both aliases billed in the same monthly cadence (one per month, alternating).
+      // Combined stream: Jan→Feb→Mar→Apr = monthly interval → detectable.
+      const merchantToSubId = new Map([
+        ['MERCHANT_A', 'sub-1'],
+        ['MERCHANT_B', 'sub-1'],
+      ])
+      const subNames = new Map([['sub-1', 'Subscription S']])
+      const transactions: Transaction[] = [
+        createTransaction('MERCHANT_A', -10, '2026-04-01', 'Entertainment'),
+        createTransaction('MERCHANT_A', -10, '2026-03-01', 'Entertainment'),
+        createTransaction('MERCHANT_A', -10, '2026-02-01', 'Entertainment'),
+        createTransaction('MERCHANT_B', -10, '2026-01-01', 'Entertainment'),
+      ]
+      const result = detectSubscriptions(transactions, mockAccounts, { merchantToSubId, subNames })
+      const entries = result.filter(s => s.subscription_id === 'sub-1')
+      expect(entries).toHaveLength(1)
+      expect(entries[0].display_name).toBe('Subscription S')
+      expect(entries[0].merchants).toContain('MERCHANT_A')
+      expect(entries[0].merchants).toContain('MERCHANT_B')
+      expect(entries[0].occurrences).toBe(4)
+    })
+
+    it('sets subscription_id to null for unlinked candidate merchants', () => {
+      const transactions: Transaction[] = [
+        createTransaction('UNLINKED_MERCHANT', -9.99, '2026-04-01', 'Entertainment'),
+        createTransaction('UNLINKED_MERCHANT', -9.99, '2026-03-01', 'Entertainment'),
+        createTransaction('UNLINKED_MERCHANT', -9.99, '2026-02-01', 'Entertainment'),
+      ]
+      const result = detectSubscriptions(transactions, mockAccounts, { merchantToSubId: new Map(), subNames: new Map() })
+      const sub = result.find(s => s.merchant === 'UNLINKED_MERCHANT')
+      expect(sub).toBeDefined()
+      expect(sub?.subscription_id).toBeNull()
+    })
+  })
+
+  describe('Linked subscriptions bypass category exclusion', () => {
+    it('detects HCF-style subscription when merchant transactions are categorised as Medical', () => {
+      // Regression: confirmed subscriptions whose alias merchant appears in EXCLUDED_CATEGORIES
+      // were being silently dropped. Category filter must not apply to linked merchants.
+      const merchantToSubId = new Map([['HCFHEALTH', 'sub-hcf']])
+      const subNames = new Map([['sub-hcf', 'HCF Health Insurance']])
+      const transactions: Transaction[] = [
+        createTransaction('HCFHEALTH', -189.95, '2026-04-01', 'Medical'),
+        createTransaction('HCFHEALTH', -189.95, '2026-03-01', 'Medical'),
+        createTransaction('HCFHEALTH', -189.95, '2026-02-01', 'Medical'),
+      ]
+      const result = detectSubscriptions(transactions, mockAccounts, { merchantToSubId, subNames })
+      const sub = result.find(s => s.subscription_id === 'sub-hcf')
+      expect(sub).toBeDefined()
+      expect(sub?.last_charged).toBe('2026-04-01')
+      expect(sub?.occurrences).toBe(3)
+    })
+
+    it('detects linked subscription whose merchant transactions are categorised as Shopping', () => {
+      const merchantToSubId = new Map([['SOME_BOX_SUBSCRIPTION', 'sub-box']])
+      const subNames = new Map([['sub-box', 'Mystery Box Monthly']])
+      const transactions: Transaction[] = [
+        createTransaction('SOME_BOX_SUBSCRIPTION', -29.99, '2026-04-01', 'Shopping'),
+        createTransaction('SOME_BOX_SUBSCRIPTION', -29.99, '2026-03-01', 'Shopping'),
+        createTransaction('SOME_BOX_SUBSCRIPTION', -29.99, '2026-02-01', 'Shopping'),
+      ]
+      const result = detectSubscriptions(transactions, mockAccounts, { merchantToSubId, subNames })
+      const sub = result.find(s => s.subscription_id === 'sub-box')
+      expect(sub).toBeDefined()
+    })
+
+    it('still excludes unlinked merchants in excluded categories', () => {
+      // Category exclusion must still work for unlinked merchants (candidate detection)
+      const transactions: Transaction[] = [
+        createTransaction('WOOLWORTHS', -80, '2026-04-01', 'Food & Groceries'),
+        createTransaction('WOOLWORTHS', -75, '2026-03-01', 'Food & Groceries'),
+        createTransaction('WOOLWORTHS', -82, '2026-02-01', 'Food & Groceries'),
+      ]
+      const result = detectSubscriptions(transactions, mockAccounts, { merchantToSubId: new Map(), subNames: new Map() })
+      expect(result.find(s => s.merchant === 'WOOLWORTHS')).toBeUndefined()
+    })
+  })
 })

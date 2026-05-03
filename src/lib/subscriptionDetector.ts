@@ -87,9 +87,11 @@ export function detectSubscriptions(
   for (const [groupKey, { txns, merchants, subId }] of Object.entries(byGroup)) {
     if (txns.length < 2) continue
 
-    // Check if merchant is in an excluded category (use first transaction's category)
+    // Category exclusion applies only to unlinked candidate merchants.
+    // Confirmed subscriptions (subId != null) bypass this filter so their
+    // transaction data is always surfaced in the UI.
     const merchantCategory = txns[0].category
-    if (merchantCategory && EXCLUDED_CATEGORIES.has(merchantCategory)) continue
+    if (!subId && merchantCategory && EXCLUDED_CATEGORIES.has(merchantCategory)) continue
 
     const sorted = [...txns].sort((a, b) => a.date.localeCompare(b.date))
 
