@@ -50,8 +50,8 @@ describe('linkTransferPairs', () => {
       { id: 'tx-a', account_id: 'acc-1', date: '2025-06-01', amount: -500, is_transfer: true },
       { id: 'tx-b', account_id: 'acc-2', date: '2025-06-01', amount: 500,  is_transfer: true },
     ]
-    const count = await linkTransferPairs(['2025-06-01'])
-    expect(count).toBe(1)
+    const result = await linkTransferPairs(['2025-06-01'])
+    expect(result.pairs).toBe(1)
   })
 
   // 2. Regression: one-sided is_transfer flag must NOT produce a link (the ATO false-positive bug)
@@ -60,8 +60,8 @@ describe('linkTransferPairs', () => {
       { id: 'tx-a', account_id: 'acc-1', date: '2025-06-01', amount: -500, is_transfer: true  },
       { id: 'tx-b', account_id: 'acc-2', date: '2025-06-01', amount: 500,  is_transfer: false },
     ]
-    const count = await linkTransferPairs(['2025-06-01'])
-    expect(count).toBe(0)
+    const result = await linkTransferPairs(['2025-06-01'])
+    expect(result.pairs).toBe(0)
     expect(db.updates).toHaveLength(0)
   })
 
@@ -71,8 +71,8 @@ describe('linkTransferPairs', () => {
       { id: 'tx-a', account_id: 'acc-1', date: '2025-06-01', amount: -500, is_transfer: true },
       { id: 'tx-b', account_id: 'acc-1', date: '2025-06-01', amount: 500,  is_transfer: true },
     ]
-    const count = await linkTransferPairs(['2025-06-01'])
-    expect(count).toBe(0)
+    const result = await linkTransferPairs(['2025-06-01'])
+    expect(result.pairs).toBe(0)
     expect(db.updates).toHaveLength(0)
   })
 
@@ -82,8 +82,8 @@ describe('linkTransferPairs', () => {
       { id: 'tx-a', account_id: 'acc-1', date: '2025-06-01', amount: -500, is_transfer: true },
       { id: 'tx-b', account_id: 'acc-2', date: '2025-06-01', amount: 400,  is_transfer: true },
     ]
-    const count = await linkTransferPairs(['2025-06-01'])
-    expect(count).toBe(0)
+    const result = await linkTransferPairs(['2025-06-01'])
+    expect(result.pairs).toBe(0)
     expect(db.updates).toHaveLength(0)
   })
 
@@ -93,8 +93,8 @@ describe('linkTransferPairs', () => {
       { id: 'tx-a', account_id: 'acc-1', date: '2025-06-01', amount: -500, is_transfer: true },
       { id: 'tx-b', account_id: 'acc-2', date: '2025-06-02', amount: 500,  is_transfer: true },
     ]
-    const count = await linkTransferPairs(['2025-06-01', '2025-06-02'])
-    expect(count).toBe(0)
+    const result = await linkTransferPairs(['2025-06-01', '2025-06-02'])
+    expect(result.pairs).toBe(0)
     expect(db.updates).toHaveLength(0)
   })
 
@@ -108,9 +108,9 @@ describe('linkTransferPairs', () => {
       // tx-c also matches tx-a in amount/date, but tx-a is already paired
       { id: 'tx-c', account_id: 'acc-3', date: '2025-06-01', amount: 500,  is_transfer: true },
     ]
-    const count = await linkTransferPairs(['2025-06-01'])
+    const result = await linkTransferPairs(['2025-06-01'])
     // Only one pair: tx-a <-> tx-b. tx-c stays unlinked.
-    expect(count).toBe(1)
+    expect(result.pairs).toBe(1)
     expect(db.updates.find(u => u.id === 'tx-c')).toBeUndefined()
   })
 
@@ -176,8 +176,8 @@ describe('linkTransferPairs', () => {
       { id: 'tx-e', account_id: 'acc-1', date: '2025-06-03', amount: -300, is_transfer: true },
       { id: 'tx-f', account_id: 'acc-2', date: '2025-06-03', amount: 300,  is_transfer: true },
     ]
-    const count = await linkTransferPairs(['2025-06-01', '2025-06-02', '2025-06-03'])
-    expect(count).toBe(3)
+    const result = await linkTransferPairs(['2025-06-01', '2025-06-02', '2025-06-03'])
+    expect(result.pairs).toBe(3)
     // Sanity-check: 6 update calls total (2 per pair)
     expect(db.updates).toHaveLength(6)
   })

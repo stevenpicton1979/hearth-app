@@ -2,52 +2,60 @@ import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
 import { DEFAULT_HOUSEHOLD_ID } from '@/lib/constants'
 import { parseXeroContactName } from '@/lib/xeroContactParser'
+import { linkTransferPairs } from '@/lib/transferLinker'
 
 // Vercel Pro: allow up to 5 minutes for large backfills
 export const maxDuration = 300
 
-// ---------------------------------------------------------------------------
 // POST /api/admin/relink-transfers
 //
-// Backfill endpoint: re-processes all existing transfer pairs and propagates
-// gl_account and contact_name from the BHT side to the personal side.
+// Two-phase backfill:
+//   Phase 1 — run the transfer linker over all dates to pair previously
+//              unlinked rows and propagate BHT metadata to the personal side.
+//   Phase 2 — for already-linked pairs (pre-migration data), propagate
+//              gl_account + contact_name where it is still missing.
 //
-// This is idempotent — safe to run multiple times.
-// Run this once after deploying the Director Drawings migration, then run
-// /api/admin/reprocess-csv to reclassify the personal-side transactions.
-// ---------------------------------------------------------------------------
+// Idempotent — safe to run multiple times.
+// After this, run /api/admin/reprocess-csv to reclassify personal-side rows.
 
 export async function POST() {
   const supabase = createServerClient()
 
-  // Fetch all linked transfer pairs where the BHT side has a gl_account.
-  // We identify the BHT side as the row with a non-null gl_account (Xero-synced).
-  const { data: bhtRows, error } = await supabase
+  // ── Phase 1: link unlinked transfer pairs ───────────────────────────────
+  const { data: dateRows, error: dateErr } = await supabase
+    .from('transactions')
+    .select('date')
+    .eq('household_id', DEFAULT_HOUSEHOLD_ID)
+
+  if (dateErr) return NextResponse.json({ error: dateErr.message }, { status: 500 })
+
+  const allDates = Array.from(new Set((dateRows ?? []).map(r => r.date as string)))
+  const { pairs, glPropagated: p1Gl, contactExtracted: p1Contact } = await linkTransferPairs(allDates)
+
+  // ── Phase 2: propagate metadata to already-linked pre-migration rows ────
+  const { data: bhtRows, error: bhtErr } = await supabase
     .from('transactions')
     .select('id, linked_transfer_id, gl_account, raw_description')
     .eq('household_id', DEFAULT_HOUSEHOLD_ID)
-    .eq('is_transfer', true)
     .not('linked_transfer_id', 'is', null)
     .not('gl_account', 'is', null)
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  if (!bhtRows || bhtRows.length === 0) return NextResponse.json({ updated: 0 })
+  if (bhtErr) return NextResponse.json({ error: bhtErr.message }, { status: 500 })
 
-  // For each BHT row, update its linked personal-side row with the propagated fields.
+  let p2Gl = 0
+  let p2Contact = 0
   const BATCH = 50
-  let updated = 0
 
-  for (let i = 0; i < bhtRows.length; i += BATCH) {
-    const batch = bhtRows.slice(i, i + BATCH)
+  for (let i = 0; i < (bhtRows ?? []).length; i += BATCH) {
+    const batch = bhtRows!.slice(i, i + BATCH)
     const results = await Promise.all(
       batch.map(row => {
         const contactName = parseXeroContactName(row.raw_description)
+        if (row.gl_account) p2Gl++
+        if (contactName) p2Contact++
         return supabase
           .from('transactions')
-          .update({
-            linked_gl_account: row.gl_account,
-            contact_name: contactName,
-          })
+          .update({ linked_gl_account: row.gl_account, contact_name: contactName })
           .eq('id', row.linked_transfer_id)
       })
     )
@@ -55,8 +63,11 @@ export async function POST() {
     if (batchErr?.error) {
       return NextResponse.json({ error: `batch ${i}: ${batchErr.error.message}` }, { status: 500 })
     }
-    updated += batch.length
   }
 
-  return NextResponse.json({ updated })
+  return NextResponse.json({
+    linked_pairs: pairs,
+    gl_propagated: p1Gl + p2Gl,
+    contact_extracted: p1Contact + p2Contact,
+  })
 }
