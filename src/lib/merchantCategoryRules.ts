@@ -1049,6 +1049,12 @@ export const MERCHANT_CATEGORY_RULES: MerchantCategoryRule[] = [
     match: (m) => /cash adv fee/i.test(m),
     output: { category: 'Bank Fees', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
   },
+  {
+    name: 'cba_interest_charges',
+    description: 'CBA "INTEREST CHARGES" — general credit card interest → Bank Fees. Anchored to avoid matching "INTEREST ON CASH ADV" (cba_interest_cash_adv).',
+    match: (m) => /^interest charges$/i.test(m),
+    output: { category: 'Bank Fees', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
 
   // Utilities — Momentum Energy (electricity retailer)
   {

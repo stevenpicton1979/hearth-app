@@ -1569,6 +1569,23 @@ describe('cba_cash_adv_fee', () => {
   })
 })
 
+describe('cba_interest_charges', () => {
+  it('matches "INTEREST CHARGES" exactly → Bank Fees / Joint', () => {
+    const result = applyMerchantCategoryRules('INTEREST CHARGES', expense)
+    expect(result?.category).toBe('Bank Fees')
+    expect(result?.isIncome).toBe(false)
+    expect(result?.isTransfer).toBe(false)
+    expect(result?.isSubscription).toBe(false)
+    expect(result?.owner).toBe('Joint')
+    expect(result?.ruleName).toBe('cba_interest_charges')
+  })
+
+  it('does NOT match "INTEREST CHARGES ON CASH ADV" — anchored $ prevents suffix matches', () => {
+    const result = applyMerchantCategoryRules('INTEREST CHARGES ON CASH ADV', expense)
+    expect(result?.ruleName).not.toBe('cba_interest_charges')
+  })
+})
+
 describe('momentum_energy', () => {
   it('matches "MOMENTUM" → Utilities', () => {
     const result = applyMerchantCategoryRules('MOMENTUM', expense)
@@ -2004,7 +2021,7 @@ describe('fingerprint integrity', () => {
       JSON.stringify({ category: 'Healthcare', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' }),
       // gold_coast_aquatics, diving_queensland — Joint Health & Fitness non-subscription
       JSON.stringify({ category: 'Health & Fitness', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' }),
-      // cba_annual_fee, cba_interest_cash_adv, cba_cash_adv_fee — all Joint Bank Fees
+      // cba_annual_fee, cba_interest_cash_adv, cba_cash_adv_fee, cba_interest_charges — all Joint Bank Fees
       JSON.stringify({ category: 'Bank Fees', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' }),
       // qld_urban_utilities, momentum_energy — Joint Utilities
       JSON.stringify({ category: 'Utilities', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' }),
