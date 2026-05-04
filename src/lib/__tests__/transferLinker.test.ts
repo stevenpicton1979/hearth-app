@@ -10,8 +10,10 @@ const db = vi.hoisted(() => ({
     date: string
     amount: number
     is_transfer: boolean
+    gl_account?: string | null
+    raw_description?: string | null
   }>,
-  updates: [] as Array<{ id: string; linked_transfer_id: string }>,
+  updates: [] as Array<Record<string, unknown>>,
 }))
 
 vi.mock('../supabase/server', () => ({
@@ -28,10 +30,7 @@ vi.mock('../supabase/server', () => ({
       // update chain: .update(vals).eq(col, id) -> records call, resolves {}
       update: (vals: Record<string, unknown>) => ({
         eq: (_: string, id: string) => {
-          db.updates.push({
-            id,
-            linked_transfer_id: vals.linked_transfer_id as string,
-          })
+          db.updates.push({ id, ...vals })
           return Promise.resolve({})
         },
       }),
@@ -127,6 +126,44 @@ describe('linkTransferPairs', () => {
     const updateB = db.updates.find(u => u.id === 'tx-b')
     expect(updateA?.linked_transfer_id).toBe('tx-b')
     expect(updateB?.linked_transfer_id).toBe('tx-a')
+  })
+
+  // 9. GL account propagation -- BHT side's gl_account propagates to personal side
+  it('propagates gl_account from BHT side to personal-side linked_gl_account', async () => {
+    db.rows = [
+      // BHT side: has gl_account (Xero-synced), negative amount (debit from BHT)
+      { id: 'tx-bht', account_id: 'acc-bht', date: '2025-06-01', amount: -4000, is_transfer: true, gl_account: 'Wages Payable', raw_description: null },
+      // Personal side: no gl_account, positive amount (credit)
+      { id: 'tx-personal', account_id: 'acc-personal', date: '2025-06-01', amount: 4000, is_transfer: true, gl_account: null, raw_description: null },
+    ]
+    await linkTransferPairs(['2025-06-01'])
+
+    const personalUpdate = db.updates.find(u => u.id === 'tx-personal')
+    expect(personalUpdate?.linked_gl_account).toBe('Wages Payable')
+  })
+
+  // 10. Contact name propagation -- parsed from BHT raw_description
+  it('propagates contact_name (first pipe-segment of raw_description) to personal side', async () => {
+    db.rows = [
+      { id: 'tx-bht', account_id: 'acc-bht', date: '2025-06-01', amount: -4000, is_transfer: true, gl_account: 'Wages Payable', raw_description: 'Steven Picton | Mar 2026 | BHT' },
+      { id: 'tx-personal', account_id: 'acc-personal', date: '2025-06-01', amount: 4000, is_transfer: true, gl_account: null, raw_description: null },
+    ]
+    await linkTransferPairs(['2025-06-01'])
+
+    const personalUpdate = db.updates.find(u => u.id === 'tx-personal')
+    expect(personalUpdate?.contact_name).toBe('Steven Picton')
+  })
+
+  // 11. BHT side does not receive linked_gl_account (propagation is one-way)
+  it('does NOT set linked_gl_account on the BHT side itself', async () => {
+    db.rows = [
+      { id: 'tx-bht', account_id: 'acc-bht', date: '2025-06-01', amount: -4000, is_transfer: true, gl_account: 'Wages Payable', raw_description: 'Steven Picton | Mar 2026' },
+      { id: 'tx-personal', account_id: 'acc-personal', date: '2025-06-01', amount: 4000, is_transfer: true, gl_account: null, raw_description: null },
+    ]
+    await linkTransferPairs(['2025-06-01'])
+
+    const bhtUpdate = db.updates.find(u => u.id === 'tx-bht')
+    expect(bhtUpdate?.linked_gl_account).toBeUndefined()
   })
 
   // 8. Return value -- must equal the number of *pairs* (not individual rows)

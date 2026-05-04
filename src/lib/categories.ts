@@ -29,8 +29,9 @@ export const CATEGORIES = [
   // 'Technology' and 'Entertainment' reused from below
 
   // Personal — Income
-  'Salary',           // PAYG wages into personal account
-  'Director Income',  // director's fees / profit distributions (taxed at year-end)
+  'Salary',            // PAYG wages into personal account
+  'Director Income',   // director's fees / profit distributions (taxed at year-end)
+  'Director Drawings', // provisional draws from BHT — confirmed by accountant at year-end (is_provisional=true)
 
   // Personal — Expenses
   'Groceries',
@@ -69,6 +70,8 @@ export function getOutcomeBucket(tx: {
 
   // Joint realm
   if (owner === 'Joint') {
+    // Director Drawings are provisional and get their own bucket (not Income/Expenses)
+    if (category === 'Director Drawings') return ['Personal', 'Joint', 'Director Drawings (provisional)']
     if (isIncome) return ['Personal', 'Joint', 'Income', category ?? 'Uncategorised']
     return ['Personal', 'Joint', 'Expenses', category ?? 'Uncategorised']
   }

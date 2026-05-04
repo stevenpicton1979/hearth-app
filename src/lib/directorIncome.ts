@@ -28,12 +28,17 @@ const DIRECTOR_INCOME_PATTERNS: { re: RegExp; name: string }[] = [
   { re: /\bpayroll\b/i,   name: 'payroll' },
 ]
 
+// Personal-side credits arriving as "TRANSFER FROM XX####" are internal transfers,
+// not wages — the transfer linker + reprocess-csv handles reclassification after linking.
+const SKIP_TRANSFER_FROM = /^transfer from\s+xx\d{4}/i
+
 const EXCLUDE_PATTERNS = [
   /dir\s*loan\s*repay/i,
 ]
 
 export function classifyDirectorIncome(description: string, amount: number): DirectorIncomeResult {
   if (amount <= 0) return { match: false, category: 'Director Income', ruleName: null }
+  if (SKIP_TRANSFER_FROM.test(description)) return { match: false, category: 'Director Income', ruleName: null }
   if (EXCLUDE_PATTERNS.some(re => re.test(description))) {
     return { match: false, category: 'Director Income', ruleName: null }
   }

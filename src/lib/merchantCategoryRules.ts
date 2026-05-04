@@ -41,6 +41,10 @@ export interface RuleContext {
   glAccount?: string | null
   /** Account owner from the accounts table — reserved for future owner-specific rules. */
   accountOwner?: string | null
+  /** GL account from the linked (paired) transfer transaction — propagated by transfer linker. */
+  linkedGlAccount?: string | null
+  /** Contact name parsed from the linked transfer's raw_description — propagated by transfer linker. */
+  linkedContactName?: string | null
 }
 
 export interface MerchantCategoryRule {
@@ -59,6 +63,8 @@ export interface MerchantCategoryRule {
     isTransfer: boolean
     isSubscription: boolean
     owner: 'Steven' | 'Nicola' | 'Joint' | 'Business' | null
+    /** When true, the transaction is provisional and should be confirmed by the accountant. */
+    isProvisional?: boolean
   }
 }
 
@@ -69,6 +75,7 @@ export interface RuleResult {
   isTransfer: boolean
   isSubscription: boolean
   owner: 'Steven' | 'Nicola' | 'Joint' | 'Business' | null
+  isProvisional?: boolean
 }
 
 export const MERCHANT_CATEGORY_RULES: MerchantCategoryRule[] = [
@@ -142,6 +149,13 @@ export const MERCHANT_CATEGORY_RULES: MerchantCategoryRule[] = [
     name: 'superannuation_payable',
     description: 'Xero GL account "Superannuation Payable" — SGC super payments → Payroll Expense',
     match: (m, ctx) => /superannuation payable/i.test(ctx.glAccount ?? ''),
+    output: { category: 'Payroll Expense', isIncome: null, isTransfer: false, isSubscription: false, owner: 'Business' },
+  },
+
+  {
+    name: 'bht_wages_payable',
+    description: 'Xero GL account "Wages Payable" — PAYG wage payments from BHT → Payroll Expense',
+    match: (m, ctx) => /wages payable/i.test(ctx.glAccount ?? ''),
     output: { category: 'Payroll Expense', isIncome: null, isTransfer: false, isSubscription: false, owner: 'Business' },
   },
 
@@ -1094,6 +1108,32 @@ export const MERCHANT_CATEGORY_RULES: MerchantCategoryRule[] = [
     description: 'River City Corporation venue/eatery → Eating Out',
     match: (m) => /^river city corporati/i.test(m),
     output: { category: 'Eating Out', isIncome: false, isTransfer: false, isSubscription: false, owner: 'Joint' },
+  },
+
+  // ─── Linked-context reclassification ─────────────────────────────────────────
+  // These rules fire during reprocess-csv when linked_gl_account / contact_name have
+  // been propagated by the transfer linker.  They MUST precede commbank_internal_transfer
+  // so that a personal-side "TRANSFER FROM XX####" can be reclassified correctly.
+
+  {
+    name: 'steven_wage_from_bht',
+    description:
+      'Personal-side credit linked to a BHT "Wages Payable" debit with Steven as the contact. ' +
+      'After transfer linker propagates linkedGlAccount="Wages Payable" and linkedContactName="Steven Picton", ' +
+      'reprocess-csv reclassifies this from is_transfer to Salary for Steven.',
+    match: (m, ctx) => /wages payable/i.test(ctx.linkedGlAccount ?? '') && /steven/i.test(ctx.linkedContactName ?? ''),
+    output: { category: 'Salary', isIncome: true, isTransfer: false, isSubscription: false, owner: 'Steven' },
+  },
+
+  {
+    name: 'bht_directors_loan_to_joint',
+    description:
+      'Personal-side credit linked to a BHT "Directors Loan" debit. ' +
+      'After transfer linker propagates linkedGlAccount containing "directors loan", ' +
+      'reprocess-csv reclassifies this as a provisional Director Drawing. ' +
+      'is_provisional=true until the accountant confirms allocation at year-end.',
+    match: (m, ctx) => /directors loan/i.test(ctx.linkedGlAccount ?? ''),
+    output: { category: 'Director Drawings', isIncome: null, isTransfer: false, isSubscription: false, owner: 'Joint', isProvisional: true },
   },
 
   // ─── Transfers (CommBank internal) ───────────────────────────────────────────

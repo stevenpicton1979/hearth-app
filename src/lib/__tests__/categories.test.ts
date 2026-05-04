@@ -27,6 +27,16 @@ describe('getOutcomeBucket', () => {
       .toEqual(['Personal', 'Joint', 'Expenses', 'Groceries'])
   })
 
+  it('Director Drawings (Joint) → own provisional bucket, not Income or Expenses', () => {
+    expect(getOutcomeBucket({ owner: 'Joint', isIncome: false, isSubscription: false, category: 'Director Drawings' }))
+      .toEqual(['Personal', 'Joint', 'Director Drawings (provisional)'])
+  })
+
+  it('Director Drawings — isIncome=true also routes to provisional bucket (amount sign may vary)', () => {
+    expect(getOutcomeBucket({ owner: 'Joint', isIncome: true, isSubscription: false, category: 'Director Drawings' }))
+      .toEqual(['Personal', 'Joint', 'Director Drawings (provisional)'])
+  })
+
   it('Personal (Steven) expense — subscription', () => {
     expect(getOutcomeBucket({ owner: 'Steven', isIncome: false, isSubscription: true, category: 'Entertainment' }))
       .toEqual(['Personal', 'Steven', 'Expenses', 'Subscriptions', 'Entertainment'])

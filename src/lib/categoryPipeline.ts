@@ -29,6 +29,10 @@ export interface RawTransaction {
    * unless a higher-priority in-pipeline rule overrides it.
    */
   matched_rule?: string | null
+  /** GL account propagated from a linked transfer pair (set by transfer linker). */
+  linked_gl_account?: string | null
+  /** Contact name parsed from the linked transfer's raw_description (set by transfer linker). */
+  contact_name?: string | null
 }
 
 export interface ProcessedTransaction {
@@ -59,6 +63,12 @@ export interface ProcessedTransaction {
    */
   matched_rule: string | null
   is_subscription?: boolean
+  /** True when the transaction is a provisional Director Drawing awaiting accountant confirmation. */
+  is_provisional?: boolean
+  /** GL account propagated from a linked transfer pair. */
+  linked_gl_account?: string | null
+  /** Contact name parsed from the linked transfer's raw_description. */
+  contact_name?: string | null
 }
 
 export async function applyMappings(merchant: string): Promise<{ category: string | null; classification: string | null }> {
@@ -197,6 +207,8 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
       isIncome,
       accountOwner,
       glAccount: raw.gl_account ?? null,
+      linkedGlAccount: raw.linked_gl_account ?? null,
+      linkedContactName: raw.contact_name ?? null,
     })
 
     if (ruleResult?.isTransfer) {
@@ -217,6 +229,8 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
         needs_review: raw.needs_review ?? false,
         gl_account: raw.gl_account ?? null,
         gl_tax_type: raw.gl_tax_type ?? null,
+        linked_gl_account: raw.linked_gl_account ?? null,
+        contact_name: raw.contact_name ?? null,
         matched_rule: `merchant:${ruleResult.ruleName}`,
       })
       transfersSkipped++
@@ -253,6 +267,8 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
       if (category !== null) autoMappings.set(merchant, category)
     }
 
+    const isProvisional = ruleResult?.isProvisional ?? false
+
     toUpsert.push({
       household_id: DEFAULT_HOUSEHOLD_ID,
       account_id: raw.account_id,
@@ -264,12 +280,15 @@ export async function processBatch(raws: RawTransaction[]): Promise<{
       classification,
       is_transfer: false,
       is_subscription: isSubscription,
+      is_provisional: isProvisional,
       external_id: raw.external_id ?? null,
       source: raw.source,
       raw_description: raw.raw_description ?? null,
       needs_review: raw.needs_review ?? false,
       gl_account: raw.gl_account ?? null,
       gl_tax_type: raw.gl_tax_type ?? null,
+      linked_gl_account: raw.linked_gl_account ?? null,
+      contact_name: raw.contact_name ?? null,
       matched_rule: matchedRule,
     })
   }

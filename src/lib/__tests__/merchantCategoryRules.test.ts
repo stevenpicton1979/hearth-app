@@ -1954,6 +1954,94 @@ describe('aldimobile_business', () => {
   })
 })
 
+// ─── bht_wages_payable ────────────────────────────────────────────────────────
+
+describe('bht_wages_payable', () => {
+  it('matches when glAccount contains "Wages Payable" → Payroll Expense / Business', () => {
+    const result = applyMerchantCategoryRules('Steven Picton', { isIncome: false, glAccount: 'Wages Payable' })
+    expect(result?.ruleName).toBe('bht_wages_payable')
+    expect(result?.category).toBe('Payroll Expense')
+    expect(result?.owner).toBe('Business')
+    expect(result?.isTransfer).toBe(false)
+  })
+
+  it('does NOT match when glAccount is something else', () => {
+    const result = applyMerchantCategoryRules('Steven Picton', { isIncome: false, glAccount: 'Directors Loan' })
+    expect(result?.ruleName).not.toBe('bht_wages_payable')
+  })
+})
+
+// ─── steven_wage_from_bht ─────────────────────────────────────────────────────
+
+describe('steven_wage_from_bht', () => {
+  it('matches when linkedGlAccount="Wages Payable" and linkedContactName contains "steven" → Salary / Steven', () => {
+    const ctx: RuleContext = {
+      isIncome: true,
+      linkedGlAccount: 'Wages Payable',
+      linkedContactName: 'Steven Picton',
+    }
+    const result = applyMerchantCategoryRules('TRANSFER FROM XX5426', ctx)
+    expect(result?.ruleName).toBe('steven_wage_from_bht')
+    expect(result?.category).toBe('Salary')
+    expect(result?.isIncome).toBe(true)
+    expect(result?.isTransfer).toBe(false)
+    expect(result?.owner).toBe('Steven')
+  })
+
+  it('does NOT match when linkedContactName does not contain "steven"', () => {
+    const ctx: RuleContext = {
+      isIncome: true,
+      linkedGlAccount: 'Wages Payable',
+      linkedContactName: 'Nicola Picton',
+    }
+    const result = applyMerchantCategoryRules('TRANSFER FROM XX5426', ctx)
+    expect(result?.ruleName).not.toBe('steven_wage_from_bht')
+  })
+
+  it('fires BEFORE commbank_internal_transfer so personal-side transfers can be reclassified', () => {
+    const ctx: RuleContext = {
+      isIncome: true,
+      linkedGlAccount: 'Wages Payable',
+      linkedContactName: 'Steven Picton',
+    }
+    const result = applyMerchantCategoryRules('TRANSFER FROM XX5426 COMMBANK APP', ctx)
+    expect(result?.ruleName).toBe('steven_wage_from_bht')
+  })
+})
+
+// ─── bht_directors_loan_to_joint ─────────────────────────────────────────────
+
+describe('bht_directors_loan_to_joint', () => {
+  it('matches when linkedGlAccount contains "directors loan" → Director Drawings / Joint, provisional', () => {
+    const ctx: RuleContext = {
+      isIncome: true,
+      linkedGlAccount: '2025 Directors Loan',
+      linkedContactName: 'Steven Picton',
+    }
+    const result = applyMerchantCategoryRules('TRANSFER FROM XX5426', ctx)
+    expect(result?.ruleName).toBe('bht_directors_loan_to_joint')
+    expect(result?.category).toBe('Director Drawings')
+    expect(result?.owner).toBe('Joint')
+    expect(result?.isTransfer).toBe(false)
+    expect(result?.isProvisional).toBe(true)
+  })
+
+  it('fires BEFORE commbank_internal_transfer for reclassification', () => {
+    const ctx: RuleContext = {
+      isIncome: true,
+      linkedGlAccount: 'Directors Loan',
+    }
+    const result = applyMerchantCategoryRules('TRANSFER FROM XX5426 NETBANK WAGE', ctx)
+    expect(result?.ruleName).toBe('bht_directors_loan_to_joint')
+  })
+
+  it('does NOT match when linkedGlAccount is absent or does not contain "directors loan"', () => {
+    const ctx: RuleContext = { isIncome: true, linkedGlAccount: 'Wages Payable' }
+    const result = applyMerchantCategoryRules('TRANSFER FROM XX5426', ctx)
+    expect(result?.ruleName).not.toBe('bht_directors_loan_to_joint')
+  })
+})
+
 describe('bank_transfer_to_mastercard', () => {
   it('matches "Bank Transfer to Mastercard Bus. Plat." — full fingerprint', () => {
     const result = applyMerchantCategoryRules('Bank Transfer to Mastercard Bus. Plat.', expense)
@@ -1989,8 +2077,10 @@ describe('fingerprint integrity', () => {
     const intentionalCollisions = new Set([
       // invoice_income, oncore_income, crosslateral_income — same output type, different match patterns
       JSON.stringify({ category: 'Business Revenue', isIncome: true, isTransfer: false, isSubscription: false, owner: 'Business' }),
-      // bht_directors_loan_transfer, director_loan_repayment, commbank_internal_transfer — inter-account transfers
+      // bht_directors_loan_transfer, director_loan_repayment, commbank_internal_transfer, bank_transfer_to_mastercard — inter-account transfers
       JSON.stringify({ category: null, isIncome: null, isTransfer: true, isSubscription: false, owner: null }),
+      // superannuation_payable, bht_wages_payable — Business Payroll Expense (GL-based rules)
+      JSON.stringify({ category: 'Payroll Expense', isIncome: null, isTransfer: false, isSubscription: false, owner: 'Business' }),
       // xbox, spotify, netflix_streaming, disney_plus, amazon_prime_video, youtube_premium,
       // playstation_network, nintendo_eshop, crunchyroll, audible, kayo_sports — Business Entertainment subscriptions
       JSON.stringify({ category: 'Entertainment', isIncome: null, isTransfer: false, isSubscription: true, owner: 'Business' }),

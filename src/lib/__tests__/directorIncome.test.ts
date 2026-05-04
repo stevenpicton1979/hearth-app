@@ -26,6 +26,27 @@ describe('classifyDirectorIncome', () => {
   })
 
   // -------------------------------------------------------------------------
+  // SKIP_TRANSFER_FROM gate — personal-side "TRANSFER FROM XX####" descriptions
+  // must NOT be classified as director income; the transfer linker handles them.
+  // -------------------------------------------------------------------------
+  describe('SKIP_TRANSFER_FROM gate', () => {
+    it('returns match=false for "TRANSFER FROM XX5426 COMMBANK APP WAGE" (personal credit)', () => {
+      const result = classifyDirectorIncome('TRANSFER FROM XX5426 COMMBANK APP WAGE', 4000)
+      expect(result.match).toBe(false)
+    })
+
+    it('returns match=false for "TRANSFER FROM XX5426 COMMBANK APP" regardless of amount', () => {
+      expect(classifyDirectorIncome('TRANSFER FROM XX5426 COMMBANK APP', 10000).match).toBe(false)
+    })
+
+    it('does NOT skip descriptions that merely contain "transfer from" mid-string', () => {
+      // "NETBANK WAGE transfer from BHT" starts with "NETBANK WAGE" not "TRANSFER FROM XX"
+      const result = classifyDirectorIncome('NETBANK WAGE transfer from BHT', 4000)
+      expect(result.match).toBe(true)
+    })
+  })
+
+  // -------------------------------------------------------------------------
   // Wage patterns → category=Salary
   // -------------------------------------------------------------------------
   describe('wage patterns → Salary', () => {

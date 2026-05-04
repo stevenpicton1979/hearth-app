@@ -13,6 +13,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { BusinessSummaryWidget } from './BusinessSummaryWidget'
 import { OutcomeBucketsCard } from './OutcomeBucketsCard'
+import { PositionWidget } from './PositionWidget'
 import { aggregateBuckets, summariseByRealm, BucketTransaction } from '@/lib/bucketAggregation'
 
 const aud = (n: number) =>
@@ -489,6 +490,9 @@ export default async function DashboardPage() {
             </Link>
           </div>
         </div>
+
+        {/* Director Drawings position — only rendered when provisional draws exist */}
+        <PositionWidget />
 
         {/* Business summary — only rendered when business-scoped accounts exist */}
         {businessAccounts.length > 0 && (

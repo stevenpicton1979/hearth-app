@@ -36,7 +36,7 @@ export async function POST() {
   // ── 2. Fetch all CSV transactions ─────────────────────────────────────────
   const { data: rows, error } = await supabase
     .from('transactions')
-    .select('id, merchant, amount, gl_account')
+    .select('id, merchant, amount, gl_account, linked_gl_account, contact_name')
     .eq('household_id', DEFAULT_HOUSEHOLD_ID)
     .eq('source', 'csv')
 
@@ -48,6 +48,8 @@ export async function POST() {
     category: Category | null
     matched_rule: string | null
     is_subscription: boolean
+    is_provisional: boolean
+    is_transfer: boolean
     classification: string | null   // DB column name for owner/realm
   }[] = []
 
@@ -55,9 +57,11 @@ export async function POST() {
     const merchant = row.merchant as string
     const amount = row.amount as number
     const glAccount = row.gl_account as string | null
+    const linkedGlAccount = row.linked_gl_account as string | null
+    const contactName = row.contact_name as string | null
     const isIncome = amount > 0
 
-    const ctx = { isIncome, glAccount }
+    const ctx = { isIncome, glAccount, linkedGlAccount, linkedContactName: contactName }
     const ruleResult = applyMerchantCategoryRules(merchant, ctx)
 
     if (ruleResult) {
@@ -66,6 +70,8 @@ export async function POST() {
         category: ruleResult.category,
         matched_rule: `merchant:${ruleResult.ruleName}`,
         is_subscription: ruleResult.isSubscription,
+        is_provisional: ruleResult.isProvisional ?? false,
+        is_transfer: ruleResult.isTransfer,
         classification: ruleResult.owner,  // owner → classification column
       })
     } else {
@@ -76,6 +82,8 @@ export async function POST() {
         category,
         matched_rule: null,
         is_subscription: false,
+        is_provisional: false,
+        is_transfer: false,
         classification: null,
       })
     }
@@ -97,6 +105,8 @@ export async function POST() {
             category: u.category,
             matched_rule: u.matched_rule,
             is_subscription: u.is_subscription,
+            is_provisional: u.is_provisional,
+            is_transfer: u.is_transfer,
             classification: u.classification,
           })
           .eq('id', u.id)
