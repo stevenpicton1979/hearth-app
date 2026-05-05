@@ -1974,7 +1974,7 @@ describe('bht_wages_payable', () => {
 // ─── steven_wage_from_bht ─────────────────────────────────────────────────────
 
 describe('steven_wage_from_bht', () => {
-  it('matches when linkedGlAccount="Wages Payable" and linkedContactName contains "steven" → Salary / Steven', () => {
+  it('matches when linkedGlAccount="Wages Payable" → Salary / Steven', () => {
     const ctx: RuleContext = {
       isIncome: true,
       linkedGlAccount: 'Wages Payable',
@@ -1988,11 +1988,24 @@ describe('steven_wage_from_bht', () => {
     expect(result?.owner).toBe('Steven')
   })
 
-  it('does NOT match when linkedContactName does not contain "steven"', () => {
+  it('matches older Xero raw_description format ("wage Transfer to xx5426") — contact_name not required', () => {
+    // Older Xero rows have raw_description like "wage Transfer to xx5426" which
+    // parseXeroContactName extracts verbatim; the rule must fire regardless.
     const ctx: RuleContext = {
       isIncome: true,
       linkedGlAccount: 'Wages Payable',
-      linkedContactName: 'Nicola Picton',
+      linkedContactName: 'wage Transfer to xx5426',
+    }
+    const result = applyMerchantCategoryRules('TRANSFER FROM XX5426', ctx)
+    expect(result?.ruleName).toBe('steven_wage_from_bht')
+    expect(result?.category).toBe('Salary')
+  })
+
+  it('does NOT match when linkedGlAccount is a different GL account', () => {
+    const ctx: RuleContext = {
+      isIncome: true,
+      linkedGlAccount: 'Office Expenses',
+      linkedContactName: 'Steven Picton',
     }
     const result = applyMerchantCategoryRules('TRANSFER FROM XX5426', ctx)
     expect(result?.ruleName).not.toBe('steven_wage_from_bht')
@@ -2002,7 +2015,6 @@ describe('steven_wage_from_bht', () => {
     const ctx: RuleContext = {
       isIncome: true,
       linkedGlAccount: 'Wages Payable',
-      linkedContactName: 'Steven Picton',
     }
     const result = applyMerchantCategoryRules('TRANSFER FROM XX5426 COMMBANK APP', ctx)
     expect(result?.ruleName).toBe('steven_wage_from_bht')

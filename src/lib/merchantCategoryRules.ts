@@ -1118,10 +1118,11 @@ export const MERCHANT_CATEGORY_RULES: MerchantCategoryRule[] = [
   {
     name: 'steven_wage_from_bht',
     description:
-      'Personal-side credit linked to a BHT "Wages Payable" debit with Steven as the contact. ' +
-      'After transfer linker propagates linkedGlAccount="Wages Payable" and linkedContactName="Steven Picton", ' +
-      'reprocess-csv reclassifies this from is_transfer to Salary for Steven.',
-    match: (m, ctx) => /wages payable/i.test(ctx.linkedGlAccount ?? '') && /steven/i.test(ctx.linkedContactName ?? ''),
+      'Steven\'s PAYG wage from BHT — identified solely via linked Xero ' +
+      'GL account (Wages Payable). Only Steven\'s wages land on personal ' +
+      'accounts in Hearth (Finley/Zach personal accounts not imported), ' +
+      'so contact_name verification is unnecessary.',
+    match: (m, ctx) => ctx.linkedGlAccount === 'Wages Payable',
     output: { category: 'Salary', isIncome: true, isTransfer: false, isSubscription: false, owner: 'Steven' },
   },
 
