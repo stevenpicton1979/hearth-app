@@ -20,20 +20,38 @@ export interface LinkTransferResult {
 //   contact_name       ← first pipe-segment of BHT row's raw_description
 // This allows reprocess-csv to reclassify personal-side credits (e.g. wages,
 // director drawings) that were initially caught as generic transfers.
-export async function linkTransferPairs(dates: string[]): Promise<LinkTransferResult> {
-  if (dates.length === 0) return { pairs: 0, glPropagated: 0, contactExtracted: 0 }
+export async function linkTransferPairs(dates?: string[]): Promise<LinkTransferResult> {
+  // Empty array means "nothing to process" (incremental sync with no new dates).
+  if (dates !== undefined && dates.length === 0) {
+    return { pairs: 0, glPropagated: 0, contactExtracted: 0 }
+  }
+
+  // Defensive guard: a very large dates array produces a URL that exceeds
+  // PostgREST's ~8 KB limit and silently returns nothing. Callers doing a
+  // full backfill should omit `dates` instead.
+  if (dates !== undefined && dates.length > 500) {
+    throw new Error(
+      'linkTransferPairs: dates array too large (>500). Omit the dates argument to process all unlinked rows.'
+    )
+  }
 
   const supabase = createServerClient()
 
-  // Fetch all unlinked rows for the affected dates.
-  // .limit(50000) overrides Supabase's default 1000-row cap.
-  const { data: rows } = await supabase
+  // Build the base query. .limit(50000) overrides Supabase's default 1000-row cap.
+  // When `dates` is omitted the caller wants ALL unlinked rows (full backfill);
+  // when provided it filters to just those dates (incremental sync).
+  let query = supabase
     .from('transactions')
     .select('id, account_id, date, amount, is_transfer, gl_account, raw_description')
     .eq('household_id', DEFAULT_HOUSEHOLD_ID)
-    .in('date', dates)
     .is('linked_transfer_id', null)
     .limit(50000)
+
+  if (dates !== undefined) {
+    query = query.in('date', dates)
+  }
+
+  const { data: rows } = await query
 
   if (!rows || rows.length === 0) return { pairs: 0, glPropagated: 0, contactExtracted: 0 }
 

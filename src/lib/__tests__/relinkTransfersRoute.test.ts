@@ -3,7 +3,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 // ── Shared DB state ───────────────────────────────────────────────────────────
 
 const db = vi.hoisted(() => ({
-  dateRows: [] as Array<{ date: string }>,
   bhtRows: [] as Array<{
     id: string
     linked_transfer_id: string
@@ -24,33 +23,21 @@ vi.mock('@/lib/transferLinker', () => ({
 }))
 
 // ── Supabase mock ─────────────────────────────────────────────────────────────
-// Distinguish the two select() calls by the fields string:
-//   select('date')              → date deduplication query (Phase 1 prep)
-//   select('id, ...')           → BHT rows query         (Phase 2)
+// Phase 1 is fully handled by the linkTransferPairs mock above.
+// Only Phase 2 touches supabase: .select('id,...').eq().not().not().limit()
 
 vi.mock('@/lib/supabase/server', () => ({
   createServerClient: () => ({
     from: () => ({
-      select: (fields: string) => {
-        if (fields === 'date') {
-          // Phase 1: .select('date').eq(household_id).limit(50000) → date rows
-          return {
-            eq: () => ({
-              limit: () => Promise.resolve({ data: db.dateRows, error: null }),
-            }),
-          }
-        }
-        // Phase 2: .select('id, ...').eq(household_id).not(...).not(...).limit(50000) → BHT rows
-        return {
-          eq: () => ({
+      select: () => ({
+        eq: () => ({
+          not: () => ({
             not: () => ({
-              not: () => ({
-                limit: () => Promise.resolve({ data: db.bhtRows, error: null }),
-              }),
+              limit: () => Promise.resolve({ data: db.bhtRows, error: null }),
             }),
           }),
-        }
-      },
+        }),
+      }),
       update: (vals: Record<string, unknown>) => ({
         eq: (_col: string, id: string) => {
           db.updates.push({
@@ -68,7 +55,6 @@ vi.mock('@/lib/supabase/server', () => ({
 import { POST } from '@/app/api/admin/relink-transfers/route'
 
 beforeEach(() => {
-  db.dateRows = []
   db.bhtRows = []
   db.updates = []
   mockLinkTransferPairs.mockClear()
@@ -82,21 +68,13 @@ describe('POST /api/admin/relink-transfers', () => {
     expect(body).toEqual({ linked_pairs: 0, gl_propagated: 0, contact_extracted: 0 })
   })
 
-  it('calls linkTransferPairs with deduplicated dates from the DB', async () => {
-    db.dateRows = [
-      { date: '2025-06-01' },
-      { date: '2025-06-01' }, // duplicate — should be deduped
-      { date: '2025-06-02' },
-    ]
+  it('calls linkTransferPairs with NO argument (avoids URL-length blow-up from .in filter)', async () => {
     await POST()
-    const calledDates = mockLinkTransferPairs.mock.calls[0][0] as string[]
-    expect(calledDates).toHaveLength(2)
-    expect(calledDates).toContain('2025-06-01')
-    expect(calledDates).toContain('2025-06-02')
+    expect(mockLinkTransferPairs).toHaveBeenCalledOnce()
+    expect(mockLinkTransferPairs).toHaveBeenCalledWith()
   })
 
   it('reflects pairs and metadata counts from linkTransferPairs in the response', async () => {
-    db.dateRows = [{ date: '2025-06-01' }]
     mockLinkTransferPairs.mockResolvedValue({ pairs: 3, glPropagated: 2, contactExtracted: 1 })
 
     const res = await POST()

@@ -22,17 +22,10 @@ export async function POST() {
   const supabase = createServerClient()
 
   // ── Phase 1: link unlinked transfer pairs ───────────────────────────────
-  // .limit(50000) overrides Supabase's default 1000-row cap.
-  const { data: dateRows, error: dateErr } = await supabase
-    .from('transactions')
-    .select('date')
-    .eq('household_id', DEFAULT_HOUSEHOLD_ID)
-    .limit(50000)
-
-  if (dateErr) return NextResponse.json({ error: dateErr.message }, { status: 500 })
-
-  const allDates = Array.from(new Set((dateRows ?? []).map(r => r.date as string)))
-  const { pairs, glPropagated: p1Gl, contactExtracted: p1Contact } = await linkTransferPairs(allDates)
+  // Omit the dates argument so linkTransferPairs fetches ALL unlinked rows
+  // in one query. Passing all distinct dates would generate a URL that
+  // exceeds PostgREST's ~8 KB limit and silently returns nothing.
+  const { pairs, glPropagated: p1Gl, contactExtracted: p1Contact } = await linkTransferPairs()
 
   // ── Phase 2: propagate metadata to already-linked pre-migration rows ────
   const { data: bhtRows, error: bhtErr } = await supabase

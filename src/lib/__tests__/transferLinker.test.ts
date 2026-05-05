@@ -20,16 +20,21 @@ const db = vi.hoisted(() => ({
 vi.mock('../supabase/server', () => ({
   createServerClient: () => ({
     from: () => ({
-      // select chain: .select().eq().in().is().limit() -> { data: db.rows }
+      // select chain: .select().eq().is().limit()[.in()] -> { data: db.rows }
+      // .limit() returns a thenable so it can be awaited directly (no-dates path),
+      // AND exposes .in() for the with-dates path.
       select: () => ({
         eq: () => ({
-          in: () => ({
-            is: () => ({
-              limit: (n: number) => {
-                db.capturedLimit = n
-                return Promise.resolve({ data: db.rows })
-              },
-            }),
+          is: () => ({
+            limit: (n: number) => {
+              db.capturedLimit = n
+              const resolve = () => Promise.resolve({ data: db.rows })
+              return {
+                in: () => resolve(),
+                then: (onFulfilled: (v: unknown) => unknown, onRejected?: (e: unknown) => unknown) =>
+                  resolve().then(onFulfilled, onRejected),
+              }
+            },
           }),
         }),
       }),
@@ -221,5 +226,33 @@ describe('linkTransferPairs', () => {
     db.rows = []
     await linkTransferPairs(['2025-06-01'])
     expect(db.capturedLimit).toBe(50000)
+  })
+
+  // 15. No-argument call (full backfill): omitting dates fetches ALL unlinked rows.
+  it('with no dates argument, pairs rows across the full household (no .in filter)', async () => {
+    db.rows = [
+      { id: 'tx-bht', account_id: 'acc-bht', date: '2025-06-01', amount: -4000, is_transfer: false, gl_account: 'Wages Payable', raw_description: null },
+      { id: 'tx-personal', account_id: 'acc-personal', date: '2025-06-01', amount: 4000, is_transfer: false, gl_account: null, raw_description: null },
+    ]
+    const result = await linkTransferPairs()
+    expect(result.pairs).toBe(1)
+    expect(db.capturedLimit).toBe(50000)
+  })
+
+  // 16. Empty array means "no new dates this sync cycle" — return 0 without hitting the DB.
+  it('with an empty dates array, returns 0 pairs without querying the DB', async () => {
+    db.rows = [
+      { id: 'tx-bht', account_id: 'acc-bht', date: '2025-06-01', amount: -4000, is_transfer: false, gl_account: 'Wages Payable', raw_description: null },
+      { id: 'tx-personal', account_id: 'acc-personal', date: '2025-06-01', amount: 4000, is_transfer: false, gl_account: null, raw_description: null },
+    ]
+    const result = await linkTransferPairs([])
+    expect(result.pairs).toBe(0)
+    expect(db.capturedLimit).toBeUndefined() // DB never queried
+  })
+
+  // 17. Defensive guard: >500 dates would blow PostgREST URL length limit.
+  it('throws when given more than 500 dates', async () => {
+    const dates = Array.from({ length: 501 }, (_, i) => `2025-${String(Math.floor(i / 31) + 1).padStart(2, '0')}-${String((i % 28) + 1).padStart(2, '0')}`)
+    await expect(linkTransferPairs(dates)).rejects.toThrow('dates array too large (>500)')
   })
 })
