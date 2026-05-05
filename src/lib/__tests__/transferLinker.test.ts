@@ -14,21 +14,29 @@ const db = vi.hoisted(() => ({
     raw_description?: string | null
   }>,
   updates: [] as Array<Record<string, unknown>>,
-  capturedLimit: undefined as number | undefined,
+  capturedRanges: [] as Array<{ from: number; to: number }>,
+  // When non-null, the mock returns pages[pageCallCount] on each .range() call
+  // instead of db.rows. Set to null for single-page tests (default).
+  pages: null as null | Array<typeof db.rows>,
+  pageCallCount: 0,
 }))
 
 vi.mock('../supabase/server', () => ({
   createServerClient: () => ({
     from: () => ({
-      // select chain: .select().eq().is().limit()[.in()] -> { data: db.rows }
-      // .limit() returns a thenable so it can be awaited directly (no-dates path),
+      // select chain: .select().eq().is().range()[.in()] -> { data: rows }
+      // .range() returns a thenable (awaitable directly, no-dates path)
       // AND exposes .in() for the with-dates path.
+      // When db.pages is set, returns successive pages on each call.
       select: () => ({
         eq: () => ({
           is: () => ({
-            limit: (n: number) => {
-              db.capturedLimit = n
-              const resolve = () => Promise.resolve({ data: db.rows })
+            range: (from: number, to: number) => {
+              db.capturedRanges.push({ from, to })
+              const pageData = db.pages !== null
+                ? (db.pages[db.pageCallCount++] ?? [])
+                : db.rows
+              const resolve = () => Promise.resolve({ data: pageData, error: null })
               return {
                 in: () => resolve(),
                 then: (onFulfilled: (v: unknown) => unknown, onRejected?: (e: unknown) => unknown) =>
@@ -52,7 +60,9 @@ vi.mock('../supabase/server', () => ({
 beforeEach(() => {
   db.rows = []
   db.updates = []
-  db.capturedLimit = undefined
+  db.capturedRanges = []
+  db.pages = null
+  db.pageCallCount = 0
 })
 
 describe('linkTransferPairs', () => {
@@ -221,11 +231,11 @@ describe('linkTransferPairs', () => {
     expect(db.updates).toHaveLength(6)
   })
 
-  // 14. Regression: must use .limit(50000) to bypass Supabase's default 1000-row cap.
-  it('queries with limit(50000) to bypass the Supabase default 1000-row cap', async () => {
+  // 14. Regression: must use .range(0, 999) for the first page (PAGE_SIZE=1000).
+  it('paginates with range(0, 999) on the first call (PAGE_SIZE=1000)', async () => {
     db.rows = []
     await linkTransferPairs(['2025-06-01'])
-    expect(db.capturedLimit).toBe(50000)
+    expect(db.capturedRanges[0]).toEqual({ from: 0, to: 999 })
   })
 
   // 15. No-argument call (full backfill): omitting dates fetches ALL unlinked rows.
@@ -236,7 +246,7 @@ describe('linkTransferPairs', () => {
     ]
     const result = await linkTransferPairs()
     expect(result.pairs).toBe(1)
-    expect(db.capturedLimit).toBe(50000)
+    expect(db.capturedRanges[0]).toEqual({ from: 0, to: 999 }) // first page starts at offset 0
   })
 
   // 16. Empty array means "no new dates this sync cycle" — return 0 without hitting the DB.
@@ -254,5 +264,33 @@ describe('linkTransferPairs', () => {
   it('throws when given more than 500 dates', async () => {
     const dates = Array.from({ length: 501 }, (_, i) => `2025-${String(Math.floor(i / 31) + 1).padStart(2, '0')}-${String((i % 28) + 1).padStart(2, '0')}`)
     await expect(linkTransferPairs(dates)).rejects.toThrow('dates array too large (>500)')
+  })
+
+  // 18. Pagination: rows spread across multiple pages are all assembled before pairing.
+  //     Page 1 has 1000 rows (triggers a second fetch), page 2 has the pairable pair.
+  it('assembles rows across multiple pages before pairing', async () => {
+    // Page 1: 1000 same-account filler rows — none can pair with each other
+    const page1 = Array.from({ length: 1000 }, (_, i) => ({
+      id: `filler-${i}`,
+      account_id: 'acc-same',
+      date: '2025-06-01',
+      amount: -(i + 1),
+      is_transfer: false,
+      gl_account: 'GL',
+      raw_description: null,
+    }))
+    // Page 2: valid pair on a different date (proves cross-page assembly works)
+    const page2 = [
+      { id: 'tx-bht', account_id: 'acc-bht', date: '2025-06-02', amount: -4000, is_transfer: false, gl_account: 'Wages Payable', raw_description: null },
+      { id: 'tx-personal', account_id: 'acc-personal', date: '2025-06-02', amount: 4000, is_transfer: false, gl_account: null, raw_description: null },
+    ]
+    // No empty sentinel needed — lastPageFull = false after page2 (2 < PAGE_SIZE)
+    // so the loop exits without an extra fetch.
+    db.pages = [page1, page2]
+
+    const result = await linkTransferPairs()
+    expect(result.pairs).toBe(1)                                   // pair found from page 2
+    expect(db.pageCallCount).toBe(2)                               // 2 range() calls: page1, page2
+    expect(db.capturedRanges[1]).toEqual({ from: 1000, to: 1999 }) // offset advanced correctly
   })
 })

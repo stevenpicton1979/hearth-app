@@ -28,22 +28,40 @@ export async function POST() {
   const { pairs, glPropagated: p1Gl, contactExtracted: p1Contact } = await linkTransferPairs()
 
   // ── Phase 2: propagate metadata to already-linked pre-migration rows ────
-  const { data: bhtRows, error: bhtErr } = await supabase
+  // Paginate — PostgREST enforces a 1000-row server cap regardless of .limit().
+  const PAGE_SIZE = 1000
+  const { data: p0, error: p0Err } = await supabase
     .from('transactions')
     .select('id, linked_transfer_id, gl_account, raw_description')
     .eq('household_id', DEFAULT_HOUSEHOLD_ID)
     .not('linked_transfer_id', 'is', null)
     .not('gl_account', 'is', null)
-    .limit(50000)
+    .range(0, PAGE_SIZE - 1)
 
-  if (bhtErr) return NextResponse.json({ error: bhtErr.message }, { status: 500 })
+  if (p0Err) return NextResponse.json({ error: p0Err.message }, { status: 500 })
+  const bhtRows = [...(p0 ?? [])]
+  let lastFull = bhtRows.length === PAGE_SIZE
+
+  for (let from = PAGE_SIZE; lastFull; from += PAGE_SIZE) {
+    const { data: page, error } = await supabase
+      .from('transactions')
+      .select('id, linked_transfer_id, gl_account, raw_description')
+      .eq('household_id', DEFAULT_HOUSEHOLD_ID)
+      .not('linked_transfer_id', 'is', null)
+      .not('gl_account', 'is', null)
+      .range(from, from + PAGE_SIZE - 1)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    if (!page) break
+    bhtRows.push(...page)
+    lastFull = page.length === PAGE_SIZE
+  }
 
   let p2Gl = 0
   let p2Contact = 0
   const BATCH = 50
 
-  for (let i = 0; i < (bhtRows ?? []).length; i += BATCH) {
-    const batch = bhtRows!.slice(i, i + BATCH)
+  for (let i = 0; i < bhtRows.length; i += BATCH) {
+    const batch = bhtRows.slice(i, i + BATCH)
     const results = await Promise.all(
       batch.map(row => {
         const contactName = parseXeroContactName(row.raw_description)

@@ -8,20 +8,37 @@ export const maxDuration = 60
 export async function GET() {
   const supabase = createServerClient()
 
-  // Reproduce the EXACT query linkTransferPairs runs (no dates arg)
-  const { data: rows, error } = await supabase
+  // Reproduce the EXACT query linkTransferPairs runs (no dates arg).
+  // Paginated with .range() — PostgREST enforces a 1000-row server cap.
+  const PAGE_SIZE = 1000
+  const { data: p0, error: err0 } = await supabase
     .from('transactions')
     .select('id, account_id, date, amount, is_transfer, gl_account, raw_description')
     .eq('household_id', DEFAULT_HOUSEHOLD_ID)
     .is('linked_transfer_id', null)
-    .limit(50000)
+    .range(0, PAGE_SIZE - 1)
 
-  if (error) {
-    return NextResponse.json({ error: error.message, code: error.code }, { status: 500 })
+  if (err0) {
+    return NextResponse.json({ error: err0.message, code: err0.code }, { status: 500 })
+  }
+  if (!p0) {
+    return NextResponse.json({ rows_returned: null, note: 'first page is null' })
   }
 
-  if (!rows) {
-    return NextResponse.json({ rows_returned: null, note: 'rows is null' })
+  const rows = [...p0]
+  let lastFull = rows.length === PAGE_SIZE
+
+  for (let from = PAGE_SIZE; lastFull; from += PAGE_SIZE) {
+    const { data: page, error } = await supabase
+      .from('transactions')
+      .select('id, account_id, date, amount, is_transfer, gl_account, raw_description')
+      .eq('household_id', DEFAULT_HOUSEHOLD_ID)
+      .is('linked_transfer_id', null)
+      .range(from, from + PAGE_SIZE - 1)
+    if (error) return NextResponse.json({ error: error.message, code: error.code }, { status: 500 })
+    if (!page) break
+    rows.push(...page)
+    lastFull = page.length === PAGE_SIZE
   }
 
   // Group by date and count what would-be pairs look like

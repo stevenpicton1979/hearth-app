@@ -37,27 +37,41 @@ export async function linkTransferPairs(dates?: string[]): Promise<LinkTransferR
 
   const supabase = createServerClient()
 
-  // Build the base query. .limit(50000) overrides Supabase's default 1000-row cap.
-  // When `dates` is omitted the caller wants ALL unlinked rows (full backfill);
-  // when provided it filters to just those dates (incremental sync).
-  let query = supabase
-    .from('transactions')
-    .select('id, account_id, date, amount, is_transfer, gl_account, raw_description')
-    .eq('household_id', DEFAULT_HOUSEHOLD_ID)
-    .is('linked_transfer_id', null)
-    .limit(50000)
+  // Supabase PostgREST enforces a server-side 1000-row cap that .limit() cannot
+  // override. Paginate with .range() until we get a page shorter than PAGE_SIZE.
+  const PAGE_SIZE = 1000
 
-  if (dates !== undefined) {
-    query = query.in('date', dates)
+  // Build a page query at `offset`. When `dates` is provided (incremental sync),
+  // adds an .in() filter so only those dates are scanned.
+  const buildQuery = (offset: number) => {
+    let q = supabase
+      .from('transactions')
+      .select('id, account_id, date, amount, is_transfer, gl_account, raw_description')
+      .eq('household_id', DEFAULT_HOUSEHOLD_ID)
+      .is('linked_transfer_id', null)
+      .range(offset, offset + PAGE_SIZE - 1)
+    if (dates !== undefined) q = q.in('date', dates)
+    return q
   }
 
-  const { data: rows } = await query
+  const { data: firstPage, error: firstErr } = await buildQuery(0)
+  if (firstErr) throw firstErr
+  const allRows = [...(firstPage ?? [])]
+  let lastPageFull = allRows.length === PAGE_SIZE
 
-  if (!rows || rows.length === 0) return { pairs: 0, glPropagated: 0, contactExtracted: 0 }
+  for (let from = PAGE_SIZE; lastPageFull; from += PAGE_SIZE) {
+    const { data: page, error } = await buildQuery(from)
+    if (error) throw error
+    if (!page) break
+    allRows.push(...page)
+    lastPageFull = page.length === PAGE_SIZE
+  }
+
+  if (allRows.length === 0) return { pairs: 0, glPropagated: 0, contactExtracted: 0 }
 
   // Group by date for O(n) pairing
-  const byDate = new Map<string, typeof rows>()
-  for (const row of rows) {
+  const byDate = new Map<string, typeof allRows>()
+  for (const row of allRows) {
     if (!byDate.has(row.date)) byDate.set(row.date, [])
     byDate.get(row.date)!.push(row)
   }

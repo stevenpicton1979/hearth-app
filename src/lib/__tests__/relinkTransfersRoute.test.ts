@@ -33,7 +33,9 @@ vi.mock('@/lib/supabase/server', () => ({
         eq: () => ({
           not: () => ({
             not: () => ({
-              limit: () => Promise.resolve({ data: db.bhtRows, error: null }),
+              // Phase 2 paginates with .range(); return all test rows on first call
+              // (always < PAGE_SIZE so the loop terminates in one round).
+              range: () => Promise.resolve({ data: db.bhtRows, error: null }),
             }),
           }),
         }),

@@ -8,14 +8,30 @@ export async function GET(req: NextRequest) {
   if (!keyword) return NextResponse.json({ error: 'keyword required' }, { status: 400 })
 
   const supabase = createServerClient()
-  // .limit(50000) overrides Supabase's default 1000-row cap.
-  const { data: txns, error } = await supabase
+
+  // Paginate — PostgREST enforces a 1000-row server cap regardless of .limit().
+  const PAGE_SIZE = 1000
+  const { data: txP0, error: txErr0 } = await supabase
     .from('transactions')
     .select('merchant, amount, category')
     .eq('household_id', DEFAULT_HOUSEHOLD_ID)
-    .limit(50000)
+    .range(0, PAGE_SIZE - 1)
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (txErr0) return NextResponse.json({ error: txErr0.message }, { status: 500 })
+  const txns = [...(txP0 ?? [])]
+  let txLastFull = txns.length === PAGE_SIZE
+
+  for (let from = PAGE_SIZE; txLastFull; from += PAGE_SIZE) {
+    const { data: page, error } = await supabase
+      .from('transactions')
+      .select('merchant, amount, category')
+      .eq('household_id', DEFAULT_HOUSEHOLD_ID)
+      .range(from, from + PAGE_SIZE - 1)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    if (!page) break
+    txns.push(...page)
+    txLastFull = page.length === PAGE_SIZE
+  }
 
   const kw = keyword.toLowerCase()
   const matches = (txns || []).filter(t =>

@@ -33,16 +33,31 @@ export async function POST() {
     (mappingRows ?? []).map(r => [r.merchant as string, r.category as Category])
   )
 
-  // ── 2. Fetch all CSV transactions ─────────────────────────────────────────
-  // .limit(50000) overrides Supabase's default 1000-row cap.
-  const { data: rows, error } = await supabase
+  // ── 2. Fetch all CSV transactions (paginated — PostgREST caps at 1000) ──────
+  const PAGE_SIZE = 1000
+  const { data: csvP0, error: csvErr0 } = await supabase
     .from('transactions')
     .select('id, merchant, amount, gl_account, linked_gl_account, contact_name')
     .eq('household_id', DEFAULT_HOUSEHOLD_ID)
     .eq('source', 'csv')
-    .limit(50000)
+    .range(0, PAGE_SIZE - 1)
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (csvErr0) return NextResponse.json({ error: csvErr0.message }, { status: 500 })
+  const rows = [...(csvP0 ?? [])]
+  let csvLastFull = rows.length === PAGE_SIZE
+
+  for (let from = PAGE_SIZE; csvLastFull; from += PAGE_SIZE) {
+    const { data: page, error } = await supabase
+      .from('transactions')
+      .select('id, merchant, amount, gl_account, linked_gl_account, contact_name')
+      .eq('household_id', DEFAULT_HOUSEHOLD_ID)
+      .eq('source', 'csv')
+      .range(from, from + PAGE_SIZE - 1)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    if (!page) break
+    rows.push(...page)
+    csvLastFull = page.length === PAGE_SIZE
+  }
 
   // ── 3. Re-apply rules to each row ─────────────────────────────────────────
   const updates: {
