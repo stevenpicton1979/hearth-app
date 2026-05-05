@@ -8,10 +8,12 @@ export async function GET(req: NextRequest) {
   if (!keyword) return NextResponse.json({ error: 'keyword required' }, { status: 400 })
 
   const supabase = createServerClient()
+  // .limit(50000) overrides Supabase's default 1000-row cap.
   const { data: txns, error } = await supabase
     .from('transactions')
     .select('merchant, amount, category')
     .eq('household_id', DEFAULT_HOUSEHOLD_ID)
+    .limit(50000)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 

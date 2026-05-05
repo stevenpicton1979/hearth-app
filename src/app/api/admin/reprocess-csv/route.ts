@@ -34,11 +34,13 @@ export async function POST() {
   )
 
   // ── 2. Fetch all CSV transactions ─────────────────────────────────────────
+  // .limit(50000) overrides Supabase's default 1000-row cap.
   const { data: rows, error } = await supabase
     .from('transactions')
     .select('id, merchant, amount, gl_account, linked_gl_account, contact_name')
     .eq('household_id', DEFAULT_HOUSEHOLD_ID)
     .eq('source', 'csv')
+    .limit(50000)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 

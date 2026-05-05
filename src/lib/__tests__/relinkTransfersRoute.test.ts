@@ -33,16 +33,20 @@ vi.mock('@/lib/supabase/server', () => ({
     from: () => ({
       select: (fields: string) => {
         if (fields === 'date') {
-          // Phase 1: .select('date').eq(household_id) → date rows
+          // Phase 1: .select('date').eq(household_id).limit(50000) → date rows
           return {
-            eq: () => Promise.resolve({ data: db.dateRows, error: null }),
+            eq: () => ({
+              limit: () => Promise.resolve({ data: db.dateRows, error: null }),
+            }),
           }
         }
-        // Phase 2: .select('id, ...').eq(household_id).not(...).not(...) → BHT rows
+        // Phase 2: .select('id, ...').eq(household_id).not(...).not(...).limit(50000) → BHT rows
         return {
           eq: () => ({
             not: () => ({
-              not: () => Promise.resolve({ data: db.bhtRows, error: null }),
+              not: () => ({
+                limit: () => Promise.resolve({ data: db.bhtRows, error: null }),
+              }),
             }),
           }),
         }

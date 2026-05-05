@@ -25,13 +25,15 @@ export async function linkTransferPairs(dates: string[]): Promise<LinkTransferRe
 
   const supabase = createServerClient()
 
-  // Fetch all unlinked rows for the affected dates
+  // Fetch all unlinked rows for the affected dates.
+  // .limit(50000) overrides Supabase's default 1000-row cap.
   const { data: rows } = await supabase
     .from('transactions')
     .select('id, account_id, date, amount, is_transfer, gl_account, raw_description')
     .eq('household_id', DEFAULT_HOUSEHOLD_ID)
     .in('date', dates)
     .is('linked_transfer_id', null)
+    .limit(50000)
 
   if (!rows || rows.length === 0) return { pairs: 0, glPropagated: 0, contactExtracted: 0 }
 

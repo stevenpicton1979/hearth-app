@@ -14,16 +14,22 @@ const db = vi.hoisted(() => ({
     raw_description?: string | null
   }>,
   updates: [] as Array<Record<string, unknown>>,
+  capturedLimit: undefined as number | undefined,
 }))
 
 vi.mock('../supabase/server', () => ({
   createServerClient: () => ({
     from: () => ({
-      // select chain: .select().eq().in().is() -> { data: db.rows }
+      // select chain: .select().eq().in().is().limit() -> { data: db.rows }
       select: () => ({
         eq: () => ({
           in: () => ({
-            is: () => Promise.resolve({ data: db.rows }),
+            is: () => ({
+              limit: (n: number) => {
+                db.capturedLimit = n
+                return Promise.resolve({ data: db.rows })
+              },
+            }),
           }),
         }),
       }),
@@ -41,6 +47,7 @@ vi.mock('../supabase/server', () => ({
 beforeEach(() => {
   db.rows = []
   db.updates = []
+  db.capturedLimit = undefined
 })
 
 describe('linkTransferPairs', () => {
@@ -207,5 +214,12 @@ describe('linkTransferPairs', () => {
     expect(result.pairs).toBe(3)
     // Sanity-check: 6 update calls total (2 per pair)
     expect(db.updates).toHaveLength(6)
+  })
+
+  // 14. Regression: must use .limit(50000) to bypass Supabase's default 1000-row cap.
+  it('queries with limit(50000) to bypass the Supabase default 1000-row cap', async () => {
+    db.rows = []
+    await linkTransferPairs(['2025-06-01'])
+    expect(db.capturedLimit).toBe(50000)
   })
 })

@@ -22,10 +22,12 @@ export async function POST() {
   const supabase = createServerClient()
 
   // ── Phase 1: link unlinked transfer pairs ───────────────────────────────
+  // .limit(50000) overrides Supabase's default 1000-row cap.
   const { data: dateRows, error: dateErr } = await supabase
     .from('transactions')
     .select('date')
     .eq('household_id', DEFAULT_HOUSEHOLD_ID)
+    .limit(50000)
 
   if (dateErr) return NextResponse.json({ error: dateErr.message }, { status: 500 })
 
@@ -39,6 +41,7 @@ export async function POST() {
     .eq('household_id', DEFAULT_HOUSEHOLD_ID)
     .not('linked_transfer_id', 'is', null)
     .not('gl_account', 'is', null)
+    .limit(50000)
 
   if (bhtErr) return NextResponse.json({ error: bhtErr.message }, { status: 500 })
 
