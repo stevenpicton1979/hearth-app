@@ -10,8 +10,10 @@ export interface LinkTransferResult {
 
 // Link transfer pairs within the household for the given dates.
 // A pair is two rows on the same date, different accounts, where
-// amount + other_amount = 0 and at least one side is flagged is_transfer.
-// Returns the number of pairs linked plus metadata propagation counts.
+// amount + other_amount = 0 and at least one side has gl_account set
+// (Xero-sourced). The gl_account requirement prevents pairing coincidental
+// same-day same-amount transactions; it also covers Wages Payable BHT debits
+// which are classified as Payroll Expense (not is_transfer) on the Xero side.
 //
 // After pairing, the linker propagates BHT-side metadata to the personal side:
 //   linked_gl_account  ← BHT row's gl_account
@@ -58,7 +60,12 @@ export async function linkTransferPairs(dates: string[]): Promise<LinkTransferRe
         const b = dayRows[j]
         if (paired.has(b.id)) continue
         if (a.account_id === b.account_id) continue
-        if (!a.is_transfer || !b.is_transfer) continue
+        // Pair if at least one side has gl_account set (Xero-sourced) — that's
+        // the signal we propagate. Without this gate, we'd risk pairing
+        // coincidental same-day same-amount transactions (e.g. a refund and an
+        // unrelated purchase). With it, we only pair true cross-account flows
+        // where Xero has classified one side.
+        if (!a.gl_account && !b.gl_account) continue
         // Integer-cent comparison avoids floating point issues
         if (Math.round(a.amount * 100) + Math.round(b.amount * 100) !== 0) continue
 

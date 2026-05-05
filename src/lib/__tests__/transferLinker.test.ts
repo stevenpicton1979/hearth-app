@@ -44,21 +44,21 @@ beforeEach(() => {
 })
 
 describe('linkTransferPairs', () => {
-  // 1. Happy path -- valid pair links
-  it('links two rows: same date, opposite amounts, different accounts, both is_transfer=true', async () => {
+  // 1. Happy path -- valid pair links (BHT side identified by gl_account)
+  it('links two rows: same date, opposite amounts, different accounts, BHT side has gl_account', async () => {
     db.rows = [
-      { id: 'tx-a', account_id: 'acc-1', date: '2025-06-01', amount: -500, is_transfer: true },
-      { id: 'tx-b', account_id: 'acc-2', date: '2025-06-01', amount: 500,  is_transfer: true },
+      { id: 'tx-a', account_id: 'acc-1', date: '2025-06-01', amount: -500, is_transfer: true, gl_account: 'Directors Loan' },
+      { id: 'tx-b', account_id: 'acc-2', date: '2025-06-01', amount: 500,  is_transfer: true, gl_account: null },
     ]
     const result = await linkTransferPairs(['2025-06-01'])
     expect(result.pairs).toBe(1)
   })
 
-  // 2. Regression: one-sided is_transfer flag must NOT produce a link (the ATO false-positive bug)
-  it('does NOT link when only one side has is_transfer=true', async () => {
+  // 2. Safety gate: neither side has gl_account → no pairing (prevents coincidental same-day same-amount matches)
+  it('does NOT link when neither side has gl_account', async () => {
     db.rows = [
-      { id: 'tx-a', account_id: 'acc-1', date: '2025-06-01', amount: -500, is_transfer: true  },
-      { id: 'tx-b', account_id: 'acc-2', date: '2025-06-01', amount: 500,  is_transfer: false },
+      { id: 'tx-a', account_id: 'acc-1', date: '2025-06-01', amount: -500, is_transfer: false, gl_account: null },
+      { id: 'tx-b', account_id: 'acc-2', date: '2025-06-01', amount: 500,  is_transfer: false, gl_account: null },
     ]
     const result = await linkTransferPairs(['2025-06-01'])
     expect(result.pairs).toBe(0)
@@ -68,8 +68,8 @@ describe('linkTransferPairs', () => {
   // 3. Same account -- must not self-link
   it('does NOT link rows on the same account', async () => {
     db.rows = [
-      { id: 'tx-a', account_id: 'acc-1', date: '2025-06-01', amount: -500, is_transfer: true },
-      { id: 'tx-b', account_id: 'acc-1', date: '2025-06-01', amount: 500,  is_transfer: true },
+      { id: 'tx-a', account_id: 'acc-1', date: '2025-06-01', amount: -500, is_transfer: true, gl_account: 'Directors Loan' },
+      { id: 'tx-b', account_id: 'acc-1', date: '2025-06-01', amount: 500,  is_transfer: true, gl_account: null },
     ]
     const result = await linkTransferPairs(['2025-06-01'])
     expect(result.pairs).toBe(0)
@@ -79,8 +79,8 @@ describe('linkTransferPairs', () => {
   // 4. Amounts don't cancel -- must not link
   it('does NOT link when amounts do not sum to zero', async () => {
     db.rows = [
-      { id: 'tx-a', account_id: 'acc-1', date: '2025-06-01', amount: -500, is_transfer: true },
-      { id: 'tx-b', account_id: 'acc-2', date: '2025-06-01', amount: 400,  is_transfer: true },
+      { id: 'tx-a', account_id: 'acc-1', date: '2025-06-01', amount: -500, is_transfer: true, gl_account: 'Directors Loan' },
+      { id: 'tx-b', account_id: 'acc-2', date: '2025-06-01', amount: 400,  is_transfer: true, gl_account: null },
     ]
     const result = await linkTransferPairs(['2025-06-01'])
     expect(result.pairs).toBe(0)
@@ -90,8 +90,8 @@ describe('linkTransferPairs', () => {
   // 5. Different dates -- rows grouped by date so cross-date pairs are impossible
   it('does NOT link rows on different dates', async () => {
     db.rows = [
-      { id: 'tx-a', account_id: 'acc-1', date: '2025-06-01', amount: -500, is_transfer: true },
-      { id: 'tx-b', account_id: 'acc-2', date: '2025-06-02', amount: 500,  is_transfer: true },
+      { id: 'tx-a', account_id: 'acc-1', date: '2025-06-01', amount: -500, is_transfer: true, gl_account: 'Directors Loan' },
+      { id: 'tx-b', account_id: 'acc-2', date: '2025-06-02', amount: 500,  is_transfer: true, gl_account: null },
     ]
     const result = await linkTransferPairs(['2025-06-01', '2025-06-02'])
     expect(result.pairs).toBe(0)
@@ -103,10 +103,10 @@ describe('linkTransferPairs', () => {
   //    link again to tx-c even though tx-c also matches.
   it('does NOT re-link a row already paired in the same run', async () => {
     db.rows = [
-      { id: 'tx-a', account_id: 'acc-1', date: '2025-06-01', amount: -500, is_transfer: true },
-      { id: 'tx-b', account_id: 'acc-2', date: '2025-06-01', amount: 500,  is_transfer: true },
+      { id: 'tx-a', account_id: 'acc-1', date: '2025-06-01', amount: -500, is_transfer: true, gl_account: 'Directors Loan' },
+      { id: 'tx-b', account_id: 'acc-2', date: '2025-06-01', amount: 500,  is_transfer: true, gl_account: null },
       // tx-c also matches tx-a in amount/date, but tx-a is already paired
-      { id: 'tx-c', account_id: 'acc-3', date: '2025-06-01', amount: 500,  is_transfer: true },
+      { id: 'tx-c', account_id: 'acc-3', date: '2025-06-01', amount: 500,  is_transfer: true, gl_account: null },
     ]
     const result = await linkTransferPairs(['2025-06-01'])
     // Only one pair: tx-a <-> tx-b. tx-c stays unlinked.
@@ -117,8 +117,8 @@ describe('linkTransferPairs', () => {
   // 7. Bidirectionality -- both rows must point to each other
   it("links bidirectionally: both rows receive each other's id", async () => {
     db.rows = [
-      { id: 'tx-a', account_id: 'acc-1', date: '2025-06-01', amount: -500, is_transfer: true },
-      { id: 'tx-b', account_id: 'acc-2', date: '2025-06-01', amount: 500,  is_transfer: true },
+      { id: 'tx-a', account_id: 'acc-1', date: '2025-06-01', amount: -500, is_transfer: true, gl_account: 'Directors Loan' },
+      { id: 'tx-b', account_id: 'acc-2', date: '2025-06-01', amount: 500,  is_transfer: true, gl_account: null },
     ]
     await linkTransferPairs(['2025-06-01'])
 
@@ -166,15 +166,42 @@ describe('linkTransferPairs', () => {
     expect(bhtUpdate?.linked_gl_account).toBeUndefined()
   })
 
+  // 12. Wages Payable: BHT side is NOT flagged is_transfer (Payroll Expense classification)
+  //     but has gl_account — must still pair and propagate to personal side.
+  it('pairs BHT Wages Payable (is_transfer=false) with personal credit and propagates gl_account + contact_name', async () => {
+    db.rows = [
+      { id: 'tx-bht', account_id: 'acc-bht', date: '2025-06-01', amount: -4000, is_transfer: false, gl_account: 'Wages Payable', raw_description: 'Steven Picton | Mar 2026 | BHT' },
+      { id: 'tx-personal', account_id: 'acc-personal', date: '2025-06-01', amount: 4000, is_transfer: false, gl_account: null, raw_description: null },
+    ]
+    const result = await linkTransferPairs(['2025-06-01'])
+
+    expect(result.pairs).toBe(1)
+    const personalUpdate = db.updates.find(u => u.id === 'tx-personal')
+    expect(personalUpdate?.linked_gl_account).toBe('Wages Payable')
+    expect(personalUpdate?.contact_name).toBe('Steven Picton')
+  })
+
+  // 13. Safety gate: two CSV-only rows (no gl_account) that cancel on the same day
+  //     must NOT be paired even if they look like a transfer by amount.
+  it('does NOT pair two rows where neither side has gl_account', async () => {
+    db.rows = [
+      { id: 'tx-x', account_id: 'acc-1', date: '2025-06-01', amount: -200, is_transfer: false, gl_account: null },
+      { id: 'tx-y', account_id: 'acc-2', date: '2025-06-01', amount: 200,  is_transfer: false, gl_account: null },
+    ]
+    const result = await linkTransferPairs(['2025-06-01'])
+    expect(result.pairs).toBe(0)
+    expect(db.updates).toHaveLength(0)
+  })
+
   // 8. Return value -- must equal the number of *pairs* (not individual rows)
   it('returns the correct count of pairs linked across multiple dates', async () => {
     db.rows = [
-      { id: 'tx-a', account_id: 'acc-1', date: '2025-06-01', amount: -100, is_transfer: true },
-      { id: 'tx-b', account_id: 'acc-2', date: '2025-06-01', amount: 100,  is_transfer: true },
-      { id: 'tx-c', account_id: 'acc-1', date: '2025-06-02', amount: -200, is_transfer: true },
-      { id: 'tx-d', account_id: 'acc-2', date: '2025-06-02', amount: 200,  is_transfer: true },
-      { id: 'tx-e', account_id: 'acc-1', date: '2025-06-03', amount: -300, is_transfer: true },
-      { id: 'tx-f', account_id: 'acc-2', date: '2025-06-03', amount: 300,  is_transfer: true },
+      { id: 'tx-a', account_id: 'acc-1', date: '2025-06-01', amount: -100, is_transfer: true, gl_account: 'Directors Loan' },
+      { id: 'tx-b', account_id: 'acc-2', date: '2025-06-01', amount: 100,  is_transfer: true, gl_account: null },
+      { id: 'tx-c', account_id: 'acc-1', date: '2025-06-02', amount: -200, is_transfer: true, gl_account: 'Directors Loan' },
+      { id: 'tx-d', account_id: 'acc-2', date: '2025-06-02', amount: 200,  is_transfer: true, gl_account: null },
+      { id: 'tx-e', account_id: 'acc-1', date: '2025-06-03', amount: -300, is_transfer: true, gl_account: 'Directors Loan' },
+      { id: 'tx-f', account_id: 'acc-2', date: '2025-06-03', amount: 300,  is_transfer: true, gl_account: null },
     ]
     const result = await linkTransferPairs(['2025-06-01', '2025-06-02', '2025-06-03'])
     expect(result.pairs).toBe(3)
