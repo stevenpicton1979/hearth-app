@@ -516,4 +516,4 @@ Read the current dashboard before changing anything. Add a summary widget showin
 - All 18 tasks committed and pushed
 - `npm test` passes after all changes
 - Vercel deployment is READY
-- Update STATE_HEARTH.md in C:\dev\portfoliostate\ with what shipped, then commit and push portfoliostate
+- Update STATE_HEARTH.md in ~/Projects/portfoliostate\ with what shipped, then commit and push portfoliostate
