@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { createServerClient } from '@/lib/supabase/server'
 import { DEFAULT_HOUSEHOLD_ID } from '@/lib/constants'
 import { aggregatePosition } from '@/lib/positionAggregation'
@@ -46,11 +47,18 @@ export async function PositionWidget({ fromPeriod }: Props) {
     <div className="bg-white border border-amber-200 rounded-xl p-5 md:col-span-2">
       <div className="flex items-center justify-between mb-3">
         <h2 className="font-semibold text-gray-900">Director Drawings</h2>
-        {summary.totalProvisional > 0 && (
-          <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
-            {aud(summary.totalProvisional)} provisional
-          </span>
-        )}
+        <div className="flex items-center gap-3">
+          {summary.totalProvisional > 0 && (
+            <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
+              {aud(summary.totalProvisional)} provisional
+            </span>
+          )}
+          {summary.totalProvisional > 0 && (
+            <Link href="/year-end" className="text-xs text-emerald-700 hover:underline">
+              Review →
+            </Link>
+          )}
+        </div>
       </div>
 
       <div className="flex gap-6 mb-4 text-sm">
