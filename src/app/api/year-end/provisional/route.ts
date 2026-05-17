@@ -5,7 +5,7 @@ import {
   fyForDate,
   fyDateRange,
   classificationFromMatchedRule,
-  YEAR_END_CLASSIFICATIONS,
+  summarizeRows,
   YearEndClassification,
 } from '@/lib/yearEnd'
 
@@ -25,11 +25,6 @@ interface RowOut {
   is_provisional: boolean
   matched_rule: string | null
   classification: YearEndClassification | null
-}
-
-interface SummaryBucket {
-  count: number
-  total: number
 }
 
 export async function GET(req: NextRequest) {
@@ -67,38 +62,7 @@ export async function GET(req: NextRequest) {
     classification: classificationFromMatchedRule((r.matched_rule as string | null) ?? null),
   }))
 
-  const byClassification: Record<YearEndClassification, SummaryBucket> = {
-    'director-income-steven': { count: 0, total: 0 },
-    'director-income-nicola': { count: 0, total: 0 },
-    'wage-steven': { count: 0, total: 0 },
-    'directors-loan': { count: 0, total: 0 },
-    'reimbursement': { count: 0, total: 0 },
-  }
-
-  let provisionalTotal = 0
-  let confirmedTotal = 0
-
-  for (const r of rows) {
-    if (r.is_provisional) {
-      provisionalTotal += r.amount
-    } else if (r.classification) {
-      confirmedTotal += r.amount
-      byClassification[r.classification].count += 1
-      byClassification[r.classification].total += r.amount
-    }
-  }
-
-  // Ensure every classification appears in the summary even if zero (UI iterates over the map).
-  for (const c of YEAR_END_CLASSIFICATIONS) {
-    if (!byClassification[c]) byClassification[c] = { count: 0, total: 0 }
-  }
-
-  const summary = {
-    provisionalTotal,
-    confirmedTotal,
-    totalDrawn: provisionalTotal + confirmedTotal,
-    byClassification,
-  }
+  const summary = summarizeRows(rows)
 
   return NextResponse.json({ fy, startDate, endDate, rows, summary })
 }

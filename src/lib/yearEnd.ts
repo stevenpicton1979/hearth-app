@@ -105,3 +105,50 @@ export function classificationFromMatchedRule(rule: string | null): YearEndClass
 export function isYearEndClassification(value: unknown): value is YearEndClassification {
   return typeof value === 'string' && (YEAR_END_CLASSIFICATIONS as readonly string[]).includes(value)
 }
+
+export interface YearEndRow {
+  amount: number
+  is_provisional: boolean
+  classification: YearEndClassification | null
+}
+
+export interface YearEndSummary {
+  provisionalTotal: number
+  confirmedTotal: number
+  totalDrawn: number
+  provisionalCount: number
+  byClassification: Record<YearEndClassification, { count: number; total: number }>
+}
+
+export function summarizeRows(rows: readonly YearEndRow[]): YearEndSummary {
+  const byClassification: YearEndSummary['byClassification'] = {
+    'director-income-steven': { count: 0, total: 0 },
+    'director-income-nicola': { count: 0, total: 0 },
+    'wage-steven': { count: 0, total: 0 },
+    'directors-loan': { count: 0, total: 0 },
+    'reimbursement': { count: 0, total: 0 },
+  }
+
+  let provisionalTotal = 0
+  let confirmedTotal = 0
+  let provisionalCount = 0
+
+  for (const r of rows) {
+    if (r.is_provisional) {
+      provisionalTotal += r.amount
+      provisionalCount += 1
+    } else if (r.classification) {
+      confirmedTotal += r.amount
+      byClassification[r.classification].count += 1
+      byClassification[r.classification].total += r.amount
+    }
+  }
+
+  return {
+    provisionalTotal,
+    confirmedTotal,
+    totalDrawn: provisionalTotal + confirmedTotal,
+    provisionalCount,
+    byClassification,
+  }
+}

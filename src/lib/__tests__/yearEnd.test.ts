@@ -9,6 +9,7 @@ import {
   isYearEndClassification,
   CLASSIFICATION_LABELS,
   YEAR_END_CLASSIFICATIONS,
+  summarizeRows,
 } from '@/lib/yearEnd'
 
 describe('fyForDate', () => {
@@ -189,5 +190,40 @@ describe('CLASSIFICATION_LABELS', () => {
     for (const c of YEAR_END_CLASSIFICATIONS) {
       expect(CLASSIFICATION_LABELS[c]).toBeTruthy()
     }
+  })
+})
+
+describe('summarizeRows', () => {
+  it('returns zeroed summary for empty input', () => {
+    const s = summarizeRows([])
+    expect(s.provisionalTotal).toBe(0)
+    expect(s.confirmedTotal).toBe(0)
+    expect(s.totalDrawn).toBe(0)
+    expect(s.provisionalCount).toBe(0)
+    expect(s.byClassification['director-income-steven']).toEqual({ count: 0, total: 0 })
+  })
+
+  it('splits provisional vs confirmed and aggregates by classification', () => {
+    const s = summarizeRows([
+      { amount: 5000, is_provisional: true, classification: null },
+      { amount: 3000, is_provisional: false, classification: 'director-income-steven' },
+      { amount: 2000, is_provisional: false, classification: 'director-income-steven' },
+      { amount: 1500, is_provisional: false, classification: 'wage-steven' },
+    ])
+    expect(s.provisionalTotal).toBe(5000)
+    expect(s.confirmedTotal).toBe(6500)
+    expect(s.totalDrawn).toBe(11500)
+    expect(s.provisionalCount).toBe(1)
+    expect(s.byClassification['director-income-steven']).toEqual({ count: 2, total: 5000 })
+    expect(s.byClassification['wage-steven']).toEqual({ count: 1, total: 1500 })
+    expect(s.byClassification['director-income-nicola']).toEqual({ count: 0, total: 0 })
+  })
+
+  it('ignores confirmed rows with no recognised classification', () => {
+    const s = summarizeRows([
+      { amount: 999, is_provisional: false, classification: null },
+    ])
+    expect(s.confirmedTotal).toBe(0)
+    expect(s.totalDrawn).toBe(0)
   })
 })
