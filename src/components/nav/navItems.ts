@@ -13,5 +13,6 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'Mappings', href: '/mappings', icon: 'tag' },
   { label: 'Net Worth', href: '/net-worth', icon: 'trending-up' },
   { label: 'Goals', href: '/goals', icon: 'target' },
+  { label: 'Year-End', href: '/year-end', icon: 'calendar' },
   { label: 'Settings', href: '/settings', icon: 'settings' },
 ]
